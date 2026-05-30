@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
-trait-async = { workspace = true }
+schemars = { workspace = true }
+async-trait = { workspace = true }

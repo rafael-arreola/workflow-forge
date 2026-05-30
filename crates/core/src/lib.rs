@@ -1,3 +1,3 @@
 pub mod context;
-pub mod module;
-pub mod primitive;
+pub mod traits;
+pub mod types;

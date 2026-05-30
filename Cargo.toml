@@ -4,6 +4,7 @@ members = ["crates/core"]
 
 [workspace.dependencies]
 # workspace dependencies
-serde = "1.0.228"
+serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 async-trait = "0.1.89"
+schemars = "1.2.1"
