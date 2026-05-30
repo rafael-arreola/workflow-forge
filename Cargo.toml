@@ -1,0 +1,9 @@
+[workspace]
+resolver = "3"
+members = ["crates/core"]
+
+[workspace.dependencies]
+# workspace dependencies
+serde = "1.0.228"
+serde_json = "1.0.150"
+async-trait = "0.1.89"
