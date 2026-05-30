@@ -27,6 +27,8 @@ impl From<&WorkflowData> for serde_json::Value {
     }
 }
 
+/// Representación de un error en un flujo de trabajo
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowError {
     pub code: String,
     pub message: String,
@@ -34,4 +36,14 @@ pub struct WorkflowError {
     pub response: Option<WorkflowData>,
 }
 
-pub type WorkflowResult = Result<serde_json::Value, WorkflowError>;
+/// Implementa `Display` para `WorkflowError` para mostrar un mensaje legible
+impl std::fmt::Display for WorkflowError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "[{}] {}", self.code, self.message)
+    }
+}
+
+/// Implementa `Error` para `WorkflowError` para compatibilidad con `std::error::Error`
+impl std::error::Error for WorkflowError {}
+
+pub type WorkflowResult = Result<WorkflowData, WorkflowError>;
