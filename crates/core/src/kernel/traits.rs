@@ -1,9 +1,6 @@
+use crate::kernel::context::WorkflowContext;
+use crate::kernel::types::{WorkflowData, WorkflowResult};
 use async_trait::async_trait;
-
-use crate::{
-    context::WorkflowContext,
-    types::{WorkflowData, WorkflowResult},
-};
 
 #[async_trait]
 pub trait WorkflowModule: Send + Sync {
