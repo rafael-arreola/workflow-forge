@@ -3,34 +3,34 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use tracing::{debug, info};
 
 use crate::context::WorkflowContext;
-use crate::node::{Node, NodeKind};
+use crate::node::{Node, NodeId, NodeKind};
 use crate::registry::TaskRegistry;
 use crate::types::{WorkflowData, WorkflowResult};
-use crate::workflow::{FlowEdge, WorkflowDef};
+use crate::workflow::{FlowEdge, WorkflowDefinition};
 
 /// Estructura auxiliar que precalcula índices del grafo para búsquedas rápidas.
 struct GraphIndex {
-    /// Mapa de node_id → Node
-    nodes: HashMap<String, Node>,
+    /// Mapa de NodeId → Node
+    nodes: HashMap<NodeId, Node>,
     /// Aristas salientes agrupadas por nodo origen
-    outgoing: HashMap<String, Vec<FlowEdge>>,
+    outgoing: HashMap<NodeId, Vec<FlowEdge>>,
     /// Aristas entrantes agrupadas por nodo destino
     #[allow(dead_code)]
-    incoming: HashMap<String, Vec<FlowEdge>>,
+    incoming: HashMap<NodeId, Vec<FlowEdge>>,
     /// IDs de nodos sin aristas entrantes (puntos de inicio del grafo)
-    start_nodes: Vec<String>,
+    start_nodes: Vec<NodeId>,
 }
 
 impl GraphIndex {
-    fn build(workflow: &WorkflowDef) -> Self {
-        let nodes: HashMap<String, Node> = workflow
+    fn build(workflow: &WorkflowDefinition) -> Self {
+        let nodes: HashMap<NodeId, Node> = workflow
             .nodes
             .iter()
             .map(|n| (n.id.clone(), n.clone()))
             .collect();
 
-        let mut outgoing: HashMap<String, Vec<FlowEdge>> = HashMap::new();
-        let mut incoming: HashMap<String, Vec<FlowEdge>> = HashMap::new();
+        let mut outgoing: HashMap<NodeId, Vec<FlowEdge>> = HashMap::new();
+        let mut incoming: HashMap<NodeId, Vec<FlowEdge>> = HashMap::new();
 
         for edge in &workflow.edges {
             outgoing
@@ -43,7 +43,7 @@ impl GraphIndex {
                 .push(edge.clone());
         }
 
-        let start_nodes: Vec<String> = workflow
+        let start_nodes: Vec<NodeId> = workflow
             .nodes
             .iter()
             .filter(|n| !incoming.contains_key(&n.id))
@@ -58,11 +58,11 @@ impl GraphIndex {
         }
     }
 
-    fn get_node(&self, id: &str) -> Option<&Node> {
+    fn get_node(&self, id: &NodeId) -> Option<&Node> {
         self.nodes.get(id)
     }
 
-    fn outgoing_edges(&self, node_id: &str) -> &[FlowEdge] {
+    fn outgoing_edges(&self, node_id: &NodeId) -> &[FlowEdge] {
         static EMPTY: &[FlowEdge] = &[];
         self.outgoing
             .get(node_id)
@@ -72,17 +72,17 @@ impl GraphIndex {
 }
 
 /// Motor de ejecución de workflows.
-/// Toma una definición declarativa (`WorkflowDef`) y un registro de tareas,
+/// Toma una definición declarativa (`WorkflowDefinition`) y un registro de tareas,
 /// y ejecuta el grafo de forma secuencial siguiendo las aristas del grafo.
 pub struct WorkflowExecutor {
-    workflow: WorkflowDef,
+    workflow: WorkflowDefinition,
     registry: std::sync::Arc<TaskRegistry>,
     index: GraphIndex,
 }
 
 impl WorkflowExecutor {
     /// Construye un nuevo executor a partir de una definición y un registro de tareas
-    pub fn new(workflow: WorkflowDef, registry: std::sync::Arc<TaskRegistry>) -> Self {
+    pub fn new(workflow: WorkflowDefinition, registry: std::sync::Arc<TaskRegistry>) -> Self {
         let index = GraphIndex::build(&workflow);
         Self {
             workflow,
@@ -112,8 +112,8 @@ impl WorkflowExecutor {
             });
         }
 
-        let mut visited: HashSet<String> = HashSet::new();
-        let mut queue: VecDeque<(String, WorkflowData)> = VecDeque::new();
+        let mut visited: HashSet<NodeId> = HashSet::new();
+        let mut queue: VecDeque<(NodeId, WorkflowData)> = VecDeque::new();
         let mut last_output: Option<WorkflowData> = None;
 
         // Encolar todos los nodos de inicio
@@ -183,7 +183,7 @@ impl WorkflowExecutor {
                                 "Los datos de entrada no cumplen el schema del nodo '{}': {}",
                                 node.id, e
                             ),
-                            source_task: Some(node.id.clone()),
+                            source_task: Some(node.id.to_string()),
                             payload: Some(input),
                             response: None,
                             source: None,
@@ -227,7 +227,7 @@ impl WorkflowExecutor {
                                 "Los datos de salida no cumplen el schema del nodo '{}': {}",
                                 node.id, e
                             ),
-                            source_task: Some(node.id.clone()),
+                            source_task: Some(node.id.to_string()),
                             payload: Some(input),
                             response: None,
                             source: None,
@@ -239,23 +239,23 @@ impl WorkflowExecutor {
             }
 
             NodeKind::Task(task_node) => {
-                let task_type = &task_node.task_id;
+                let task_id = &task_node.task_id;
                 let task =
                     self.registry
-                        .get(task_type)
+                        .get(task_id)
                         .ok_or_else(|| crate::error::WorkflowError {
                             code: "TASK_NOT_FOUND".into(),
-                            message: format!("Tarea '{}' no encontrada en el registry", task_type),
-                            source_task: Some(node.id.clone()),
+                            message: format!("Tarea '{}' no encontrada en el registry", task_id),
+                            source_task: Some(node.id.to_string()),
                             payload: None,
                             response: None,
                             source: None,
                         })?;
 
-                debug!(node_id = %node.id, task_type = %task_type, "Invocando tarea");
+                debug!(node_id = %node.id, task_id = %task_id, "Invocando tarea");
                 task.execute(ctx, input).await.map_err(|mut e| {
                     if e.source_task.is_none() {
-                        e.source_task = Some(node.id.clone());
+                        e.source_task = Some(node.id.to_string());
                     }
                     e
                 })
@@ -263,7 +263,7 @@ impl WorkflowExecutor {
         }
     }
 
-    fn node_not_found(&self, node_id: &str) -> crate::error::WorkflowError {
+    fn node_not_found(&self, node_id: &NodeId) -> crate::error::WorkflowError {
         crate::error::WorkflowError {
             code: "NODE_NOT_FOUND".into(),
             message: format!("Nodo '{}' no encontrado en el workflow", node_id),
