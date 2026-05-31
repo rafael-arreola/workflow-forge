@@ -8,6 +8,7 @@ pub struct Node {
     /// Identificador único del nodo dentro del workflow
     pub id: String,
     /// Tipo de nodo: tarea ejecutable, condicionalx, bucle, paralelo, etc.
+    #[serde(flatten)]
     pub kind: NodeKind,
 }
 

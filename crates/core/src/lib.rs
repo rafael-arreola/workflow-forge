@@ -1,4 +1,5 @@
 pub mod context;
+pub mod error;
 pub mod executor;
 pub mod node;
 pub mod registry;

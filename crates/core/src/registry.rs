@@ -1,17 +1,17 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use crate::task::Task;
+use crate::task::{Task, TaskId};
 
 /// Registro global de tareas disponibles para ejecución.
-/// Las tareas se registran por su `task_type()` y se resuelven en runtime
+/// Las tareas se registran por su `task_id()` y se resuelven en runtime
 /// cuando el executor encuentra un nodo de tipo `Task`.
 ///
 /// Thread-safe: usa `Arc<RwLock<>>` para permitir lectura concurrente
 /// y registro puntual desde múltiples hilos.
 #[derive(Default)]
 pub struct TaskRegistry {
-    tasks: Arc<RwLock<HashMap<String, Arc<dyn Task>>>>,
+    tasks: Arc<RwLock<HashMap<TaskId, Arc<dyn Task>>>>,
 }
 
 impl TaskRegistry {
@@ -27,27 +27,27 @@ impl TaskRegistry {
     where
         T: Task,
     {
-        let key = task.task_type().to_string();
+        let key = task.task_id().clone();
         let mut map = self.tasks.write().expect("TaskRegistry lock poisoned");
         map.insert(key, Arc::new(task));
     }
 
     /// Obtiene una tarea por su tipo. Devuelve `None` si no está registrada.
-    pub fn get(&self, task_type: &str) -> Option<Arc<dyn Task>> {
+    pub fn get(&self, task_id: &TaskId) -> Option<Arc<dyn Task>> {
         let map = self.tasks.read().expect("TaskRegistry lock poisoned");
-        map.get(task_type).cloned()
+        map.get(task_id).cloned()
     }
 
     /// Lista todos los tipos de tarea registrados
-    pub fn list(&self) -> Vec<String> {
+    pub fn list(&self) -> Vec<TaskId> {
         let map = self.tasks.read().expect("TaskRegistry lock poisoned");
         map.keys().cloned().collect()
     }
 
     /// Verifica si un tipo de tarea está registrado
-    pub fn contains(&self, task_type: &str) -> bool {
+    pub fn contains(&self, task_id: &TaskId) -> bool {
         let map = self.tasks.read().expect("TaskRegistry lock poisoned");
-        map.contains_key(task_type)
+        map.contains_key(task_id)
     }
 }
 
