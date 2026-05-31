@@ -3,8 +3,13 @@ resolver = "3"
 members = ["crates/core"]
 
 [workspace.dependencies]
-uuid = { version = "1.23.2", features = ["v7"] }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.150"
-async-trait = "0.1.89"
-schemars = { version = "1.2.1", features = ["derive"] }
+async-trait = "0.1"
+futures = "0.3"
+jsonpath-rust = "1.0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+uuid = { version = "1", features = ["v7"] }
+schemars = "1.2.1"

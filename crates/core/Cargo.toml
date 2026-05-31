@@ -1,11 +1,16 @@
 [package]
-name = "core"
+name = "workflow-forge-core"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+async-trait = { workspace = true }
+futures = { workspace = true }
+jsonpath-rust = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-schemars = { workspace = true }
-async-trait = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
 uuid = { workspace = true }
+schemars = { workspace = true }
