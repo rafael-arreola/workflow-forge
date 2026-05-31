@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-mod event;
-mod task;
+pub mod event;
+pub mod task;
 
 /// Identificador único de un nodo dentro del grafo del workflow.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

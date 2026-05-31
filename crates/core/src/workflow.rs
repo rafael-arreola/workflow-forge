@@ -2,7 +2,7 @@ use crate::node::{Node, NodeId};
 use serde::{Deserialize, Serialize};
 
 /// Definición completa de un workflow lista para ser serializada/deserializada.
-/// Contiene nodos (módulos + control de flujo), aristas y configuración global.
+/// Contiene nodos y aristas.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowDefinition {
     /// Identificador único del workflow (se asigna si no se provee)
