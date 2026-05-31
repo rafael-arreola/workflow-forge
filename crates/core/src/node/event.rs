@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-
+use crate::types::WorkflowData;
 use serde::{Deserialize, Serialize};
-
-use crate::WorkflowData;
+use std::collections::HashMap;
 
 /// Punto de entrada del workflow. Define el contrato de los datos iniciales.
 #[derive(Debug, Clone, Serialize, Deserialize)]

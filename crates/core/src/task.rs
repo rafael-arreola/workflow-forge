@@ -5,12 +5,10 @@ use crate::types::{PortDef, WorkflowData, WorkflowResult};
 
 /// Unidad mínima ejecutable dentro de un workflow.
 /// Cada tarea declara sus puertos y define su lógica de transformación.
-/// Debe implementarse para cada tipo de tarea concreta (addon).
 #[async_trait]
 pub trait Task: Send + Sync + 'static {
-    /// Identificador del tipo de tarea (ej. "http_request", "transform").
-    /// Usado por el registry para resolver definiciones en runtime.
-    fn task_type(&self) -> &str;
+    /// Identificador único de la tarea se usa para poder resolver la tarea en runtime.
+    fn task_uuid(&self) -> &str;
 
     /// Puertos de entrada que reciben datos para la ejecución
     fn input_ports(&self) -> &[PortDef];

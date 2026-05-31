@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 mod event;
-mod transformer;
+mod task;
 /// Nodo del grafo de workflow. Contiene un identificador y una variante de comportamiento
 /// que se resuelve en tiempo de ejecución.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,4 +19,6 @@ pub enum NodeKind {
     Start(event::StartNode),
     /// Nodo de terminación del workflow
     End(event::EndNode),
+    /// Nodo de tarea ejecutable
+    Task(task::TaskNode),
 }
