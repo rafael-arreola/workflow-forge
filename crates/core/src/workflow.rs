@@ -26,4 +26,14 @@ pub struct FlowEdge {
     pub from: NodeId,
     /// ID del nodo de destino
     pub to: NodeId,
+    /// Condición que debe cumplirse para seguir esta arista
+    pub condition: EdgeCondition,
+}
+
+/// Condición que debe cumplirse para seguir una arista en el workflow.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EdgeCondition {
+    Success,
+    Failure,
 }
