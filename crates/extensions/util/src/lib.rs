@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use workflow_forge_core::context::WorkflowContext;
 use workflow_forge_core::registry::TaskRegistry;
 use workflow_forge_core::task::{Task, TaskManifest};
-use workflow_forge_core::types::{WorkflowData, WorkflowResult};
+use workflow_forge_core::task::{WorkflowData, WorkflowResult};
 
 /// Registra todas las tareas de la extensión en el registry
 pub fn register(registry: &TaskRegistry) {

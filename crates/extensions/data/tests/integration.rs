@@ -3,7 +3,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use workflow_forge_core::executor::WorkflowExecutor;
 use workflow_forge_core::registry::TaskRegistry;
-use workflow_forge_core::types::WorkflowData;
+use workflow_forge_core::task::WorkflowData;
 use workflow_forge_core::workflow::WorkflowDefinition;
 
 fn registry() -> Arc<TaskRegistry> {

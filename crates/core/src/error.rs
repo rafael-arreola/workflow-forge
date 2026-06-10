@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::types::WorkflowData;
+use crate::task::WorkflowData;
 
 /// Error estructurado que una tarea puede devolver durante la ejecución.
 /// Incluye trazabilidad hasta la tarea origen y soporta encadenamiento.

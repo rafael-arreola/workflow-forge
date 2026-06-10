@@ -10,7 +10,7 @@ use workflow_forge_core::node::task::TaskNode;
 use workflow_forge_core::node::{Node, NodeId, NodeKind};
 use workflow_forge_core::registry::TaskRegistry;
 use workflow_forge_core::task::{Task, TaskManifest};
-use workflow_forge_core::types::{WorkflowData, WorkflowResult};
+use workflow_forge_core::task::{WorkflowData, WorkflowResult};
 use workflow_forge_core::workflow::{FlowEdge, WorkflowDefinition};
 
 // ---------------------------------------------------------------------------

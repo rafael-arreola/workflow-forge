@@ -1,4 +1,4 @@
-use crate::types::WorkflowData;
+use crate::task::WorkflowData;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
