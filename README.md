@@ -3,7 +3,7 @@
 [![CI](https://github.com/rafael-arreola/workflow-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/rafael-arreola/workflow-forge/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-A declarative, BPMN-style workflow engine for Rust. Workflows are **plain JSON
+A declarative, JSON-based workflow engine for Rust. Workflows are **plain JSON
 documents** — defined with [JSON Schema](schemas/1.0/), wired with JSONPath —
 executed by an embeddable, async core.
 
@@ -88,18 +88,41 @@ handle failures through an error route:
   "version": "1.0.0",
   "nodes": [
     { "id": "start", "kind": "start" },
-    { "id": "fetch", "kind": "task", "task": "http.request",
+    {
+      "id": "fetch",
+      "kind": "task",
+      "task": "http.request",
       "input": { "url": "$.trigger.url", "fail_on_error_status": true },
       "retry": { "max": 3, "backoff": "exponential", "initial_ms": 500 },
-      "timeout_ms": 10000 },
-    { "id": "check", "kind": "gateway", "gateway": "exclusive", "branches": [
-      { "when": { "path": "$.nodes.fetch.output.body.active", "eq": true }, "edge": "active" },
-      { "else": true, "edge": "inactive" }
-    ]},
-    { "id": "notify", "kind": "task", "task": "util.log",
-      "input": { "message": "user is active", "value": "$.nodes.fetch.output.body" } },
-    { "id": "alert", "kind": "task", "task": "util.log",
-      "input": { "level": "error", "message": "$.nodes.fetch.error" } },
+      "timeout_ms": 10000
+    },
+    {
+      "id": "check",
+      "kind": "gateway",
+      "gateway": "exclusive",
+      "branches": [
+        {
+          "when": { "path": "$.nodes.fetch.output.body.active", "eq": true },
+          "edge": "active"
+        },
+        { "else": true, "edge": "inactive" }
+      ]
+    },
+    {
+      "id": "notify",
+      "kind": "task",
+      "task": "util.log",
+      "input": {
+        "message": "user is active",
+        "value": "$.nodes.fetch.output.body"
+      }
+    },
+    {
+      "id": "alert",
+      "kind": "task",
+      "task": "util.log",
+      "input": { "level": "error", "message": "$.nodes.fetch.error" }
+    },
     { "id": "end", "kind": "end" },
     { "id": "end-error", "kind": "end", "status": "error" }
   ],
@@ -119,13 +142,17 @@ Conditions are JSON too — composable with `and` / `or` / `not` and operators
 like `eq`, `gt`, `in`, `contains`, `exists`, `starts_with`, `matches`:
 
 ```json
-{ "and": [
-  { "path": "$.nodes.fetch.output.status", "eq": 200 },
-  { "or": [
-    { "path": "$.trigger.priority", "in": ["high", "urgent"] },
-    { "path": "$.trigger.retry_count", "gt": 3 }
-  ]}
-]}
+{
+  "and": [
+    { "path": "$.nodes.fetch.output.status", "eq": 200 },
+    {
+      "or": [
+        { "path": "$.trigger.priority", "in": ["high", "urgent"] },
+        { "path": "$.trigger.retry_count", "gt": 3 }
+      ]
+    }
+  ]
+}
 ```
 
 ## Official extensions
@@ -134,13 +161,13 @@ Extensions are crates that register tasks. Enable them via feature flags on
 the `workflow-forge` facade (`util`, `data`, `http` are on by default; add
 `tabular` and `sftp`, or use `full`).
 
-| Namespace | Tasks | Notes |
-|-----------|-------|-------|
-| `util` | `util.noop`, `util.log`, `util.delay` | Debugging, testing, examples |
-| `data` | `data.transform`, `data.merge`, `data.template` | All data reshaping lives here |
-| `http` | `http.request` | Methods, headers, query, JSON body, basic/bearer auth |
-| `tabular` | `tabular.parse`, `tabular.write` | CSV / XLSX ↔ JSON, via `$blob` |
-| `sftp` | `sftp.get`, `sftp.put`, `sftp.list` | Streaming transfers, via `$blob` |
+| Namespace | Tasks                                           | Notes                                                 |
+| --------- | ----------------------------------------------- | ----------------------------------------------------- |
+| `util`    | `util.noop`, `util.log`, `util.delay`           | Debugging, testing, examples                          |
+| `data`    | `data.transform`, `data.merge`, `data.template` | All data reshaping lives here                         |
+| `http`    | `http.request`                                  | Methods, headers, query, JSON body, basic/bearer auth |
+| `tabular` | `tabular.parse`, `tabular.write`                | CSV / XLSX ↔ JSON, via `$blob`                        |
+| `sftp`    | `sftp.get`, `sftp.put`, `sftp.list`             | Streaming transfers, via `$blob`                      |
 
 Large files never travel inline in the context: tasks exchange **blob
 references** (`{ "$blob": "<id>", "name": "...", "size": ... }`) backed by a
