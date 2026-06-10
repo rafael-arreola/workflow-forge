@@ -1,0 +1,18 @@
+[package]
+name = "workflow-forge-ext-http"
+description = "Extensión http de workflow-forge: cliente HTTP/S declarativo"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+workflow-forge-core = { workspace = true }
+async-trait = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+httpmock = { workspace = true }
+tokio = { workspace = true }

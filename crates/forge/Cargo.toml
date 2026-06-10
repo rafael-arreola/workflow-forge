@@ -1,0 +1,28 @@
+[package]
+name = "workflow-forge"
+description = "Motor de workflows declarativos definidos con JSON Schema + JSONPath"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["util", "data", "http"]
+full = ["util", "data", "http", "tabular", "sftp"]
+util = ["dep:workflow-forge-ext-util"]
+data = ["dep:workflow-forge-ext-data"]
+http = ["dep:workflow-forge-ext-http"]
+tabular = ["dep:workflow-forge-ext-tabular"]
+sftp = ["dep:workflow-forge-ext-sftp"]
+
+[dependencies]
+workflow-forge-core = { workspace = true }
+workflow-forge-ext-util = { workspace = true, optional = true }
+workflow-forge-ext-data = { workspace = true, optional = true }
+workflow-forge-ext-http = { workspace = true, optional = true }
+workflow-forge-ext-tabular = { workspace = true, optional = true }
+workflow-forge-ext-sftp = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tokio = { workspace = true }

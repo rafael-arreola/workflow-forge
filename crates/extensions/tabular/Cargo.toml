@@ -1,0 +1,19 @@
+[package]
+name = "workflow-forge-ext-tabular"
+description = "Extensión tabular de workflow-forge: CSV y XLSX hacia/desde JSON"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+workflow-forge-core = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+csv = "1.4.0"
+calamine = "0.35.0"
+rust_xlsxwriter = "0.95.0"
+
+[dev-dependencies]
+tokio = { workspace = true }

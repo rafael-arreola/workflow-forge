@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/rafael-arreola/workflow-forge/main/schemas/1.0/extension.schema.json",
+  "title": "workflow-forge Extension Manifest",
+  "description": "Esquema de extensión de la spec 1.0: el manifiesto con el que una extensión declara sus tareas. Un catálogo es un array de manifiestos (TaskRegistry::catalog()).",
+  "oneOf": [
+    { "$ref": "#/$defs/manifest" },
+    {
+      "title": "Catálogo de tareas",
+      "type": "array",
+      "items": { "$ref": "#/$defs/manifest" }
+    }
+  ],
+  "$defs": {
+    "manifest": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "description": "Id namespaced único de la tarea (ej. http.request)",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+        },
+        "description": { "type": "string" },
+        "input_schema": {
+          "description": "JSON Schema que valida el input de la tarea",
+          "type": ["object", "boolean"]
+        },
+        "output_schema": {
+          "description": "JSON Schema que valida el output de la tarea",
+          "type": ["object", "boolean"]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

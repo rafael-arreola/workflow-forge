@@ -1,0 +1,21 @@
+[package]
+name = "workflow-forge-ext-sftp"
+description = "Extensión sftp de workflow-forge: get, put y list sobre SFTP"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+workflow-forge-core = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ssh2 = "0.9"
+tokio = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+async-trait = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }

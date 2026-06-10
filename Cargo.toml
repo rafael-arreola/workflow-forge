@@ -1,13 +1,27 @@
 [workspace]
 resolver = "3"
-members = ["crates/core"]
+members = ["crates/core", "crates/extensions/*", "crates/forge"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/rafael-arreola/workflow-forge"
 
 [workspace.dependencies]
+workflow-forge-core = { path = "crates/core", version = "0.1.0" }
+workflow-forge-ext-util = { path = "crates/extensions/util", version = "0.1.0" }
+workflow-forge-ext-data = { path = "crates/extensions/data", version = "0.1.0" }
+workflow-forge-ext-http = { path = "crates/extensions/http", version = "0.1.0" }
+workflow-forge-ext-tabular = { path = "crates/extensions/tabular", version = "0.1.0" }
+workflow-forge-ext-sftp = { path = "crates/extensions/sftp", version = "0.1.0" }
 async-trait = "0.1"
 futures = "0.3"
 jsonpath-rust = "1.0.4"
 jsonschema = "0.28"
 regex = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "charset"] }
+httpmock = "0.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

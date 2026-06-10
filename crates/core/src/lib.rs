@@ -1,3 +1,4 @@
+pub mod blob;
 pub mod condition;
 pub mod context;
 pub mod error;
@@ -9,6 +10,10 @@ pub mod task;
 pub mod types;
 pub mod validation;
 pub mod workflow;
+
+// Re-export para que las extensiones construyan schemas sin depender
+// directamente de schemars
+pub use schemars;
 
 /// Versión del crate workflow-forge-core
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

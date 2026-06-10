@@ -1,0 +1,258 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/rafael-arreola/workflow-forge/main/schemas/1.0/workflow.schema.json",
+  "title": "workflow-forge Workflow Definition",
+  "description": "Esquema de ejecución de la spec 1.0: define qué es un workflow válido (grafo de nodos y aristas, gateways, condiciones, retry y mappings JSONPath).",
+  "type": "object",
+  "required": ["name", "version", "nodes"],
+  "properties": {
+    "spec": {
+      "description": "Versión de la spec que cumple esta definición",
+      "type": "string",
+      "enum": ["1.0"],
+      "default": "1.0"
+    },
+    "id": { "type": ["string", "null"] },
+    "name": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "minLength": 1 },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/node" },
+      "minItems": 1
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/edge" },
+      "default": []
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["start", "end", "task", "gateway", "subworkflow"] }
+      },
+      "oneOf": [
+        { "$ref": "#/$defs/startNode" },
+        { "$ref": "#/$defs/endNode" },
+        { "$ref": "#/$defs/taskNode" },
+        { "$ref": "#/$defs/gatewayNode" },
+        { "$ref": "#/$defs/subworkflowNode" }
+      ]
+    },
+    "startNode": {
+      "type": "object",
+      "properties": {
+        "id": true,
+        "kind": { "const": "start" },
+        "schema": { "$ref": "#/$defs/jsonSchema" },
+        "defaults": {
+          "description": "Valores que se fusionan con el trigger si no vienen en él",
+          "type": "object"
+        }
+      },
+      "required": ["kind"],
+      "additionalProperties": false
+    },
+    "endNode": {
+      "type": "object",
+      "properties": {
+        "id": true,
+        "kind": { "const": "end" },
+        "status": {
+          "description": "Status del resultado terminal",
+          "oneOf": [
+            { "enum": ["success", "error", "cancelled"] },
+            {
+              "type": "object",
+              "required": ["custom"],
+              "properties": { "custom": { "type": "string" } },
+              "additionalProperties": false
+            }
+          ],
+          "default": "success"
+        },
+        "output": {
+          "description": "Mapping del resultado final, resuelto contra el contexto; si se omite, el resultado es el output del predecesor"
+        },
+        "schema": { "$ref": "#/$defs/jsonSchema" }
+      },
+      "required": ["kind"],
+      "additionalProperties": false
+    },
+    "taskNode": {
+      "type": "object",
+      "properties": {
+        "id": true,
+        "kind": { "const": "task" },
+        "task": {
+          "description": "Id namespaced de la tarea registrada (ej. http.request)",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+        },
+        "input": {
+          "description": "Mapping de entrada. Strings que empiezan con `$.` se resuelven como JSONPath contra el contexto; `$$.` escapa a literal; sin input, la tarea recibe el output del predecesor"
+        },
+        "retry": { "$ref": "#/$defs/retryPolicy" },
+        "timeout_ms": {
+          "description": "Tiempo máximo de ejecución por intento, en milisegundos",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": ["kind", "task"],
+      "additionalProperties": false
+    },
+    "gatewayNode": {
+      "type": "object",
+      "properties": {
+        "id": true,
+        "kind": { "const": "gateway" },
+        "gateway": { "enum": ["exclusive", "parallel", "join"] },
+        "branches": {
+          "description": "Ramas condicionales; solo aplican a exclusive",
+          "type": "array",
+          "items": { "$ref": "#/$defs/branch" }
+        }
+      },
+      "required": ["kind", "gateway"],
+      "additionalProperties": false,
+      "if": { "properties": { "gateway": { "const": "exclusive" } } },
+      "then": { "required": ["branches"] },
+      "else": { "not": { "required": ["branches"] } }
+    },
+    "subworkflowNode": {
+      "description": "Reservado por la spec 1.0; el validador del engine lo rechaza como no soportado aún",
+      "type": "object",
+      "properties": {
+        "id": true,
+        "kind": { "const": "subworkflow" }
+      },
+      "required": ["kind"]
+    },
+    "branch": {
+      "type": "object",
+      "properties": {
+        "when": { "$ref": "#/$defs/condition" },
+        "else": { "type": "boolean" },
+        "edge": {
+          "description": "Label de la arista saliente que sigue el flujo si esta rama gana",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["edge"],
+      "additionalProperties": false,
+      "oneOf": [
+        { "required": ["when"] },
+        { "required": ["else"], "properties": { "else": { "const": true } } }
+      ]
+    },
+    "condition": {
+      "description": "Mini-DSL de condiciones: composición lógica o comparación sobre un path JSONPath",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["and"],
+          "properties": {
+            "and": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/condition" },
+              "minItems": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["or"],
+          "properties": {
+            "or": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/condition" },
+              "minItems": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["not"],
+          "properties": { "not": { "$ref": "#/$defs/condition" } },
+          "additionalProperties": false
+        },
+        { "$ref": "#/$defs/comparison" }
+      ]
+    },
+    "comparison": {
+      "description": "Un path JSONPath y exactamente un operador. Un path ausente no es error: exists da false y los demás operadores dan false",
+      "type": "object",
+      "required": ["path"],
+      "minProperties": 2,
+      "maxProperties": 2,
+      "properties": {
+        "path": { "type": "string", "pattern": "^\\$\\." },
+        "eq": true,
+        "ne": true,
+        "gt": true,
+        "gte": true,
+        "lt": true,
+        "lte": true,
+        "in": { "type": "array" },
+        "contains": true,
+        "exists": { "type": "boolean" },
+        "is_null": { "type": "boolean" },
+        "starts_with": { "type": "string" },
+        "ends_with": { "type": "string" },
+        "matches": { "type": "string", "format": "regex" }
+      },
+      "additionalProperties": false
+    },
+    "retryPolicy": {
+      "type": "object",
+      "required": ["max"],
+      "properties": {
+        "max": {
+          "description": "Reintentos máximos después del intento inicial",
+          "type": "integer",
+          "minimum": 1
+        },
+        "backoff": {
+          "enum": ["exponential", "linear", "fixed"],
+          "default": "exponential"
+        },
+        "initial_ms": {
+          "description": "Espera base antes del primer reintento, en milisegundos",
+          "type": "integer",
+          "minimum": 0,
+          "default": 500
+        }
+      },
+      "additionalProperties": false
+    },
+    "edge": {
+      "type": "object",
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "label": {
+          "description": "Conecta una rama de gateway (branches[].edge)",
+          "type": "string"
+        },
+        "on": {
+          "description": "Disparador alternativo: error enruta cuando el nodo origen agota sus reintentos",
+          "enum": ["error"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "jsonSchema": {
+      "description": "Un JSON Schema embebido",
+      "type": ["object", "boolean"]
+    }
+  }
+}

@@ -1,9 +1,10 @@
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 use serde_json::{Value, json};
 use uuid::Uuid;
 
+use crate::blob::{BlobStore, TempDirBlobStore};
 use crate::node::NodeId;
 use crate::workflow::WorkflowDefinition;
 
@@ -17,7 +18,6 @@ use crate::workflow::WorkflowDefinition;
 /// ```
 ///
 /// Thread-safe: las ramas paralelas leen y escriben concurrentemente.
-#[derive(Debug)]
 pub struct WorkflowContext {
     /// Identificador único de la ejecución actual (UUID v7)
     execution_id: String,
@@ -25,6 +25,8 @@ pub struct WorkflowContext {
     started_at: Instant,
     /// Documento de estado de la ejecución
     state: RwLock<Value>,
+    /// Almacenamiento de blobs (`$blob`) con ciclo de vida de la ejecución
+    blobs: Arc<dyn BlobStore>,
 }
 
 impl WorkflowContext {
@@ -41,16 +43,23 @@ impl WorkflowContext {
                 "execution_id": execution_id,
             }
         });
+        let blobs = Arc::new(TempDirBlobStore::new(&execution_id));
         Self {
             execution_id,
             started_at: Instant::now(),
             state: RwLock::new(state),
+            blobs,
         }
     }
 
     /// Identificador único de la ejecución
     pub fn execution_id(&self) -> &str {
         &self.execution_id
+    }
+
+    /// Almacenamiento de blobs de esta ejecución (convención `$blob`)
+    pub fn blobs(&self) -> &Arc<dyn BlobStore> {
+        &self.blobs
     }
 
     /// Tiempo transcurrido desde el inicio de la ejecución

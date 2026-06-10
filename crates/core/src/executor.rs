@@ -214,12 +214,20 @@ impl WorkflowExecutor {
             "Iniciando ejecución de workflow"
         );
 
+        let result = self.run_inner(trigger, &ctx).await;
+        if let Err(e) = ctx.blobs().cleanup().await {
+            warn!(code = %e.code, message = %e.message, "No se pudieron limpiar los blobs");
+        }
+        result
+    }
+
+    async fn run_inner(&self, trigger: WorkflowData, ctx: &WorkflowContext) -> WorkflowResult {
         let state = RunState {
             joins: Mutex::new(HashMap::new()),
             ends: Mutex::new(Vec::new()),
         };
 
-        self.execute_from(&self.index.start, Arc::new(trigger.0), None, &ctx, &state)
+        self.execute_from(&self.index.start, Arc::new(trigger.0), None, ctx, &state)
             .await?;
 
         // Joins que nunca recibieron todas sus ramas (p.ej. un exclusive

@@ -280,12 +280,24 @@ Docs, ejemplos, CI, licencias, publicación en crates.io, anuncio.
 - Servidor con API / triggers
 - Editor visual (el grafo + schemas lo hacen posible)
 
+## Contratos de extensiones (decididos en implementación)
+
+- **`data.transform`**: `{ source, shape }`. Los strings de `shape` con prefijo
+  `@.` son JSONPath **relativos al source** (sin colisión con los mappings `$.`
+  del executor); `@@.` escapa; un path ausente produce `null`.
+- **`data.merge`**: `{ objects: [...] }`, merge profundo en orden, llaves
+  posteriores ganan; arrays/escalares se reemplazan completos.
+- **`data.template`**: `{ template, values }`, placeholders `{path.con.puntos}`,
+  `{{`/`}}` escapan; placeholder ausente es error; output string.
+- **`util.log` / `util.delay`**: devuelven su `value` (o null) como output,
+  para no romper la cadena del token.
+- **`http.request`**: un status 4xx/5xx NO es error por default (el status es
+  dato, se rutea con gateways); con `fail_on_error_status: true` la tarea
+  falla y aplican `retry`/`on_error` del nodo.
+
 ## Preguntas abiertas
 
 1. **Cancelación**: ¿API de cancelación cooperativa de una ejecución en v1?
    (No afecta la spec JSON; se decide al diseñar la API del executor.)
 2. **Operadores definitivos del mini-DSL de condiciones**: la lista propuesta
-   arriba se cierra en Fase 0 contra los workflows de ejemplo.
-3. **Diseño fino de `data.transform` / `data.template`**: dado que todo el peso
-   de las transformaciones cae en estas tareas (decisión #14), su input schema
-   merece diseño cuidadoso en Fase 0.
+   arriba se cierra al redactar los JSON Schemas de la spec (Fase 0 pendiente).
