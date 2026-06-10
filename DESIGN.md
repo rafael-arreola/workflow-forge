@@ -12,10 +12,10 @@ embebiendo el core en su aplicación Rust. El core publica dos contratos:
 
 1. **Esquema de ejecución**: el JSON Schema que describe qué es un workflow
    válido (nodos, aristas, gateways, retry, mappings).
-2. **Esquema de extensión**: el manifiesto con el que cualquier plugin declara
-   sus tareas — config, puertos de entrada/salida — como JSON Schema. Esto
-   habilita validación estática, documentación generada y, a futuro, editores
-   visuales, sin acoplarse al código del plugin.
+2. **Esquema de extensión**: el manifiesto con el que cualquier extensión
+   declara sus tareas — config, input/output — como JSON Schema. Esto habilita
+   validación estática, documentación generada y, a futuro, editores visuales,
+   sin acoplarse al código de la extensión.
 
 ## Decisiones fundacionales
 
@@ -27,17 +27,18 @@ embebiendo el core en su aplicación Rust. El core publica dos contratos:
 | 4 | Ejecución v1 | Efímera en memoria, run-to-completion | Durable desde v1 |
 | 5 | Flujo de datos | Contexto global por ejecución + mappings JSONPath; el output de cada nodo se publica en `$.nodes.<id>.output` | Dataflow puro por puertos; híbrido |
 | 6 | Branching | Nodo `gateway` explícito (exclusive / parallel / join) con condiciones en el nodo y aristas etiquetadas | Condiciones en aristas; ambos |
-| 7 | Plugins | Traits Rust compile-time en v1; el contrato JSON Schema se diseña para que WASM sea solo un loader nuevo (roadmap) | WASM desde v1; sin API de plugins |
+| 7 | Extensiones | Traits Rust compile-time en v1; el contrato JSON Schema se diseña para que WASM sea solo un loader nuevo (roadmap) | WASM desde v1; sin API de extensiones |
 | 8 | Errores | Política por nodo (`retry`, `timeout_ms`) + arista `on: error` opcional; sin compensación/sagas en v1 | Solo fallo del workflow; modelo con compensación |
-| 9 | Plugins v1 | HTTP/S client, transformación de datos, SFTP/FS | (utilidades delay/log quedan como nice-to-have) |
+| 9 | Extensiones v1 | HTTP/S client, transformación de datos, SFTP/FS | (utilidades delay/log quedan como nice-to-have) |
 | 10 | Licencia | Dual MIT / Apache-2.0 | MIT solo, Apache solo, AGPL |
 | 11 | Versionado | Campo `spec` en cada workflow + JSON Schemas publicados y versionados (vía `$id`); semver del crate independiente | Acoplar spec al semver del crate |
 | 12 | Condiciones | Mini-DSL JSON propio (`eq`, `gt`, `in`, `and`/`or`/`not`, … sobre paths JSONPath) — validable con JSON Schema y construible por UI | CEL, JSONata, mini-DSL + CEL opcional |
 | 13 | Join | `wait_all` con fallo rápido: espera todas las ramas; si una falla sin `on_error`, el workflow falla y las demás se cancelan | Modos configurables `all`/`any`/`count(n)`; sin paralelismo en v1 |
 | 14 | Mappings | JSONPath puro + literales; toda transformación es un nodo `data.*` explícito | Helpers `$concat`/`$default`; templates de string inline |
 | 15 | Sub-workflows | Post-v1, pero `kind: "subworkflow"` queda reservado en la spec 1.0 | Implementarlo en v1; no reservarlo |
-| 16 | Plugins v1 (ampliado) | `http`, `data`, `util`, `sftp`, `tabular` (csv+xlsx); `compress`/`crypto`/`storage`/`smtp` en v1.x, `db`/`queue` post-v1 | Solo http+data+util en v1 |
-| 17 | Fachada | Crate `workflow-forge` con feature flags (`http`, `data`, …) que re-exporta core y registra plugins; un solo `cargo add` para adoptar | Que el usuario dependa de core + cada plugin |
+| 16 | Extensiones v1 (ampliado) | `http`, `data`, `util`, `sftp`, `tabular` (csv+xlsx); `compress`/`crypto`/`storage`/`smtp` en v1.x, `db`/`queue` post-v1 | Solo http+data+util en v1 |
+| 17 | Fachada | Crate `workflow-forge` con feature flags (`http`, `data`, …) que re-exporta core y registra extensiones; un solo `cargo add` para adoptar | Que el usuario dependa de core + cada extensión |
+| 19 | Terminología | Se llaman **extensiones** (no "plugins"): crates `workflow-forge-ext-*` bajo `crates/extensions/` | "Plugins" |
 | 18 | Binarios/archivos | Convención `$blob`: las tareas pasan referencias `{"$blob": "<id>", ...}`; el core define un trait `BlobStore` (v1: temp dir por ejecución, limpiado al terminar) | Paths planos; base64 inline |
 
 ## Modelo conceptual
@@ -96,8 +97,8 @@ Ejemplo de gateway exclusivo:
 ```
 
 `kind: "subworkflow"` queda **reservado** en la spec 1.0 (no implementado en
-v1): el validador lo rechaza con "no soportado aún", pero ningún plugin puede
-ocupar ese kind.
+v1): el validador lo rechaza con "no soportado aún", pero ninguna extensión
+puede ocupar ese kind.
 
 ### Condiciones (mini-DSL)
 
@@ -178,11 +179,11 @@ El input y output de cada tarea se validan contra los JSON Schemas declarados
 en su manifiesto (errores `TASK_INPUT_INVALID` / `TASK_OUTPUT_INVALID`).
 Un nodo task sin `input` recibe el output de su predecesor.
 
-### Extensión (plugins)
+### Extensiones
 
-- v1: un plugin es un crate que implementa el trait `Task` y se registra en el
-  `TaskRegistry`. Los oficiales viven en el workspace (`crates/plugin-*`)
-  detrás de feature flags.
+- v1: una extensión es un crate que implementa el trait `Task` y se registra
+  en el `TaskRegistry`. Las oficiales viven en el workspace
+  (`crates/extensions/*`) detrás de feature flags.
 - Toda tarea declara un **manifiesto** (`TaskManifest`): id namespaced
   (`http.request`), descripción, JSON Schema de input/output. El manifiesto es
   serializable: `TaskRegistry::catalog()` exporta el catálogo completo de
@@ -190,7 +191,7 @@ Un nodo task sin `input` recibe el output de su predecesor.
 - Roadmap: loader WASM (extism/wasmtime) que consume el mismo manifiesto, y
   por tanto no cambia la spec.
 
-### Plugins v1
+### Extensiones v1
 
 | Namespace | Tareas | Notas |
 |-----------|--------|-------|
@@ -201,7 +202,7 @@ Un nodo task sin `input` recibe el output de su predecesor.
 | `tabular` | `tabular.parse`, `tabular.write` | CSV y XLSX ↔ JSON; usa `$blob` |
 | `fs` | `fs.read`, `fs.write` | Local, complementa sftp; usa `$blob` |
 
-Roadmap de plugins: `compress` (zip/gzip), `crypto` (hash/HMAC), `storage`
+Roadmap de extensiones: `compress` (zip/gzip), `crypto` (hash/HMAC), `storage`
 (S3-compatible) y `smtp` en v1.x; `db` (SQL) y `queue` (AMQP/Kafka) post-v1.
 
 ### Binarios: convención `$blob`
@@ -223,23 +224,23 @@ tocan el filesystem por su cuenta.
 ```
 crates/
   core/                  → workflow-forge-core (spec, executor, manifest, BlobStore)
-  plugins/
-    http/                → workflow-forge-plugin-http
-    data/                → workflow-forge-plugin-data
-    util/                → workflow-forge-plugin-util
-    sftp/                → workflow-forge-plugin-sftp
-    tabular/             → workflow-forge-plugin-tabular
+  extensions/
+    http/                → workflow-forge-ext-http
+    data/                → workflow-forge-ext-data
+    util/                → workflow-forge-ext-util
+    sftp/                → workflow-forge-ext-sftp
+    tabular/             → workflow-forge-ext-tabular
   forge/                 → workflow-forge (fachada con feature flags)
 ```
 
-Reglas: cada plugin depende solo de core (nunca de otro plugin), expone
+Reglas: cada extensión depende solo de core (nunca de otra extensión), expone
 `register(&TaskRegistry)` y sus manifiestos, y trae sus propios tests.
 
 ## Versionado del contrato
 
 - Cada workflow declara `"spec": "1.0"`.
-- Los JSON Schemas (workflow + manifiesto de extensión + cada plugin oficial)
-  se publican en el repo bajo `schemas/<version>/` con `$id` estable, de modo
+- Los JSON Schemas (workflow + manifiesto de extensión + cada extensión
+  oficial) se publican en el repo bajo `schemas/<version>/` con `$id` estable, de modo
   que un workflow es validable con cualquier validador estándar, sin el engine.
 - Los crates evolucionan con semver propio; un bump de crate no implica bump
   de spec.
@@ -247,8 +248,7 @@ Reglas: cada plugin depende solo de core (nunca de otro plugin), expone
 ## Open source
 
 - **Licencia**: dual MIT / Apache-2.0 (estándar del ecosistema Rust).
-- **Workspace**: `crates/core`, `crates/plugin-http`, `crates/plugin-data`,
-  `crates/plugin-sftp` (+ futuro `crates/cli`).
+- **Workspace**: ver "Layout del workspace" arriba (+ futuro `crates/cli`).
 - **Mínimos de release**: README con quickstart, schemas publicados, ejemplos
   ejecutables, CI (fmt + clippy + test), CHANGELOG, publicación en crates.io.
 
@@ -265,16 +265,16 @@ mappings, gateways (exclusive/parallel/join), retry/timeout/on_error,
 validación del grafo (ciclos, nodos huérfanos, aristas a ids inexistentes),
 catálogo exportable de tareas.
 
-### Fase 2 — Plugins oficiales
-`plugin-http`, `plugin-data`, `plugin-sftp`, cada uno con manifiesto, schemas
-y tests de integración.
+### Fase 2 — Extensiones oficiales
+`ext-util`, `ext-data`, `ext-http`, `ext-tabular`, `ext-sftp` + fachada, cada
+una con manifiesto, schemas y tests de integración.
 
 ### Fase 3 — Pulido OSS y v1.0
 Docs, ejemplos, CI, licencias, publicación en crates.io, anuncio.
 
 ### Futuro (post-v1)
 - CLI runtime (`forge run workflow.json`)
-- Plugins WASM instalables sin recompilar
+- Extensiones WASM instalables sin recompilar
 - Durabilidad: executor event-sourced detrás de un trait de storage; espera de
   eventos externos
 - Servidor con API / triggers
