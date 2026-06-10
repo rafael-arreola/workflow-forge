@@ -13,15 +13,35 @@ pub struct WorkflowError {
     /// Identificador de la tarea que originó el error
     #[serde(default)]
     pub source_task: Option<String>,
-    /// Datos que originaron el error
+    /// Datos que originaron el error (boxed para mantener el error barato de mover)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub payload: Option<WorkflowData>,
+    pub payload: Option<Box<WorkflowData>>,
     /// Datos parciales generados antes del fallo
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub response: Option<WorkflowData>,
+    pub response: Option<Box<WorkflowData>>,
     /// Causa raíz (error interno del sistema)
     #[serde(skip)]
     pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
+}
+
+impl WorkflowError {
+    /// Crea un error con código y mensaje; el resto de campos en `None`
+    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+            source_task: None,
+            payload: None,
+            response: None,
+            source: None,
+        }
+    }
+
+    /// Asigna la tarea/nodo de origen
+    pub fn with_source_task(mut self, source_task: impl Into<String>) -> Self {
+        self.source_task = Some(source_task.into());
+        self
+    }
 }
 
 // Clone manual: `source` no es Clone, se omite en la copia

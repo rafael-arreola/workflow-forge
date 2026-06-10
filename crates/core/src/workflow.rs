@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 /// Contiene nodos y aristas.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowDefinition {
+    /// Versión de la spec que cumple esta definición (ej. "1.0")
+    #[serde(default = "default_spec")]
+    pub spec: String,
     /// Identificador único del workflow (se asigna si no se provee)
     #[serde(default)]
     pub id: Option<String>,
@@ -12,11 +15,15 @@ pub struct WorkflowDefinition {
     pub name: String,
     /// Versión semántica
     pub version: String,
-    /// Nodos que componen el grafo (módulos, condicionales, bucles, etc.)
+    /// Nodos que componen el grafo
     pub nodes: Vec<Node>,
-    /// Aristas dirigidas que definen el flujo de datos y control
+    /// Aristas dirigidas que definen el flujo de control
     #[serde(default)]
     pub edges: Vec<FlowEdge>,
+}
+
+fn default_spec() -> String {
+    "1.0".to_string()
 }
 
 /// Conexión dirigida entre dos nodos del workflow.
@@ -26,4 +33,19 @@ pub struct FlowEdge {
     pub from: NodeId,
     /// ID del nodo de destino
     pub to: NodeId,
+    /// Etiqueta de la arista; conecta una rama de gateway (`branches[].edge`)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// Disparador alternativo: `error` enruta el flujo cuando el nodo origen
+    /// agota sus reintentos. Sin `on`, la arista es del flujo normal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on: Option<EdgeTrigger>,
+}
+
+/// Disparadores alternativos de una arista.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum EdgeTrigger {
+    /// La arista se sigue cuando el nodo origen falla definitivamente
+    Error,
 }

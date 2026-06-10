@@ -35,19 +35,3 @@ impl From<&WorkflowData> for serde_json::Value {
 
 /// Resultado de la ejecución de una tarea: datos exitosos o error estructurado
 pub type WorkflowResult = Result<WorkflowData, WorkflowError>;
-
-/// Definición de un puerto individual de entrada o salida de una tarea
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PortDef {
-    /// Nombre identificador del puerto dentro de la tarea
-    pub name: String,
-    /// Indica si el puerto es obligatorio para la ejecución
-    #[serde(default)]
-    pub required: bool,
-    /// Esquema JSON que valida los datos que transitan por este puerto
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub schema: Option<schemars::Schema>,
-    /// Descripción legible del propósito del puerto
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-}

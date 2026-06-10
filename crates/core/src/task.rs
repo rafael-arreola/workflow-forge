@@ -1,7 +1,8 @@
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 use crate::context::WorkflowContext;
-use crate::types::{PortDef, WorkflowData, WorkflowResult};
+use crate::types::{WorkflowData, WorkflowResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TaskId(pub String);
@@ -49,20 +50,49 @@ impl<'de> serde::Deserialize<'de> for TaskId {
     }
 }
 
+/// Contrato público de una tarea: el "esquema de extensión" de la spec.
+/// Es serializable, de modo que el catálogo completo de tareas disponibles
+/// puede exportarse como JSON y validarse/documentarse sin el engine.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskManifest {
+    /// Id namespaced único (ej. `"http.request"`)
+    pub id: TaskId,
+    /// Descripción legible del propósito de la tarea
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// JSON Schema que valida el input de la tarea
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_schema: Option<schemars::Schema>,
+    /// JSON Schema que valida el output de la tarea
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_schema: Option<schemars::Schema>,
+}
+
+impl TaskManifest {
+    /// Manifiesto mínimo: solo id, sin schemas
+    pub fn new(id: impl Into<TaskId>) -> Self {
+        Self {
+            id: id.into(),
+            description: None,
+            input_schema: None,
+            output_schema: None,
+        }
+    }
+}
+
 /// Unidad mínima ejecutable dentro de un workflow.
-/// Cada tarea declara sus puertos y define su lógica de transformación.
+/// Cada tarea publica su manifiesto y define su lógica de transformación.
 #[async_trait]
 pub trait Task: Send + Sync + 'static {
-    /// Identificador único de la tarea se usa para poder resolver la tarea en runtime.
-    fn task_id(&self) -> &TaskId;
-
-    /// Puertos de entrada que reciben datos para la ejecución
-    fn input_ports(&self) -> &[PortDef];
-
-    /// Puertos de salida que emiten el resultado de la ejecución
-    fn output_ports(&self) -> &[PortDef];
+    /// Contrato público de la tarea: id, descripción y schemas de input/output
+    fn manifest(&self) -> &TaskManifest;
 
     /// Transforma los datos de entrada en la salida esperada.
     /// Recibe el contexto inmutable del workflow y los datos de entrada.
     async fn execute(&self, ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult;
+
+    /// Id de la tarea, tomado del manifiesto
+    fn task_id(&self) -> &TaskId {
+        &self.manifest().id
+    }
 }

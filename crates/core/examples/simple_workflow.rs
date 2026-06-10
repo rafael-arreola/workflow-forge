@@ -9,8 +9,8 @@ use workflow_forge_core::node::event::{EndNode, EndStatus, StartNode};
 use workflow_forge_core::node::task::TaskNode;
 use workflow_forge_core::node::{Node, NodeId, NodeKind};
 use workflow_forge_core::registry::TaskRegistry;
-use workflow_forge_core::task::{Task, TaskId};
-use workflow_forge_core::types::{PortDef, WorkflowData, WorkflowResult};
+use workflow_forge_core::task::{Task, TaskManifest};
+use workflow_forge_core::types::{WorkflowData, WorkflowResult};
 use workflow_forge_core::workflow::{FlowEdge, WorkflowDefinition};
 
 // ---------------------------------------------------------------------------
@@ -18,23 +18,13 @@ use workflow_forge_core::workflow::{FlowEdge, WorkflowDefinition};
 // ---------------------------------------------------------------------------
 
 struct UpperCaseTask {
-    task_id: TaskId,
+    manifest: TaskManifest,
 }
-
-static PORTS: &[PortDef] = &[];
 
 #[async_trait]
 impl Task for UpperCaseTask {
-    fn task_id(&self) -> &TaskId {
-        &self.task_id
-    }
-
-    fn input_ports(&self) -> &[PortDef] {
-        PORTS
-    }
-
-    fn output_ports(&self) -> &[PortDef] {
-        PORTS
+    fn manifest(&self) -> &TaskManifest {
+        &self.manifest
     }
 
     async fn execute(&self, _ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult {
@@ -53,21 +43,13 @@ impl Task for UpperCaseTask {
 // ---------------------------------------------------------------------------
 
 struct MetadataTask {
-    task_id: TaskId,
+    manifest: TaskManifest,
 }
 
 #[async_trait]
 impl Task for MetadataTask {
-    fn task_id(&self) -> &TaskId {
-        &self.task_id
-    }
-
-    fn input_ports(&self) -> &[PortDef] {
-        PORTS
-    }
-
-    fn output_ports(&self) -> &[PortDef] {
-        PORTS
+    fn manifest(&self) -> &TaskManifest {
+        &self.manifest
     }
 
     async fn execute(&self, ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult {
@@ -80,7 +62,7 @@ impl Task for MetadataTask {
             }
         };
 
-        map.insert("workflow_id".to_string(), json!(ctx.workflow_id()));
+        map.insert("execution_id".to_string(), json!(ctx.execution_id()));
         map.insert("elapsed_ms".to_string(), json!(ctx.elapsed().as_millis()));
 
         Ok(WorkflowData(serde_json::Value::Object(map)))
@@ -98,12 +80,12 @@ async fn main() {
     let registry = Arc::new(TaskRegistry::new());
 
     let upper = UpperCaseTask {
-        task_id: TaskId::from("upper"),
+        manifest: TaskManifest::new("upper"),
     };
     let upper_id = upper.task_id().clone();
 
     let meta = MetadataTask {
-        task_id: TaskId::from("metadata"),
+        manifest: TaskManifest::new("metadata"),
     };
     let meta_id = meta.task_id().clone();
 
@@ -118,6 +100,7 @@ async fn main() {
     // --- 2. Definir el workflow (programáticamente) ---
 
     let workflow = WorkflowDefinition {
+        spec: "1.0".into(),
         id: None,
         name: "text-pipeline".into(),
         version: "1.0.0".into(),
@@ -131,16 +114,27 @@ async fn main() {
             },
             Node {
                 id: NodeId::from("to_upper"),
-                kind: NodeKind::Task(TaskNode { task_id: upper_id }),
+                kind: NodeKind::Task(TaskNode {
+                    task: upper_id,
+                    input: None,
+                    retry: None,
+                    timeout_ms: None,
+                }),
             },
             Node {
                 id: NodeId::from("add_meta"),
-                kind: NodeKind::Task(TaskNode { task_id: meta_id }),
+                kind: NodeKind::Task(TaskNode {
+                    task: meta_id,
+                    input: None,
+                    retry: None,
+                    timeout_ms: None,
+                }),
             },
             Node {
                 id: NodeId::from("end"),
                 kind: NodeKind::End(EndNode {
                     status: EndStatus::Success,
+                    output: None,
                     schema: None,
                 }),
             },
@@ -149,14 +143,20 @@ async fn main() {
             FlowEdge {
                 from: NodeId::from("start"),
                 to: NodeId::from("to_upper"),
+                label: None,
+                on: None,
             },
             FlowEdge {
                 from: NodeId::from("to_upper"),
                 to: NodeId::from("add_meta"),
+                label: None,
+                on: None,
             },
             FlowEdge {
                 from: NodeId::from("add_meta"),
                 to: NodeId::from("end"),
+                label: None,
+                on: None,
             },
         ],
     };
@@ -168,7 +168,15 @@ async fn main() {
 
     // --- 4. Ejecutar ---
 
-    let executor = WorkflowExecutor::new(workflow, registry);
+    let executor = match WorkflowExecutor::new(workflow, registry) {
+        Ok(executor) => executor,
+        Err(errors) => {
+            for err in errors {
+                eprintln!("❌ Workflow inválido: [{}] {}", err.code, err.message);
+            }
+            std::process::exit(1);
+        }
+    };
 
     let input = WorkflowData(json!({
         "text": "hello world from workflow-forge"

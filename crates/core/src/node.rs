@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod event;
+pub mod gateway;
 pub mod task;
 
 /// Identificador único de un nodo dentro del grafo del workflow.
@@ -52,4 +53,16 @@ pub enum NodeKind {
     End(event::EndNode),
     /// Nodo de tarea ejecutable
     Task(task::TaskNode),
+    /// Nodo de control de flujo (exclusive/parallel/join)
+    Gateway(gateway::GatewayNode),
+    /// Reservado por la spec 1.0; la validación lo rechaza como "no soportado aún"
+    Subworkflow(SubworkflowNode),
+}
+
+/// Placeholder del kind reservado `subworkflow`. Acepta cualquier contenido
+/// para que la deserialización no falle, pero la validación del grafo lo rechaza.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubworkflowNode {
+    #[serde(flatten)]
+    pub reserved: serde_json::Map<String, serde_json::Value>,
 }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use crate::task::{Task, TaskId};
+use crate::task::{Task, TaskId, TaskManifest};
 
 /// Registro global de tareas disponibles para ejecución.
 /// Las tareas se registran por su `task_id()` y se resuelven en runtime
@@ -42,6 +42,16 @@ impl TaskRegistry {
     pub fn list(&self) -> Vec<TaskId> {
         let map = self.tasks.read().expect("TaskRegistry lock poisoned");
         map.keys().cloned().collect()
+    }
+
+    /// Exporta el catálogo de manifiestos de todas las tareas registradas.
+    /// Serializable a JSON: es la base de tooling, documentación y editores.
+    pub fn catalog(&self) -> Vec<TaskManifest> {
+        let map = self.tasks.read().expect("TaskRegistry lock poisoned");
+        let mut catalog: Vec<TaskManifest> =
+            map.values().map(|task| task.manifest().clone()).collect();
+        catalog.sort_by(|a, b| a.id.0.cmp(&b.id.0));
+        catalog
     }
 
     /// Verifica si un tipo de tarea está registrado

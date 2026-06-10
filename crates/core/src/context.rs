@@ -1,40 +1,125 @@
+use std::sync::RwLock;
 use std::time::Instant;
 
+use serde_json::{Value, json};
 use uuid::Uuid;
 
-/// Contexto inmutable compartido con todos los módulos durante la ejecución.
-/// Proporciona trazabilidad (ID de workflow) y medición de tiempo.
+use crate::node::NodeId;
+use crate::workflow::WorkflowDefinition;
+
+/// Contexto de una ejecución. Contiene el documento de estado sobre el que
+/// se resuelven mappings y condiciones:
+///
+/// ```text
+/// $.trigger              → input inicial del workflow
+/// $.nodes.<id>.output    → resultado de cada nodo ejecutado
+/// $.workflow             → metadata (id, nombre, versión, execution_id)
+/// ```
+///
+/// Thread-safe: las ramas paralelas leen y escriben concurrentemente.
 #[derive(Debug)]
 pub struct WorkflowContext {
     /// Identificador único de la ejecución actual (UUID v7)
-    workflow_id: String,
+    execution_id: String,
     /// Instante en que inició la ejecución
-    execution_at: Instant,
+    started_at: Instant,
+    /// Documento de estado de la ejecución
+    state: RwLock<Value>,
 }
 
 impl WorkflowContext {
-    /// Crea un nuevo contexto con un UUID v7 y marca de tiempo actual
-    pub fn new() -> Self {
-        let workflow_id = Uuid::now_v7().to_string();
+    /// Crea el contexto de una nueva ejecución con su documento de estado inicial
+    pub fn new(workflow: &WorkflowDefinition, trigger: Value) -> Self {
+        let execution_id = Uuid::now_v7().to_string();
+        let state = json!({
+            "trigger": trigger,
+            "nodes": {},
+            "workflow": {
+                "id": workflow.id,
+                "name": workflow.name,
+                "version": workflow.version,
+                "execution_id": execution_id,
+            }
+        });
         Self {
-            workflow_id,
-            execution_at: Instant::now(),
+            execution_id,
+            started_at: Instant::now(),
+            state: RwLock::new(state),
         }
     }
 
-    /// Devuelve el identificador único de la ejecución
-    pub fn workflow_id(&self) -> &str {
-        &self.workflow_id
+    /// Identificador único de la ejecución
+    pub fn execution_id(&self) -> &str {
+        &self.execution_id
     }
 
     /// Tiempo transcurrido desde el inicio de la ejecución
     pub fn elapsed(&self) -> std::time::Duration {
-        self.execution_at.elapsed()
+        self.started_at.elapsed()
+    }
+
+    /// Lee el documento de estado bajo el lock, sin clonar
+    pub fn with_state<R>(&self, f: impl FnOnce(&Value) -> R) -> R {
+        let state = self.state.read().expect("WorkflowContext lock poisoned");
+        f(&state)
+    }
+
+    /// Copia completa del documento de estado (para debugging/inspección)
+    pub fn snapshot(&self) -> Value {
+        self.with_state(Clone::clone)
+    }
+
+    /// Publica el output de un nodo en `$.nodes.<id>.output`
+    pub fn set_node_output(&self, node_id: &NodeId, output: Value) {
+        let mut state = self.state.write().expect("WorkflowContext lock poisoned");
+        state["nodes"][node_id.0.as_str()] = json!({ "output": output });
+    }
+
+    /// Output de un nodo ya ejecutado, si existe
+    pub fn node_output(&self, node_id: &NodeId) -> Option<Value> {
+        self.with_state(|state| state["nodes"][node_id.0.as_str()].get("output").cloned())
+    }
+
+    /// Publica el error de un nodo en `$.nodes.<id>.error` (rutas on_error)
+    pub fn set_node_error(&self, node_id: &NodeId, error: Value) {
+        let mut state = self.state.write().expect("WorkflowContext lock poisoned");
+        state["nodes"][node_id.0.as_str()]["error"] = error;
     }
 }
 
-impl Default for WorkflowContext {
-    fn default() -> Self {
-        Self::new()
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn workflow() -> WorkflowDefinition {
+        serde_json::from_value(json!({
+            "name": "test",
+            "version": "0.1.0",
+            "nodes": [],
+            "edges": []
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn documento_inicial_y_outputs() {
+        let ctx = WorkflowContext::new(&workflow(), json!({ "user_id": 7 }));
+
+        ctx.with_state(|state| {
+            assert_eq!(state["trigger"]["user_id"], 7);
+            assert_eq!(state["workflow"]["name"], "test");
+            assert_eq!(
+                state["workflow"]["execution_id"],
+                ctx.execution_id().to_string().as_str()
+            );
+        });
+
+        let node = NodeId::from("fetch");
+        assert_eq!(ctx.node_output(&node), None);
+        ctx.set_node_output(&node, json!({ "status": 200 }));
+        assert_eq!(ctx.node_output(&node), Some(json!({ "status": 200 })));
+        ctx.with_state(|state| {
+            assert_eq!(state["nodes"]["fetch"]["output"]["status"], 200);
+        });
     }
 }

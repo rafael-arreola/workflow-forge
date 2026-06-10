@@ -23,7 +23,12 @@ pub struct EndNode {
     #[serde(default)]
     pub status: EndStatus,
 
-    /// Transformación opcional de los datos antes de devolverlos como resultado final
+    /// Mapping del resultado final del workflow, resuelto contra el contexto.
+    /// Si se omite, el resultado es el output del nodo predecesor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<serde_json::Value>,
+
+    /// Esquema JSON que valida el resultado final
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema: Option<schemars::Schema>,
 }
