@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/rafael-arreola/workflow-forge/main/schemas/1.0/profile.schema.json",
+  "title": "workflow-forge Task Profile",
+  "description": "Perfil de tarea de la spec 1.0: instancia nombrada y reusable de una tarea registrada, con config horneada (bind) y JSON Schemas de input/output propios. Se registra en el registry (compartido entre workflows) o inline en la sección `tasks` de un workflow.",
+  "type": "object",
+  "required": ["id", "extends"],
+  "properties": {
+    "id": {
+      "description": "Id namespaced único bajo el que se registra el perfil (ej. acme.crear_orden)",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+    },
+    "extends": {
+      "description": "Id de la tarea base ya registrada que este perfil especializa (puede ser otro perfil)",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+    },
+    "description": { "type": "string" },
+    "input_schema": {
+      "description": "JSON Schema del input específico del perfil",
+      "type": ["object", "boolean"]
+    },
+    "output_schema": {
+      "description": "JSON Schema del output específico del perfil",
+      "type": ["object", "boolean"]
+    },
+    "bind": {
+      "description": "Shape que construye el input de la base: `@` es el input completo del perfil, `@.path` un subpath (ausente → null), `@@.` escapa, el resto son literales. Los objetos {\"$secret\": \"NOMBRE\"} se resuelven al registrar vía SecretProvider. Sin bind, el input pasa tal cual a la base"
+    },
+    "output": {
+      "description": "Shape opcional aplicado al output de la base (ej. \"@.body\"), validado después contra output_schema"
+    }
+  },
+  "additionalProperties": false
+}

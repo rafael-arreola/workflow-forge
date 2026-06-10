@@ -176,3 +176,140 @@ fn manifiestos_del_core_validan_contra_el_esquema_de_extension() {
     // Ids sin namespace son rechazados
     assert!(!validator.is_valid(&json!({ "id": "sinpunto" })));
 }
+
+#[test]
+fn workflow_con_foreach_valida() {
+    assert_valid_everywhere(json!({
+        "spec": "1.0",
+        "name": "con-foreach", "version": "0.1.0",
+        "nodes": [
+            { "id": "start", "kind": "start" },
+            { "id": "lote", "kind": "foreach",
+              "task": "http.request",
+              "items": "$.trigger.filas",
+              "concurrency": 4,
+              "throttle_ms": 100,
+              "on_item_error": "collect",
+              "retry": { "max": 2 },
+              "timeout_ms": 5000 },
+            { "id": "end", "kind": "end" }
+        ],
+        "edges": [
+            { "from": "start", "to": "lote" },
+            { "from": "lote", "to": "end" }
+        ]
+    }));
+}
+
+#[test]
+fn el_schema_rechaza_foreach_invalidos() {
+    let base = |foreach: Value| {
+        json!({
+            "name": "x", "version": "1",
+            "nodes": [
+                { "id": "s", "kind": "start" },
+                foreach
+            ]
+        })
+    };
+    assert_schema_rejects(
+        base(json!({ "id": "f", "kind": "foreach", "task": "a.b" })),
+        "foreach sin items",
+    );
+    assert_schema_rejects(
+        base(json!({ "id": "f", "kind": "foreach", "items": [] })),
+        "foreach sin task",
+    );
+    assert_schema_rejects(
+        base(json!({ "id": "f", "kind": "foreach", "task": "a.b",
+            "items": [], "concurrency": 0 })),
+        "concurrency 0",
+    );
+    assert_schema_rejects(
+        base(json!({ "id": "f", "kind": "foreach", "task": "a.b",
+            "items": [], "on_item_error": "ignore" })),
+        "on_item_error desconocido",
+    );
+}
+
+fn profile_validator() -> jsonschema::Validator {
+    let schema: Value =
+        serde_json::from_str(include_str!("../../../schemas/1.0/profile.schema.json"))
+            .expect("schema parseable");
+    jsonschema::validator_for(&schema).expect("schema compilable")
+}
+
+#[test]
+fn workflow_con_perfiles_inline_valida() {
+    assert_valid_everywhere(json!({
+        "spec": "1.0",
+        "name": "con-perfiles", "version": "0.1.0",
+        "tasks": [{
+            "id": "acme.crear_orden",
+            "extends": "http.request",
+            "description": "Crea una orden en Acme",
+            "input_schema": { "type": "object", "required": ["sku"] },
+            "output_schema": { "type": "object" },
+            "bind": {
+                "url": "https://api.acme.com/orders",
+                "method": "POST",
+                "auth": { "type": "bearer", "token": { "$secret": "ACME_TOKEN" } },
+                "body": "@"
+            },
+            "output": "@.body"
+        }],
+        "nodes": [
+            { "id": "start", "kind": "start" },
+            { "id": "crear", "kind": "task", "task": "acme.crear_orden" },
+            { "id": "end", "kind": "end" }
+        ],
+        "edges": [
+            { "from": "start", "to": "crear" },
+            { "from": "crear", "to": "end" }
+        ]
+    }));
+}
+
+#[test]
+fn el_schema_rechaza_perfiles_invalidos() {
+    let base = |tasks: Value| {
+        json!({
+            "name": "x", "version": "1", "tasks": tasks,
+            "nodes": [{ "id": "s", "kind": "start" }]
+        })
+    };
+    assert_schema_rejects(base(json!([{ "id": "acme.x" }])), "perfil sin extends");
+    assert_schema_rejects(
+        base(json!([{ "id": "SinNamespace", "extends": "http.request" }])),
+        "id de perfil sin namespace",
+    );
+    assert_schema_rejects(
+        base(json!([{ "id": "acme.x", "extends": "http.request", "config": {} }])),
+        "propiedad desconocida en el perfil",
+    );
+}
+
+#[test]
+fn los_perfiles_validan_contra_el_esquema_de_perfil() {
+    let validator = profile_validator();
+
+    let perfil = json!({
+        "id": "acme.crear_orden",
+        "extends": "http.request",
+        "input_schema": { "type": "object" },
+        "bind": { "url": "https://api.acme.com", "body": "@" },
+        "output": "@.body"
+    });
+    let errors: Vec<String> = validator
+        .iter_errors(&perfil)
+        .map(|e| e.to_string())
+        .collect();
+    assert!(errors.is_empty(), "perfil rechazado: {errors:?}");
+
+    // El tipo del core deserializa lo que el schema acepta
+    let _: workflow_forge_core::profile::TaskProfile =
+        serde_json::from_value(perfil).expect("el core debe deserializarlo");
+
+    assert!(!validator.is_valid(&json!({ "id": "acme.x" })));
+    assert!(!validator.is_valid(&json!({ "id": "sinpunto", "extends": "http.request" })));
+}

@@ -1,4 +1,5 @@
 use crate::node::{Node, NodeId};
+use crate::profile::TaskProfile;
 use serde::{Deserialize, Serialize};
 
 /// Definición completa de un workflow lista para ser serializada/deserializada.
@@ -15,6 +16,10 @@ pub struct WorkflowDefinition {
     pub name: String,
     /// Versión semántica
     pub version: String,
+    /// Perfiles de tarea locales al workflow: instancias preconfiguradas de
+    /// tareas registradas, visibles solo para esta definición
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tasks: Vec<TaskProfile>,
     /// Nodos que componen el grafo
     pub nodes: Vec<Node>,
     /// Aristas dirigidas que definen el flujo de control

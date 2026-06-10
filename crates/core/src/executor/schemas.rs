@@ -55,9 +55,14 @@ impl CompiledSchemas {
                 compiled.nodes.insert(node.id.clone(), validator);
             }
 
-            if let NodeKind::Task(task_node) = &node.kind
-                && !compiled.tasks.contains_key(&task_node.task)
-                && let Some(task) = registry.get(&task_node.task)
+            let task_ref = match &node.kind {
+                NodeKind::Task(task_node) => Some(&task_node.task),
+                NodeKind::Foreach(foreach) => Some(&foreach.task),
+                _ => None,
+            };
+            if let Some(task_ref) = task_ref
+                && !compiled.tasks.contains_key(task_ref)
+                && let Some(task) = registry.get(task_ref)
             {
                 let manifest = task.manifest();
                 let input = manifest
@@ -68,9 +73,7 @@ impl CompiledSchemas {
                     .output_schema
                     .as_ref()
                     .and_then(|s| compile(s, format!("el output de la tarea '{}'", manifest.id)));
-                compiled
-                    .tasks
-                    .insert(task_node.task.clone(), (input, output));
+                compiled.tasks.insert(task_ref.clone(), (input, output));
             }
         }
 

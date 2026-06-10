@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+use crate::error::WorkflowError;
+use crate::profile::{ProfileTask, TaskProfile};
+use crate::secret::SecretProvider;
 use crate::task::{Task, TaskId, TaskManifest};
 
 /// Registro global de tareas disponibles para ejecución.
@@ -27,9 +30,61 @@ impl TaskRegistry {
     where
         T: Task,
     {
+        self.register_arc(Arc::new(task));
+    }
+
+    /// Registra una tarea ya envuelta en `Arc` (útil para compartir instancias
+    /// entre registries). Si ya existe una con el mismo id, la sobrescribe.
+    pub fn register_arc(&self, task: Arc<dyn Task>) {
         let key = task.task_id().clone();
         let mut map = self.tasks.write().expect("TaskRegistry lock poisoned");
-        map.insert(key, Arc::new(task));
+        map.insert(key, task);
+    }
+
+    /// Registra un perfil de tarea: una instancia nombrada y reusable de una
+    /// tarea base ya registrada, con config horneada (`bind`) y schemas
+    /// propios. Los `{"$secret": "X"}` del bind se resuelven aquí con el
+    /// provider dado.
+    ///
+    /// Errores: `PROFILE_BASE_NOT_FOUND` si `extends` no está registrado,
+    /// `PROFILE_ID_CONFLICT` si el id ya existe, `SECRET_NOT_FOUND` si un
+    /// secreto no resuelve.
+    pub fn register_profile(
+        &self,
+        profile: TaskProfile,
+        secrets: &dyn SecretProvider,
+    ) -> Result<(), WorkflowError> {
+        if self.contains(&profile.id) {
+            return Err(WorkflowError::new(
+                "PROFILE_ID_CONFLICT",
+                format!(
+                    "No se puede registrar el perfil '{}': ya existe una tarea con ese id",
+                    profile.id
+                ),
+            ));
+        }
+        let base = self.get(&profile.extends).ok_or_else(|| {
+            WorkflowError::new(
+                "PROFILE_BASE_NOT_FOUND",
+                format!(
+                    "El perfil '{}' extiende '{}', que no está registrada",
+                    profile.id, profile.extends
+                ),
+            )
+        })?;
+        let task = ProfileTask::new(profile, base, secrets)?;
+        self.register(task);
+        Ok(())
+    }
+
+    /// Copia superficial e independiente del registry: las tareas (Arc) se
+    /// comparten, pero los registros posteriores no afectan al original.
+    /// Es la base de los perfiles inline por workflow.
+    pub fn scoped(&self) -> TaskRegistry {
+        let map = self.tasks.read().expect("TaskRegistry lock poisoned");
+        TaskRegistry {
+            tasks: Arc::new(RwLock::new(map.clone())),
+        }
     }
 
     /// Obtiene una tarea por su tipo. Devuelve `None` si no está registrada.

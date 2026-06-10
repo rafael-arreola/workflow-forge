@@ -40,6 +40,10 @@ embebiendo el core en su aplicación Rust. El core publica dos contratos:
 | 17 | Fachada | Crate `workflow-forge` con feature flags (`http`, `data`, …) que re-exporta core y registra extensiones; un solo `cargo add` para adoptar | Que el usuario dependa de core + cada extensión |
 | 19 | Terminología | Se llaman **extensiones** (no "plugins"): crates `workflow-forge-ext-*` bajo `crates/extensions/` | "Plugins" |
 | 18 | Binarios/archivos | Convención `$blob`: las tareas pasan referencias `{"$blob": "<id>", ...}`; el core define un trait `BlobStore` (v1: temp dir por ejecución, limpiado al terminar) | Paths planos; base64 inline |
+| 20 | Perfiles de tarea | Instancias nombradas y reusables de una tarea (`TaskProfile`): config horneada (`bind`) + schemas propios; se registran en el registry o inline en la sección `tasks` del workflow | Repetir config en cada nodo; solo registry; solo inline |
+| 21 | Secrets | Convención `{"$secret": "NOMBRE"}` en el `bind` de perfiles, resuelta al registrar vía trait `SecretProvider` (default: variables de entorno) | Tokens literales en JSON; diferir a v1.x |
+| 22 | Iteración | Nodo `foreach`: invoca una tarea por cada elemento de un array, con concurrencia elegible (default secuencial), throttle entre arranques y políticas `fail`/`collect` por elemento | Nodo de loop genérico; iteración dentro de data.map; sin iteración en v1 |
+| 23 | Observabilidad | Trait `ExecutionObserver` + eventos tipados serializables (`ExecutionEvent`) emitidos por el executor; `InMemoryHistory` → `ExecutionReport` integrado. Los eventos son la semilla del journal durable (post-v1) | Solo tracing; reporte sin streaming; diferir todo a la fase durable |
 
 ## Modelo conceptual
 
@@ -205,6 +209,123 @@ Un nodo task sin `input` recibe el output de su predecesor.
 Roadmap de extensiones: `compress` (zip/gzip), `crypto` (hash/HMAC), `storage`
 (S3-compatible) y `smtp` en v1.x; `db` (SQL) y `queue` (AMQP/Kafka) post-v1.
 
+### Nodo `foreach`
+
+Iteración con invocación de tarea por elemento — el complemento de `data.map`
+(que solo reshapea). El caso típico: "una llamada HTTP por cada fila del lote
+del cliente".
+
+```json
+{
+  "id": "crear_ordenes",
+  "kind": "foreach",
+  "items": "$.nodes.adaptar.output",
+  "task": "miapi.crear_envio",
+  "concurrency": 5,
+  "throttle_ms": 200,
+  "on_item_error": "collect",
+  "retry": { "max": 2 },
+  "timeout_ms": 10000
+}
+```
+
+Semántica:
+
+- `items`: mapping (reglas `$.` de los inputs) que debe resolver a array
+  (`FOREACH_ITEMS_NOT_ARRAY` si no).
+- Cada elemento es el **input directo** de la tarea; el reshape por elemento
+  se hace antes con `data.map` (decisión #14: un solo lugar transforma).
+  Input/output de cada elemento se validan contra los schemas de la tarea.
+- `concurrency` (default 1 = secuencial) limita los elementos en vuelo;
+  `throttle_ms` separa los **arranques** de elementos entre sí, también bajo
+  concurrencia — es el rate limit hacia el destino.
+- `retry`/`timeout_ms` aplican por elemento.
+- `on_item_error: "fail"` (default): el primer error cancela los elementos en
+  vuelo y el nodo falla (aplican aristas `on: error`). Output: array de
+  outputs en el orden de `items`.
+- `on_item_error: "collect"`: se ejecutan todos; output
+  `{ "ok": [...], "failed": [{ "index", "item", "error" }] }` y el nodo no
+  falla — los fallos se rutean con gateways
+  (ej. `{ "path": "$.nodes.x.output.failed[0]", "exists": true }`).
+
+### Observabilidad
+
+El executor emite eventos tipados a un `ExecutionObserver` registrado con
+`WorkflowExecutor::with_observer` (cero costo sin observer). Los eventos
+serializan a JSON con discriminador `type` y llevan `execution_id`, `seq`
+(orden total por ejecución, estable bajo paralelismo) y `elapsed_ms`:
+
+`workflow_started` · `node_started` · `task_attempt_started` ·
+`task_attempt_failed` · `node_completed` · `node_failed` ·
+`foreach_item_completed` · `foreach_item_failed` · `workflow_completed` ·
+`workflow_failed`
+
+- Los payloads (trigger, inputs, outputs, errores) van **completos** en los
+  eventos; el observer decide qué persistir/truncar. `on_event` es síncrono y
+  no debe bloquear (el host bufferiza si persiste lento).
+- `InMemoryHistory` es el observer integrado: acumula eventos y produce un
+  `ExecutionReport` serializable — status global + por nodo (status,
+  attempts, duración, output/error, conteos ok/failed de foreach).
+- **Roadmap durable (#8)**: estos mismos eventos son el journal del executor
+  event-sourced post-v1 — un `EventStore` que persista `ExecutionEvent` y un
+  replay que reconstruya el estado. El contrato de eventos se congela aquí
+  para no rediseñar.
+
+### Perfiles de tarea
+
+El bloque de construcción para integraciones repetibles: un **perfil**
+(`TaskProfile`) es una instancia nombrada y reusable de una tarea registrada,
+con la configuración horneada y un contrato de input/output específico. El
+caso típico: un endpoint concreto de un cliente como tarea de primera clase.
+
+```json
+{
+  "id": "acme.crear_orden",
+  "extends": "http.request",
+  "description": "Crea una orden en Acme",
+  "input_schema": { "type": "object", "required": ["sku", "qty"] },
+  "output_schema": { "type": "object", "required": ["order_id"] },
+  "bind": {
+    "url": "https://api.acme.com/orders",
+    "method": "POST",
+    "auth": { "type": "bearer", "token": { "$secret": "ACME_TOKEN" } },
+    "fail_on_error_status": true,
+    "body": "@"
+  },
+  "output": "@.body"
+}
+```
+
+Semántica:
+
+- `extends`: id de una tarea ya registrada; puede ser otro perfil (cadenas de
+  especialización). No hay ciclos posibles: la base debe existir al registrar.
+- `bind`: shape que construye el input de la base a partir del input del
+  perfil, con la misma convención de `data.transform`: `@` es el input
+  completo, `@.path` un subpath (ausente → null), `@@.` escapa, el resto son
+  literales. Sin `bind`, el input pasa tal cual.
+- `output`: shape opcional sobre el output de la base (ej. `"@.body"`); el
+  resultado se valida contra `output_schema`.
+- Secrets: los objetos `{"$secret": "NOMBRE"}` del `bind` se resuelven **al
+  registrar** el perfil vía el trait `SecretProvider` (default `EnvSecrets`,
+  variables de entorno). Las definiciones versionadas no llevan credenciales.
+- Registro: `TaskRegistry::register_profile()` para perfiles compartidos entre
+  workflows, o la sección `tasks` del documento del workflow para perfiles
+  locales (el executor los registra en una copia `scoped()` del registry: el
+  registry compartido no se contamina).
+- Un perfil registrado es una tarea más: aparece en el catálogo con sus
+  schemas y el executor valida su input/output como a cualquier tarea. Si el
+  `bind` produce un input que la base rechaza, el error es
+  `PROFILE_BIND_INVALID` (otros errores: `PROFILE_BASE_NOT_FOUND`,
+  `PROFILE_ID_CONFLICT`, `SECRET_NOT_FOUND`).
+- Spec: `schemas/1.0/profile.schema.json` publica el contrato del perfil; el
+  schema del workflow lo embebe en su sección `tasks`.
+
+El patrón de integración resultante: `trigger` (JSON del cliente en su
+formato) → nodo `data.transform` que lo reconvierte campo a campo → perfil
+preconfigurado que ejecuta la llamada. Cada pieza es declarativa, validable y
+reusable.
+
 ### Binarios: convención `$blob`
 
 El contexto es JSON; los archivos grandes no viajan inline. Una tarea que
@@ -284,7 +405,12 @@ Docs, ejemplos, CI, licencias, publicación en crates.io, anuncio.
 
 - **`data.transform`**: `{ source, shape }`. Los strings de `shape` con prefijo
   `@.` son JSONPath **relativos al source** (sin colisión con los mappings `$.`
-  del executor); `@@.` escapa; un path ausente produce `null`.
+  del executor); `@` solo es el source completo; `@@.` escapa; un path ausente
+  produce `null`. La resolución de shapes vive en `core::shape` (compartida
+  con el `bind`/`output` de los perfiles).
+- **`data.map`**: `{ items, shape }`, aplica el shape a **cada elemento** del
+  array (paths `@.` relativos al elemento; ausente → null). Es la respuesta v1
+  al caso "reestructurar filas de un CSV/array" sin nodo de iteración genérico.
 - **`data.merge`**: `{ objects: [...] }`, merge profundo en orden, llaves
   posteriores ganan; arrays/escalares se reemplazan completos.
 - **`data.template`**: `{ template, values }`, placeholders `{path.con.puntos}`,

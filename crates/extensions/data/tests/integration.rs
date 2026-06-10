@@ -58,10 +58,56 @@ async fn pipeline_transform_merge_template() {
     assert_eq!(result.0, json!("Hola ada desde Xalapa, MX"));
 }
 
+#[tokio::test]
+async fn map_reestructura_cada_fila() {
+    // El caso CSV→JSON con otra estructura: renombrar columnas y agregar
+    // campos constantes, fila por fila.
+    let workflow = json!({
+        "name": "remap", "version": "0.1.0",
+        "nodes": [
+            { "id": "start", "kind": "start" },
+            { "id": "renombra", "kind": "task", "task": "data.map",
+              "input": {
+                  "items": "$.trigger.rows",
+                  "shape": {
+                      "full_name": "@.nombre",
+                      "city": "@.direccion.ciudad",
+                      "source": "csv-import"
+                  }
+              } },
+            { "id": "end", "kind": "end" }
+        ],
+        "edges": [
+            { "from": "start", "to": "renombra" },
+            { "from": "renombra", "to": "end" }
+        ]
+    });
+
+    let result = run(
+        workflow,
+        json!({ "rows": [
+            { "nombre": "ada", "direccion": { "ciudad": "Xalapa" } },
+            { "nombre": "alan", "direccion": {} }
+        ]}),
+    )
+    .await;
+
+    assert_eq!(
+        result.0,
+        json!([
+            { "full_name": "ada", "city": "Xalapa", "source": "csv-import" },
+            { "full_name": "alan", "city": null, "source": "csv-import" }
+        ])
+    );
+}
+
 #[test]
 fn catalogo_con_schemas() {
     let catalog = registry().catalog();
     let ids: Vec<&str> = catalog.iter().map(|m| m.id.0.as_str()).collect();
-    assert_eq!(ids, vec!["data.merge", "data.template", "data.transform"]);
+    assert_eq!(
+        ids,
+        vec!["data.map", "data.merge", "data.template", "data.transform"]
+    );
     assert!(catalog.iter().all(|m| m.input_schema.is_some()));
 }

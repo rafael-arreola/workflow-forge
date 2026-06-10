@@ -15,6 +15,12 @@
     "id": { "type": ["string", "null"] },
     "name": { "type": "string", "minLength": 1 },
     "version": { "type": "string", "minLength": 1 },
+    "tasks": {
+      "description": "Perfiles de tarea locales al workflow: instancias preconfiguradas de tareas registradas, visibles solo para esta definición. El contrato completo está en profile.schema.json",
+      "type": "array",
+      "items": { "$ref": "#/$defs/taskProfile" },
+      "default": []
+    },
     "nodes": {
       "type": "array",
       "items": { "$ref": "#/$defs/node" },
@@ -28,17 +34,39 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "taskProfile": {
+      "description": "Espejo de profile.schema.json (embebido para validar el workflow standalone, sin resolución remota)",
+      "type": "object",
+      "required": ["id", "extends"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+        },
+        "extends": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+        },
+        "description": { "type": "string" },
+        "input_schema": { "$ref": "#/$defs/jsonSchema" },
+        "output_schema": { "$ref": "#/$defs/jsonSchema" },
+        "bind": true,
+        "output": true
+      },
+      "additionalProperties": false
+    },
     "node": {
       "type": "object",
       "required": ["id", "kind"],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
-        "kind": { "enum": ["start", "end", "task", "gateway", "subworkflow"] }
+        "kind": { "enum": ["start", "end", "task", "foreach", "gateway", "subworkflow"] }
       },
       "oneOf": [
         { "$ref": "#/$defs/startNode" },
         { "$ref": "#/$defs/endNode" },
         { "$ref": "#/$defs/taskNode" },
+        { "$ref": "#/$defs/foreachNode" },
         { "$ref": "#/$defs/gatewayNode" },
         { "$ref": "#/$defs/subworkflowNode" }
       ]
@@ -104,6 +132,46 @@
         }
       },
       "required": ["kind", "task"],
+      "additionalProperties": false
+    },
+    "foreachNode": {
+      "type": "object",
+      "properties": {
+        "id": true,
+        "kind": { "const": "foreach" },
+        "task": {
+          "description": "Id namespaced de la tarea (o perfil) ejecutada por cada elemento",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+        },
+        "items": {
+          "description": "Mapping (reglas `$.` de los inputs) que debe resolver a un array; cada elemento es el input directo de la tarea (reshape previo con data.map)"
+        },
+        "concurrency": {
+          "description": "Elementos en vuelo simultáneamente; 1 = secuencial",
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "throttle_ms": {
+          "description": "Espera mínima entre arranques de elementos (rate limit hacia el destino)",
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "on_item_error": {
+          "description": "fail: el primer error cancela el resto y el nodo falla. collect: ejecuta todo, output {ok, failed} y el nodo no falla",
+          "enum": ["fail", "collect"],
+          "default": "fail"
+        },
+        "retry": { "$ref": "#/$defs/retryPolicy" },
+        "timeout_ms": {
+          "description": "Tiempo máximo por intento de cada elemento, en milisegundos",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": ["kind", "task", "items"],
       "additionalProperties": false
     },
     "gatewayNode": {

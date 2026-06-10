@@ -4,22 +4,24 @@
 //! | Tarea | Contrato |
 //! |-------|----------|
 //! | `data.transform` | Reshape de `source` según `shape` (paths `@.` relativos al source) |
+//! | `data.map` | Aplica `shape` a CADA elemento de `items` (paths `@.` relativos al elemento) |
 //! | `data.merge` | Merge profundo de `objects`; las llaves posteriores ganan |
 //! | `data.template` | Interpola `{path.con.puntos}` de `values` en `template` |
 
 use async_trait::async_trait;
-use jsonpath_rust::JsonPath;
 use serde_json::{Value, json};
 
 use workflow_forge_core::context::WorkflowContext;
 use workflow_forge_core::error::WorkflowError;
 use workflow_forge_core::registry::TaskRegistry;
+use workflow_forge_core::shape::apply_shape;
 use workflow_forge_core::task::{Task, TaskManifest};
 use workflow_forge_core::task::{WorkflowData, WorkflowResult};
 
 /// Registra todas las tareas de la extensión en el registry
 pub fn register(registry: &TaskRegistry) {
     registry.register(TransformTask::default());
+    registry.register(MapTask::default());
     registry.register(MergeTask::default());
     registry.register(TemplateTask::default());
 }
@@ -41,7 +43,8 @@ impl Default for TransformTask {
         let mut manifest = TaskManifest::new("data.transform");
         manifest.description = Some(
             "Reshape de `source` según `shape`. Los strings de `shape` que empiezan \
-             con `@.` son JSONPath relativos al source; un path ausente produce null"
+             con `@.` son JSONPath relativos al source (`@` solo es el source \
+             completo); un path ausente produce null"
                 .into(),
         );
         manifest.input_schema = Some(schema(json!({
@@ -56,40 +59,6 @@ impl Default for TransformTask {
     }
 }
 
-/// Resuelve recursivamente un `shape` contra el documento `source`.
-/// `@.a.b` → JSONPath `$.a.b` sobre source; ausente → null.
-fn apply_shape(shape: &Value, source: &Value) -> Result<Value, WorkflowError> {
-    match shape {
-        Value::String(s) => {
-            if let Some(rest) = s.strip_prefix("@@.") {
-                return Ok(Value::String(format!("@.{rest}")));
-            }
-            let Some(rest) = s.strip_prefix("@.") else {
-                return Ok(shape.clone());
-            };
-            let path = format!("$.{rest}");
-            let matches = source.query(&path).map_err(|e| {
-                WorkflowError::new(
-                    "INVALID_JSONPATH",
-                    format!("Path '@.{rest}' inválido en shape: {e}"),
-                )
-            })?;
-            Ok(matches.into_iter().next().cloned().unwrap_or(Value::Null))
-        }
-        Value::Array(items) => items
-            .iter()
-            .map(|item| apply_shape(item, source))
-            .collect::<Result<Vec<_>, _>>()
-            .map(Value::Array),
-        Value::Object(map) => map
-            .iter()
-            .map(|(key, value)| apply_shape(value, source).map(|r| (key.clone(), r)))
-            .collect::<Result<serde_json::Map<_, _>, _>>()
-            .map(Value::Object),
-        literal => Ok(literal.clone()),
-    }
-}
-
 #[async_trait]
 impl Task for TransformTask {
     fn manifest(&self) -> &TaskManifest {
@@ -100,6 +69,60 @@ impl Task for TransformTask {
         let source = input.get("source").cloned().unwrap_or(Value::Null);
         let shape = input.get("shape").cloned().unwrap_or(Value::Null);
         apply_shape(&shape, &source).map(WorkflowData)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// data.map
+// ---------------------------------------------------------------------------
+
+pub struct MapTask {
+    manifest: TaskManifest,
+}
+
+impl Default for MapTask {
+    fn default() -> Self {
+        let mut manifest = TaskManifest::new("data.map");
+        manifest.description = Some(
+            "Aplica `shape` a cada elemento de `items` y devuelve el array \
+             resultante. Los strings `@.path` del shape se resuelven contra \
+             cada elemento (`@` solo es el elemento completo); un path ausente \
+             produce null"
+                .into(),
+        );
+        manifest.input_schema = Some(schema(json!({
+            "type": "object",
+            "required": ["items", "shape"],
+            "properties": {
+                "items": {
+                    "description": "Array a transformar (p.ej. $.nodes.parse.output.rows)",
+                    "type": "array"
+                },
+                "shape": { "description": "Estructura de salida por elemento; strings `@.path` se resuelven contra el elemento" }
+            }
+        })));
+        manifest.output_schema = Some(schema(json!({ "type": "array" })));
+        Self { manifest }
+    }
+}
+
+#[async_trait]
+impl Task for MapTask {
+    fn manifest(&self) -> &TaskManifest {
+        &self.manifest
+    }
+
+    async fn execute(&self, _ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult {
+        let Some(Value::Array(items)) = input.get("items").cloned() else {
+            return Ok(WorkflowData(Value::Array(vec![])));
+        };
+        let shape = input.get("shape").cloned().unwrap_or(Value::Null);
+
+        let mapped = items
+            .iter()
+            .map(|item| apply_shape(&shape, item))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(WorkflowData(Value::Array(mapped)))
     }
 }
 
@@ -267,29 +290,6 @@ impl Task for TemplateTask {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn shape_resuelve_paths_relativos_y_ausentes() {
-        let source = json!({ "user": { "name": "ada", "tags": ["a", "b"] } });
-        let shape = json!({
-            "nombre": "@.user.name",
-            "primera": "@.user.tags[0]",
-            "no_existe": "@.user.email",
-            "literal": "@@.escapado",
-            "fijo": 7
-        });
-        let result = apply_shape(&shape, &source).unwrap();
-        assert_eq!(
-            result,
-            json!({
-                "nombre": "ada",
-                "primera": "a",
-                "no_existe": null,
-                "literal": "@.escapado",
-                "fijo": 7
-            })
-        );
-    }
 
     #[test]
     fn merge_profundo_posteriores_ganan() {

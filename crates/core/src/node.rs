@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod event;
+pub mod foreach;
 pub mod gateway;
 pub mod task;
 
@@ -53,6 +54,8 @@ pub enum NodeKind {
     End(event::EndNode),
     /// Nodo de tarea ejecutable
     Task(task::TaskNode),
+    /// Nodo que itera un array invocando una tarea por elemento
+    Foreach(foreach::ForeachNode),
     /// Nodo de control de flujo (exclusive/parallel/join)
     Gateway(gateway::GatewayNode),
     /// Reservado por la spec 1.0; la validación lo rechaza como "no soportado aún"

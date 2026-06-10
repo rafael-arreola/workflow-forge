@@ -9,7 +9,6 @@ repository.workspace = true
 [dependencies]
 workflow-forge-core = { workspace = true }
 async-trait = { workspace = true }
-jsonpath-rust = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]

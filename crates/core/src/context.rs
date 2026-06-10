@@ -27,6 +27,8 @@ pub struct WorkflowContext {
     state: RwLock<Value>,
     /// Almacenamiento de blobs (`$blob`) con ciclo de vida de la ejecución
     blobs: Arc<dyn BlobStore>,
+    /// Contador de eventos de observabilidad (orden total por ejecución)
+    event_seq: std::sync::atomic::AtomicU64,
 }
 
 impl WorkflowContext {
@@ -49,7 +51,14 @@ impl WorkflowContext {
             started_at: Instant::now(),
             state: RwLock::new(state),
             blobs,
+            event_seq: std::sync::atomic::AtomicU64::new(0),
         }
+    }
+
+    /// Siguiente número de secuencia de evento (orden total por ejecución)
+    pub fn next_event_seq(&self) -> u64 {
+        self.event_seq
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
     }
 
     /// Identificador único de la ejecución

@@ -123,5 +123,5 @@ async fn fail_on_error_status_permite_retry() {
     let err = run(workflow, json!({})).await.unwrap_err();
     assert_eq!(err.code, "HTTP_STATUS_ERROR");
     // 1 intento + 2 reintentos
-    assert_eq!(mock.hits_async().await, 3);
+    assert_eq!(mock.calls_async().await, 3);
 }

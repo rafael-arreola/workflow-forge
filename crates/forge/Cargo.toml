@@ -24,5 +24,6 @@ workflow-forge-ext-tabular = { workspace = true, optional = true }
 workflow-forge-ext-sftp = { workspace = true, optional = true }
 
 [dev-dependencies]
+httpmock = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

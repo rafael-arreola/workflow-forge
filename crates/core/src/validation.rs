@@ -118,6 +118,20 @@ pub fn validate(workflow: &WorkflowDefinition) -> Result<(), Vec<WorkflowError>>
                 }
             }
             NodeKind::Task(_) => {}
+            NodeKind::Foreach(foreach) => {
+                if foreach.concurrency == 0 {
+                    errors.push(
+                        WorkflowError::new(
+                            "FOREACH_INVALID_CONCURRENCY",
+                            format!(
+                                "El foreach '{}' declara concurrency 0; debe ser >= 1",
+                                node.id
+                            ),
+                        )
+                        .with_source_task(node.id.to_string()),
+                    );
+                }
+            }
             NodeKind::Gateway(gw) => match gw.gateway {
                 GatewayKind::Exclusive => {
                     if gw.branches.is_empty() {
@@ -241,14 +255,16 @@ pub fn validate(workflow: &WorkflowDefinition) -> Result<(), Vec<WorkflowError>>
             }
         }
 
-        // aristas on:error solo salen de nodos task
+        // aristas on:error solo salen de nodos que ejecutan tareas
         for edge in out {
-            if edge.on == Some(EdgeTrigger::Error) && !matches!(node.kind, NodeKind::Task(_)) {
+            if edge.on == Some(EdgeTrigger::Error)
+                && !matches!(node.kind, NodeKind::Task(_) | NodeKind::Foreach(_))
+            {
                 errors.push(
                     WorkflowError::new(
                         "ERROR_EDGE_INVALID_SOURCE",
                         format!(
-                            "La arista de error {}→{} debe originarse en un nodo task",
+                            "La arista de error {}→{} debe originarse en un nodo task o foreach",
                             edge.from, edge.to
                         ),
                     )
@@ -349,18 +365,22 @@ pub fn validate_tasks(
     let errors: Vec<WorkflowError> = workflow
         .nodes
         .iter()
-        .filter_map(|node| match &node.kind {
-            NodeKind::Task(task_node) if !registry.contains(&task_node.task) => Some(
+        .filter_map(|node| {
+            let task = match &node.kind {
+                NodeKind::Task(task_node) => &task_node.task,
+                NodeKind::Foreach(foreach) => &foreach.task,
+                _ => return None,
+            };
+            (!registry.contains(task)).then(|| {
                 WorkflowError::new(
                     "TASK_NOT_FOUND",
                     format!(
                         "El nodo '{}' referencia la tarea '{}' que no está registrada",
-                        node.id, task_node.task
+                        node.id, task
                     ),
                 )
-                .with_source_task(node.id.to_string()),
-            ),
-            _ => None,
+                .with_source_task(node.id.to_string())
+            })
         })
         .collect();
 

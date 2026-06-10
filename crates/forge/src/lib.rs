@@ -41,7 +41,12 @@ pub mod prelude {
     pub use workflow_forge_core::context::WorkflowContext;
     pub use workflow_forge_core::error::WorkflowError;
     pub use workflow_forge_core::executor::WorkflowExecutor;
+    pub use workflow_forge_core::observe::{
+        EventKind, ExecutionEvent, ExecutionObserver, ExecutionReport, InMemoryHistory,
+    };
+    pub use workflow_forge_core::profile::TaskProfile;
     pub use workflow_forge_core::registry::TaskRegistry;
+    pub use workflow_forge_core::secret::{EnvSecrets, SecretProvider};
     pub use workflow_forge_core::task::{Task, TaskId, TaskManifest};
     pub use workflow_forge_core::task::{WorkflowData, WorkflowResult};
     pub use workflow_forge_core::workflow::WorkflowDefinition;
