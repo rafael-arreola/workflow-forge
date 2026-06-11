@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>workflow-forge — Infrastructure Manual</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <style>
   :root {
     --bg: #ffffff;
@@ -42,7 +43,7 @@
   main {
     margin-left: var(--sidebar-w);
     padding: 2.5rem 3rem 6rem;
-    max-width: 60rem;
+    max-width: 62rem;
   }
   h1, h2, h3, h4 { line-height: 1.3; scroll-margin-top: 1rem; }
   h1 { font-size: 2rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
@@ -84,6 +85,63 @@
     margin: 1rem 0;
   }
   .muted { color: var(--muted); }
+
+  /* ── Mermaid diagrams: click to open the interactive viewer ── */
+  .diagram {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1.25rem 0;
+    background: #fcfdfe;
+    cursor: zoom-in;
+    position: relative;
+    transition: box-shadow 0.15s;
+  }
+  .diagram:hover { box-shadow: 0 2px 12px rgba(30, 90, 138, 0.18); }
+  .diagram::after {
+    content: "⛶ click to expand";
+    position: absolute; top: 0.4rem; right: 0.7rem;
+    font-size: 0.7rem; color: var(--muted);
+    background: var(--inline-bg); border-radius: 4px;
+    padding: 0.1rem 0.45rem;
+  }
+  .diagram .mermaid { display: flex; justify-content: center; }
+  .diagram figcaption {
+    text-align: center; font-size: 0.8rem; color: var(--muted);
+    margin-top: 0.5rem;
+  }
+
+  /* viewer modal */
+  #viewer {
+    display: none;
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(12, 18, 28, 0.92);
+  }
+  #viewer.open { display: block; }
+  #viewer .stage {
+    position: absolute; inset: 0;
+    overflow: hidden; cursor: grab;
+  }
+  #viewer .stage.dragging { cursor: grabbing; }
+  #viewer .canvas {
+    position: absolute; top: 50%; left: 50%;
+    transform-origin: 0 0;
+  }
+  #viewer .canvas svg { background: #fcfdfe; border-radius: 10px; padding: 1.5rem; }
+  #viewer .toolbar {
+    position: absolute; top: 1rem; right: 1rem; z-index: 1001;
+    display: flex; gap: 0.5rem;
+  }
+  #viewer .toolbar button {
+    font-size: 1rem; width: 2.4rem; height: 2.4rem;
+    border: none; border-radius: 8px; cursor: pointer;
+    background: #ffffff; color: var(--fg);
+  }
+  #viewer .toolbar button:hover { background: var(--accent-soft); }
+  #viewer .hint {
+    position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%);
+    color: #aebacb; font-size: 0.8rem;
+  }
 </style>
 </head>
 <body>
@@ -94,7 +152,11 @@
   <a href="#purpose">1. Purpose &amp; Scope</a>
   <a href="#workspace">2. Workspace Layout</a>
   <a href="#architecture">3. Core Architecture</a>
-  <a href="#families">4. The Families</a>
+  <a class="l2" href="#arch-families">Family graph</a>
+  <a class="l2" href="#arch-traits">Trait &amp; DI map</a>
+  <a class="l2" href="#arch-ownership">Ownership &amp; threading</a>
+  <a href="#assembly">4. Assembly: Building an Executor</a>
+  <a href="#families">5. The Families in Depth</a>
   <a class="l2" href="#fam-spec">spec</a>
   <a class="l2" href="#fam-expr">expr</a>
   <a class="l2" href="#fam-validate">validate</a>
@@ -103,8 +165,12 @@
   <a class="l2" href="#fam-io">io</a>
   <a class="l2" href="#fam-observe">observe</a>
   <a class="l2" href="#fam-error">error</a>
-  <a href="#lifecycle">5. Life of an Execution</a>
-  <a href="#extension-points">6. Extension Points</a>
+  <a href="#lifecycle">6. Life of an Execution</a>
+  <a class="l2" href="#life-traversal">Traversal engine</a>
+  <a class="l2" href="#life-failure">The failure ladder</a>
+  <a class="l2" href="#life-foreach">Foreach mechanics</a>
+  <a class="l2" href="#life-join">Parallel &amp; join mechanics</a>
+  <a href="#extension-points">7. Extension Points</a>
   <a class="l2" href="#ext-task">New task / extension crate</a>
   <a class="l2" href="#ext-operator">New condition operator</a>
   <a class="l2" href="#ext-rule">New validation rule</a>
@@ -112,15 +178,15 @@
   <a class="l2" href="#ext-secret">New secret provider</a>
   <a class="l2" href="#ext-observer">New observer</a>
   <a class="l2" href="#ext-kind">New node kind (spec change)</a>
-  <a href="#testing">7. Testing Strategy</a>
-  <a href="#invariants">8. Invariants &amp; Gotchas</a>
-  <a href="#conventions">9. Conventions</a>
+  <a href="#testing">8. Testing Strategy</a>
+  <a href="#invariants">9. Invariants &amp; Gotchas</a>
+  <a href="#conventions">10. Conventions</a>
 </nav>
 
 <main>
 
 <h1>workflow-forge — Infrastructure Manual</h1>
-<p class="muted">The engineering reference for <strong>maintaining, extending and improving</strong> the workflow-forge engine. It documents every component of the core, how they work, how they communicate, and exactly where to plug in new behavior. If you only want to <em>use</em> the library, read the <a href="usage.html">User Manual</a> instead.</p>
+<p class="muted">The engineering reference for <strong>maintaining, extending and improving</strong> the workflow-forge engine. It documents every component of the core, how each one works internally, and how they assemble and communicate to behave as specified. Diagrams are interactive — <strong>click any diagram</strong> to open it in a zoomable viewer. If you only want to <em>use</em> the library, read the <a href="usage.html">User Manual</a> instead.</p>
 
 <h2 id="purpose">1. Purpose &amp; Scope</h2>
 <p>The engine (<code>crates/core</code>, package <code>workflow-forge-core</code>) executes workflow documents conforming to <strong>spec 1.0</strong>. Its architecture pursues four goals, in this order:</p>
@@ -161,61 +227,251 @@
 </table>
 
 <h2 id="architecture">3. Core Architecture</h2>
-<p>The core is organized in <strong>eight families</strong> with closed responsibilities. The compile pipeline goes top-down; the supporting families serve the pipeline sideways:</p>
-<pre><code>          ┌────────────────────────────────────────────────┐
-          │  spec      the language: pure serde data types  │
-          └───────────────────────┬────────────────────────┘
-                                  ▼
-          ┌────────────────────────────────────────────────┐
-          │  validate  static rules, accumulate all errors  │
-          └───────────────────────┬────────────────────────┘
-                                  ▼
-          ┌────────────────────────────────────────────────┐
-          │  runtime   executor · context · handlers · policy │
-          └────────────────────────────────────────────────┘
 
-   expr     $. mappings, @. shapes, condition evaluation + operator registry
-   task     the extension contract: Task, TaskRegistry, profiles
-   io       BlobStore/Factory ($blob) · SecretProvider ($secret)
-   observe  ExecutionObserver · ExecutionEvent · InMemoryHistory
-   error    WorkflowError + error::codes catalog</code></pre>
+<h3 id="arch-families">3.1 The family graph</h3>
+<p>The core is organized in <strong>eight families</strong> with closed responsibilities. Dependencies flow strictly in one direction — <code>spec</code> depends on nothing, <code>runtime</code> depends on everything. There are no dependency cycles between families; that is what keeps each one curable in isolation.</p>
 
-<h3>Who talks to whom</h3>
+<figure class="diagram">
+<pre class="mermaid">
+flowchart TB
+    subgraph HOST["Host application"]
+        APP["host code / crates/forge facade"]
+    end
+    subgraph EXT["Extension crates (workflow-forge-ext-*)"]
+        TASKS["Task implementations<br/>util · data · http · tabular · sftp"]
+    end
+    subgraph CORE["crates/core"]
+        SPEC["spec<br/><i>serde types, zero logic</i>"]
+        EXPR["expr<br/><i>$. mappings · @. shapes ·<br/>condition eval · operator registry</i>"]
+        VALIDATE["validate<br/><i>rule pipeline, error accumulation</i>"]
+        RUNTIME["runtime<br/><i>executor · context · handlers ·<br/>policy · graph · schemas</i>"]
+        TASK["task<br/><i>Task trait · TaskRegistry · profiles</i>"]
+        IO["io<br/><i>BlobStore/Factory · SecretProvider</i>"]
+        OBSERVE["observe<br/><i>events · observer · history</i>"]
+        ERROR["error<br/><i>WorkflowError · codes catalog</i>"]
+    end
+    APP -->|"builds &amp; runs"| RUNTIME
+    APP -->|"registers tasks"| TASK
+    APP -->|"registers operators"| EXPR
+    TASKS -->|"impl Task"| TASK
+    TASKS -->|"ctx.blobs()"| IO
+    RUNTIME --> SPEC
+    RUNTIME --> VALIDATE
+    RUNTIME --> EXPR
+    RUNTIME --> TASK
+    RUNTIME --> IO
+    RUNTIME --> OBSERVE
+    VALIDATE --> SPEC
+    VALIDATE -.->|"KnownConditionOperators<br/>queries operators::global()"| EXPR
+    EXPR --> SPEC
+    TASK --> SPEC
+    SPEC ~~~ ERROR
+    VALIDATE --> ERROR
+    EXPR --> ERROR
+    RUNTIME --> ERROR
+    TASK --> ERROR
+    IO --> ERROR
+    OBSERVE --> ERROR
+</pre>
+<figcaption>Family dependency graph. Solid arrows = compile-time dependency; dashed = the single cross-cut (validation consulting the operator registry).</figcaption>
+</figure>
+
+<h3 id="arch-traits">3.2 The trait &amp; dependency-injection map</h3>
+<p>Seven traits define every seam where the host can replace behavior. The executor owns them as trait objects; nothing in the core ever names a concrete implementation except the defaults.</p>
+
+<figure class="diagram">
+<pre class="mermaid">
+classDiagram
+    class WorkflowExecutor {
+        workflow: WorkflowDefinition
+        registry: Arc~TaskRegistry~
+        index: GraphIndex
+        schemas: CompiledSchemas
+        observer: Option~Arc dyn ExecutionObserver~
+        blobs: Arc dyn BlobStoreFactory
+        subworkflows: HashMap~NodeId, WorkflowExecutor~
+        +run(trigger) WorkflowResult
+        +builder(wf, registry) WorkflowExecutorBuilder
+    }
+    class WorkflowExecutorBuilder {
+        +secrets(p) Self
+        +workflows(reg) Self
+        +blobs(factory) Self
+        +observer(obs) Self
+        +rule(r) Self
+        +build() Result
+    }
+    class Task {
+        &lt;&lt;trait&gt;&gt;
+        +manifest() TaskManifest
+        +execute(ctx, input) WorkflowResult
+    }
+    class ValidationRule {
+        &lt;&lt;trait&gt;&gt;
+        +codes() static str list
+        +check(workflow, ctx, errors)
+    }
+    class ConditionOperator {
+        &lt;&lt;trait&gt;&gt;
+        +key() static str
+        +evaluate(value, operand) Result~bool~
+    }
+    class BlobStoreFactory {
+        &lt;&lt;trait&gt;&gt;
+        +create(execution_id) Arc dyn BlobStore
+    }
+    class BlobStore {
+        &lt;&lt;trait&gt;&gt;
+        +put(data, name) BlobRef
+        +get(ref) bytes
+        +import_file(path, name) BlobRef
+        +local_path(ref) PathBuf
+        +cleanup()
+    }
+    class SecretProvider {
+        &lt;&lt;trait&gt;&gt;
+        +get(name) Option~String~
+    }
+    class ExecutionObserver {
+        &lt;&lt;trait&gt;&gt;
+        +on_event(event)
+    }
+    class TaskRegistry {
+        +register(task)
+        +register_profile(profile, secrets)
+        +scoped() TaskRegistry
+        +get(id) Option~Arc dyn Task~
+    }
+    class OperatorRegistry {
+        +register(op)
+        +get(key) +contains(key) +list()
+    }
+    WorkflowExecutorBuilder --> WorkflowExecutor : build()
+    WorkflowExecutor o-- TaskRegistry
+    WorkflowExecutor o-- BlobStoreFactory
+    WorkflowExecutor o-- ExecutionObserver
+    WorkflowExecutor --> ValidationRule : at build()
+    WorkflowExecutorBuilder --> SecretProvider : at build()
+    TaskRegistry o-- Task
+    OperatorRegistry o-- ConditionOperator
+    BlobStoreFactory --> BlobStore : one per execution
+    Task ..> BlobStore : via ctx.blobs()
+</pre>
+<figcaption>Every extension trait and where the executor holds it. Defaults: EnvSecrets, TempDirBlobFactory, rules::BUILTIN, no observer.</figcaption>
+</figure>
+
 <table>
-  <tr><th>From</th><th>To</th><th>Through</th></tr>
-  <tr><td><code>runtime</code></td><td><code>spec</code></td><td>Reads the definition; dispatches on <code>NodeKind</code>.</td></tr>
-  <tr><td><code>runtime</code></td><td><code>validate</code></td><td><code>validate_with()</code> + <code>validate_tasks()</code> during <code>build_internal</code>. Runtime never executes an unvalidated document.</td></tr>
-  <tr><td><code>runtime</code></td><td><code>expr</code></td><td><code>mapping::resolve</code> for inputs/items/outputs; <code>Condition::evaluate</code> for gateways.</td></tr>
-  <tr><td><code>runtime</code></td><td><code>task</code></td><td><code>TaskRegistry::get</code> → <code>Task::execute(ctx, input)</code>, wrapped by <code>policy</code>.</td></tr>
-  <tr><td><code>runtime</code></td><td><code>io</code></td><td><code>BlobStoreFactory::create(execution_id)</code> per run; secrets resolved at profile registration.</td></tr>
-  <tr><td><code>runtime</code></td><td><code>observe</code></td><td><code>WorkflowExecutor::emit()</code> → <code>ExecutionObserver::on_event</code>.</td></tr>
-  <tr><td><code>validate</code></td><td><code>expr</code></td><td>Only the <code>KnownConditionOperators</code> rule queries <code>operators::global()</code>.</td></tr>
-  <tr><td>extensions</td><td><code>task</code> + <code>io</code></td><td>Implement <code>Task</code>; reach blobs via <code>ctx.blobs()</code> — extensions never touch the filesystem directly.</td></tr>
-  <tr><td>everyone</td><td><code>error</code></td><td>All failures are <code>WorkflowError</code> with a code from <code>error::codes</code>.</td></tr>
+  <tr><th>Builder method</th><th>Trait injected</th><th>Consumed when</th><th>Default</th></tr>
+  <tr><td><code>.secrets()</code></td><td><code>io::secret::SecretProvider</code></td><td><strong>Build only</strong> — profile registration resolves <code>$secret</code></td><td><code>EnvSecrets</code></td></tr>
+  <tr><td><code>.workflows()</code></td><td><code>runtime::WorkflowRegistry</code></td><td><strong>Build only</strong> — subworkflow names resolve to child executors</td><td>none</td></tr>
+  <tr><td><code>.blobs()</code></td><td><code>io::blob::BlobStoreFactory</code></td><td><strong>Every run</strong> — <code>create(execution_id)</code> per execution</td><td><code>TempDirBlobFactory</code></td></tr>
+  <tr><td><code>.observer()</code></td><td><code>observe::ExecutionObserver</code></td><td><strong>Every run</strong> — synchronous per event; propagated to all child executors</td><td>none</td></tr>
+  <tr><td><code>.rule()</code></td><td><code>validate::ValidationRule</code></td><td><strong>Build only</strong> — after built-ins, also on every subworkflow</td><td><code>rules::BUILTIN</code> only</td></tr>
 </table>
+<p>Two more extension surfaces are registries rather than builder arguments: <code>task::TaskRegistry</code> (tasks and profiles — consulted at build for <code>validate_tasks</code>/<code>CompiledSchemas</code> and at run for dispatch) and <code>expr::operators::global()</code> (condition operators, process-wide <code>OnceLock</code>, consulted at build by the <code>KnownConditionOperators</code> rule and at run by gateway evaluation).</p>
 
-<h3>Where dependency injection lives</h3>
-<p>The single DI point of the runtime is <code>WorkflowExecutorBuilder</code> (<code>runtime/executor.rs</code>):</p>
+<div class="note"><strong>A deliberate non-trait:</strong> node kinds. <code>spec::node::NodeKind</code> is a <em>closed enum</em> — the node vocabulary belongs to the spec, not to hosts. Engine extensibility flows through tasks, not through new kinds. The per-kind execution logic is organized as <code>impl WorkflowExecutor</code> blocks in separate files (<code>runtime/handlers/</code>), which gives the same modularity as a <code>NodeHandler</code> trait without dynamic-dispatch ceremony for a vocabulary that cannot grow at runtime. Adding a kind is a spec change with a documented checklist (<a href="#ext-kind">§7.7</a>).</div>
+
+<h3 id="arch-ownership">3.3 Ownership, sharing and threading model</h3>
+<p>Understanding <em>who owns what</em> explains most of the engine's design decisions:</p>
 <table>
-  <tr><th>Builder method</th><th>Trait injected</th><th>Default</th></tr>
-  <tr><td><code>.secrets()</code></td><td><code>io::secret::SecretProvider</code></td><td><code>EnvSecrets</code> (environment variables)</td></tr>
-  <tr><td><code>.workflows()</code></td><td><code>runtime::WorkflowRegistry</code> (shared subworkflows)</td><td>none</td></tr>
-  <tr><td><code>.blobs()</code></td><td><code>io::blob::BlobStoreFactory</code></td><td><code>TempDirBlobFactory</code></td></tr>
-  <tr><td><code>.observer()</code></td><td><code>observe::ExecutionObserver</code></td><td>none</td></tr>
-  <tr><td><code>.rule()</code></td><td><code>validate::ValidationRule</code> (repeatable)</td><td>built-in rules only</td></tr>
+  <tr><th>Object</th><th>Ownership</th><th>Sharing mechanism</th><th>Why</th></tr>
+  <tr><td><code>WorkflowExecutor</code></td><td>Host</td><td><code>&amp;self</code> — immutable during runs</td><td>Build once, run many times concurrently. All run-mutable state lives in <code>WorkflowContext</code> + <code>RunState</code>, created per run.</td></tr>
+  <tr><td><code>TaskRegistry</code> / each <code>Task</code></td><td>Shared</td><td><code>Arc&lt;TaskRegistry&gt;</code> / <code>Arc&lt;dyn Task&gt;</code></td><td>Tasks are stateless services; one instance serves all executions.</td></tr>
+  <tr><td>State document</td><td><code>WorkflowContext</code></td><td><code>RwLock&lt;serde_json::Value&gt;</code></td><td>Parallel branches read (mappings, conditions) and write (node outputs) concurrently. Reads take the lock via <code>with_state(|s| …)</code> without cloning; writes are short and key-scoped.</td></tr>
+  <tr><td>The token (predecessor output)</td><td>Traversal</td><td><code>Arc&lt;Value&gt;</code></td><td>A parallel fan-out hands the same token to N branches; <code>Arc</code> avoids cloning potentially large payloads. <code>Arc::unwrap_or_clone</code> recovers ownership when a single consumer remains.</td></tr>
+  <tr><td><code>RunState</code> (joins, ends)</td><td>One per run, stack-allocated in <code>run_inner</code></td><td><code>Mutex&lt;HashMap&gt;</code> / <code>Mutex&lt;Vec&gt;</code></td><td>Join arrivals and end results are rare, short critical sections; a Mutex is simpler and sufficient.</td></tr>
+  <tr><td><code>BlobStore</code></td><td>Execution (root)</td><td><code>Arc&lt;dyn BlobStore&gt;</code>, cloned into child contexts</td><td>Subworkflows share the root store so <code>$blob</code> refs cross boundaries; only the root cleans up.</td></tr>
+  <tr><td>Event sequence</td><td>Execution tree</td><td><code>Arc&lt;AtomicU64&gt;</code> (fetch_add SeqCst)</td><td>One total order across root + subworkflows, race-free without locks.</td></tr>
+  <tr><td>Observer</td><td>Shared</td><td><code>Arc&lt;dyn ExecutionObserver&gt;</code>, cloned into every child executor at registration</td><td>One sink sees the whole tree.</td></tr>
+  <tr><td>Operator registry</td><td>Process</td><td><code>OnceLock&lt;OperatorRegistry&gt;</code> wrapping <code>RwLock&lt;HashMap&lt;String, Arc&lt;dyn ConditionOperator&gt;&gt;&gt;</code></td><td>Operators are vocabulary, not per-executor config; validation and evaluation must agree on the same set.</td></tr>
 </table>
-<p>Two more extension surfaces are registries rather than builder arguments: <code>task::TaskRegistry</code> (tasks/profiles) and <code>expr::operators::global()</code> (condition operators, process-wide).</p>
+<p><strong>Concurrency primitives in play:</strong> <code>futures::future::try_join_all</code> (parallel edges and gateway fan-out — first error cancels siblings by drop), <code>futures::stream::buffered(n)</code> (foreach concurrency window), <code>tokio::time::timeout</code> (per attempt), <code>tokio::time::sleep</code> (backoff and throttle), <code>catch_unwind</code> (panic isolation). Recursion through the graph returns <code>BoxFuture</code> (<code>execute_from</code>) because async recursion needs boxing; the same applies to <code>foreach_item</code>, where rustc cannot prove <code>Send</code> for the unboxed closure chain.</p>
 
-<div class="note"><strong>A deliberate non-trait:</strong> node kinds. <code>spec::node::NodeKind</code> is a <em>closed enum</em> — the node vocabulary belongs to the spec, not to hosts. Engine extensibility flows through tasks, not through new kinds. The per-kind execution logic is organized as <code>impl WorkflowExecutor</code> blocks in separate files (<code>runtime/handlers/</code>), which gives the same modularity as a <code>NodeHandler</code> trait without dynamic-dispatch ceremony for a vocabulary that cannot grow at runtime. Adding a kind is a spec change with a documented checklist (<a href="#ext-kind">§6.7</a>).</div>
+<h2 id="assembly">4. Assembly: Building an Executor</h2>
+<p>Construction is where the engine earns its "fail at build, not at run" promise. <code>WorkflowExecutor::builder(…).build()</code> funnels into <code>build_internal</code> (<code>runtime/executor.rs</code>), which assembles five components <strong>in a fixed order</strong> — each step depends on guarantees established by the previous one:</p>
 
-<h2 id="families">4. The Families</h2>
+<figure class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant H as Host
+    participant B as WorkflowExecutorBuilder
+    participant R as TaskRegistry
+    participant S as SecretProvider
+    participant V as validate
+    participant CS as CompiledSchemas
+    participant GI as GraphIndex
+    participant W as WorkflowRegistry
 
-<h3 id="fam-spec">4.1 <code>spec/</code> — the language</h3>
-<p><strong>Pure data, zero logic.</strong> Everything here is serde types mirroring the JSON document. If a struct in <code>spec</code> needs behavior beyond (de)serialization and trivial accessors, that behavior belongs in another family.</p>
+    H->>B: builder(workflow, registry)<br/>.secrets(…).workflows(…).blobs(…)<br/>.observer(…).rule(…).build()
+    B->>B: build_internal(workflow, registry, secrets, shared, rules, ancestry)
+
+    alt document has inline tasks (profiles)
+        B->>R: registry.scoped()  — copy-on-write child
+        loop each TaskProfile
+            B->>S: resolve_secrets(bind)  — every {"$secret": X}
+            S-->>B: secret values (or SECRET_NOT_FOUND)
+            B->>R: scoped.register_profile(profile)
+            R-->>B: ProfileTask registered (or PROFILE_* error)
+        end
+    end
+
+    B->>V: validate_with(workflow, host_rules)
+    Note over V: rules::BUILTIN + host rules,<br/>shared error vector, recurses into<br/>inline workflows
+    V-->>B: Ok or Vec of WorkflowError (ALL problems)
+    B->>V: validate_tasks(workflow, registry)
+    V-->>B: every task id registered (or TASK_NOT_FOUND)
+
+    B->>CS: CompiledSchemas::build(workflow, registry)
+    Note over CS: compiles start/end schemas +<br/>input/output schema of every<br/>referenced task, once
+    CS-->>B: validators (or INVALID_SCHEMA)
+    B->>GI: GraphIndex::build(workflow)
+    GI-->>B: adjacency maps by edge trigger
+
+    loop each subworkflow node
+        B->>W: resolve name (inline section first,<br/>then shared registry)
+        W-->>B: child WorkflowDefinition
+        B->>B: build_internal(child, ORIGINAL registry,<br/>same secrets/rules, ancestry+self)
+        Note over B: cycle check via ancestry stack,<br/>depth cap 8, child errors bubble<br/>up prefixed with child name
+    end
+
+    B-->>H: WorkflowExecutor { workflow, registry,<br/>index, schemas, blobs, observer, subworkflows }
+</pre>
+<figcaption>build_internal: the assembly sequence. Any failed step aborts with the accumulated error list; a successfully built executor is structurally guaranteed.</figcaption>
+</figure>
+
+<h3>Step by step, and why the order matters</h3>
+<ol>
+  <li><strong>Scoped profile registration.</strong> If the document declares inline <code>tasks</code>, the builder calls <code>registry.scoped()</code> — a copy-on-write child registry — and registers each <code>TaskProfile</code> into it, resolving <code>{"$secret": …}</code> references through the injected <code>SecretProvider</code> <em>at this moment</em>. Two consequences: the shared registry is never polluted by document-local definitions, and secrets exist only inside the in-memory baked profile, never in any serialized form. The <em>original</em> registry is kept aside (<code>original_registry</code>) because children must not see the parent's inline profiles.</li>
+  <li><strong>Structural validation.</strong> <code>validate_with(workflow, host_rules)</code> runs <code>rules::BUILTIN</code> in order, then host rules, all pushing into one shared <code>Vec&lt;WorkflowError&gt;</code> — and recurses into inline subworkflow documents. <code>validate_tasks(workflow, registry)</code> then checks every <code>task</code>/<code>foreach</code> reference against the (scoped) registry. This must run <em>after</em> step 1 — otherwise nodes referencing inline profiles would report false <code>TASK_NOT_FOUND</code>.</li>
+  <li><strong><code>CompiledSchemas::build</code>.</strong> Walks the nodes once and compiles: the <code>schema</code> of each start/end node (keyed by <code>NodeId</code>) and the <code>input_schema</code>/<code>output_schema</code> of each <em>referenced</em> task manifest (keyed by <code>TaskId</code>, deduplicated). Schemas are static per definition — compiling them per node execution (and per retry) would be repeated work. A non-compiling schema is <code>INVALID_SCHEMA</code> at build. Needs step 1 (profile manifests must exist in the registry).</li>
+  <li><strong><code>GraphIndex::build</code>.</strong> One pass over <code>workflow.edges</code> sorts every edge into four buckets keyed by source node: <code>outgoing</code> (normal flow), <code>outgoing_error</code> (<code>on: error</code>), <code>outgoing_panic</code> (<code>on: panic</code>), plus <code>incoming_count</code> (normal-flow in-degree, the join arrival target) and the <code>start</code> node id. After this, traversal never scans the edge list — every hop is a HashMap lookup. The <code>expect()</code> calls inside (<code>node()</code>, start lookup) are safe <em>because</em> step 2 already guaranteed referential integrity; this is the first place the build order turns validation into license for infallible code.</li>
+  <li><strong>Recursive subworkflow resolution.</strong> For each <code>subworkflow</code> node: resolve the name against the document's inline <code>workflows</code> section first, then the shared <code>WorkflowRegistry</code>; missing → <code>SUBWORKFLOW_NOT_FOUND</code>. The child executor is built by calling <code>build_internal</code> <em>recursively right here</em>, passing: the <strong>original</strong> registry (profile scoping), the same secrets provider and host rules, and an <code>ancestry: Vec&lt;String&gt;</code> stack of workflow names. If the child's name is already in the stack → <code>SUBWORKFLOW_CYCLE</code> (message shows the chain <code>a → b → c</code>); stack depth ≥ 8 → <code>SUBWORKFLOW_DEPTH_EXCEEDED</code>. Child build errors bubble up with their messages prefixed <code>"in sub-workflow '&lt;name&gt;': …"</code>. The resolved children land in <code>subworkflows: HashMap&lt;NodeId, WorkflowExecutor&gt;</code> — at runtime, dispatch is a map lookup, never a registry search.</li>
+</ol>
+<p>Finally the builder applies the optional injections: <code>blobs</code> replaces the default <code>TempDirBlobFactory</code>, and <code>observer</code> is set via <code>set_observer</code>, which walks <code>subworkflows</code> recursively cloning the <code>Arc</code> into every child — that is how one observer sees the whole execution tree.</p>
+
+<div class="note"><strong>What an assembled executor contains</strong> — the exact fields of <code>WorkflowExecutor</code>:
+<table>
+  <tr><th>Field</th><th>Type</th><th>Role at run time</th></tr>
+  <tr><td><code>workflow</code></td><td><code>WorkflowDefinition</code></td><td>The validated document (node bodies are read through <code>index</code>).</td></tr>
+  <tr><td><code>registry</code></td><td><code>Arc&lt;TaskRegistry&gt;</code></td><td>Task dispatch (<code>get(task_id)</code> → <code>Arc&lt;dyn Task&gt;</code>). The scoped copy if inline profiles exist.</td></tr>
+  <tr><td><code>index</code></td><td><code>GraphIndex</code></td><td>Node lookup + the three edge buckets + join in-degrees + start id.</td></tr>
+  <tr><td><code>schemas</code></td><td><code>CompiledSchemas</code></td><td>Precompiled <code>jsonschema::Validator</code>s for start/end nodes and task input/output.</td></tr>
+  <tr><td><code>observer</code></td><td><code>Option&lt;Arc&lt;dyn ExecutionObserver&gt;&gt;</code></td><td>Event sink; <code>emit()</code> is a no-op when <code>None</code>.</td></tr>
+  <tr><td><code>blobs</code></td><td><code>Arc&lt;dyn BlobStoreFactory&gt;</code></td><td>Creates one <code>BlobStore</code> per root execution.</td></tr>
+  <tr><td><code>subworkflows</code></td><td><code>HashMap&lt;NodeId, WorkflowExecutor&gt;</code></td><td>Fully-built child executors, one per subworkflow node.</td></tr>
+</table>
+Everything is immutable after build — which is precisely why <code>run(&amp;self)</code> can execute concurrently.</div>
+
+<h2 id="families">5. The Families in Depth</h2>
+
+<h3 id="fam-spec">5.1 <code>spec/</code> — the language</h3>
+<p><strong>Pure data, zero logic.</strong> Everything here is serde types mirroring the JSON document. If a struct in <code>spec</code> needs behavior beyond (de)serialization and trivial accessors, that behavior belongs in another family — evaluation goes to <code>expr</code>, checking to <code>validate</code>, execution to <code>runtime</code>.</p>
 <table>
   <tr><th>File</th><th>Contains</th></tr>
   <tr><td><code>workflow.rs</code></td><td><code>WorkflowDefinition</code> (spec, id, name, version, tasks, workflows, nodes, edges), <code>FlowEdge</code> (from/to/label/on), <code>EdgeTrigger</code> (<code>Error</code> | <code>Panic</code>)</td></tr>
-  <tr><td><code>node/mod.rs</code></td><td><code>NodeId</code>, <code>Node</code> (id + flattened kind), <code>NodeKind</code> enum (closed; <code>kind</code> is the JSON tag; <code>name()</code> returns the discriminator string), <code>SubworkflowNode</code></td></tr>
+  <tr><td><code>node/mod.rs</code></td><td><code>NodeId</code>, <code>Node</code> (id + <code>#[serde(flatten)]</code> kind), <code>NodeKind</code> enum (closed; <code>kind</code> is the JSON tag; <code>name()</code> returns the discriminator string), <code>SubworkflowNode</code></td></tr>
   <tr><td><code>node/event.rs</code></td><td><code>StartNode</code> (schema, defaults), <code>EndNode</code> (status, output, schema), <code>EndStatus</code></td></tr>
   <tr><td><code>node/task.rs</code></td><td><code>TaskNode</code> (task, input, retry, timeout_ms), <code>RetryPolicy</code> (max, backoff, initial_ms=500), <code>Backoff</code> (Exponential default | Linear | Fixed)</td></tr>
   <tr><td><code>node/foreach.rs</code></td><td><code>ForeachNode</code> (task, items, concurrency=1, throttle_ms, on_item_error, retry, timeout_ms), <code>OnItemError</code> (Fail default | Collect)</td></tr>
@@ -227,50 +483,50 @@
 <h4>Hand-written serde, on purpose</h4>
 <p>Three deserializers are manual, all for the same reason — <em>error quality</em> and <em>open vocabulary</em>:</p>
 <ul>
-  <li><code>Condition</code>: an untagged derive produces the useless "data did not match any variant"; the manual impl reports exactly which key is missing or extraneous ("expected 'and', 'or', 'not' or a comparison with 'path'; keys found: [foo]").</li>
-  <li><code>Comparison</code>: enforces "exactly one operator key next to <code>path</code>" with a precise message.</li>
-  <li><code>CompareOp::from_key_operand</code>: the 13 spec keys are matched and their operand <em>types</em> verified (<code>in</code> wants an array, <code>exists</code> a bool, <code>matches</code> a string…). <strong>Any unknown key becomes <code>CompareOp::Custom</code></strong> — this is the deserialization-side half of the extensible operator vocabulary. Serialization round-trips Custom keys verbatim.</li>
+  <li><code>Condition</code>: an untagged derive produces the useless "data did not match any variant"; the manual impl reports exactly which key is missing or extraneous ("expected 'and', 'or', 'not' or a comparison with 'path'; keys found: [foo]") and rejects logical keys with siblings.</li>
+  <li><code>Comparison</code>: pops <code>path</code> out of the object, then demands <em>exactly one</em> remaining key — the operator. More or fewer keys produce a message that lists what was found.</li>
+  <li><code>CompareOp::from_key_operand(key, operand)</code>: the 13 spec keys are matched and their operand <em>types</em> verified at parse time (<code>in</code> wants an array, <code>exists</code>/<code>is_null</code> a bool, <code>starts_with</code>/<code>ends_with</code>/<code>matches</code> a string). <strong>Any unknown key becomes <code>CompareOp::Custom</code></strong> — this is the deserialization half of the extensible operator vocabulary; the evaluation half lives in <code>expr::operators</code>. Serialization (<code>key()</code> + <code>operand()</code>) round-trips Custom keys verbatim, so documents with host operators survive load→save unchanged.</li>
 </ul>
 
-<h3 id="fam-expr">4.2 <code>expr/</code> — expression resolution</h3>
+<h3 id="fam-expr">5.2 <code>expr/</code> — expression resolution</h3>
+<p>Three resolution dialects, one path engine. The crucial assembly fact: <strong>every JSONPath query in the entire engine funnels through <code>expr::path::query_first</code></strong> — mappings, shapes, and condition paths included. Changing path semantics (or swapping the JSONPath library) is a one-file change.</p>
 <table>
-  <tr><th>File</th><th>Contains</th></tr>
-  <tr><td><code>path.rs</code></td><td>The single JSONPath engine of the crate: <code>query_first(doc, path)</code> (first match or <code>None</code>, parse error as <code>Err(String)</code>) and <code>cached_regex()</code> (process-wide compiled-regex cache for the <code>matches</code> operator). <em>Every</em> path resolution in the engine funnels through here — change JSONPath behavior in exactly one place.</td></tr>
-  <tr><td><code>mapping.rs</code></td><td><code>resolve(mapping, context)</code> — the <code>$.</code> convention used by node inputs, foreach items and end outputs. <code>$$.</code> escapes to a literal <code>$.</code>. Unresolved path → <code>MAPPING_PATH_NOT_FOUND</code> (inputs treat absence as a definition bug).</td></tr>
-  <tr><td><code>shape.rs</code></td><td><code>apply_shape(shape, source)</code> — the <code>@.</code> convention used by profile <code>bind</code>/<code>output</code> and <code>data.transform</code>/<code>data.map</code>. Relative to a local document; missing paths yield <code>null</code> (shapes tolerate absence, mappings do not).</td></tr>
-  <tr><td><code>operators.rs</code></td><td>Condition <em>evaluation</em> (the syntax lives in <code>spec::condition</code>) and the operator extension point — below.</td></tr>
+  <tr><th>File</th><th>How it works</th><th>Who calls it</th></tr>
+  <tr><td><code>path.rs</code></td><td><code>query_first(doc, path)</code> parses the path (error → <code>Err(String)</code>, mapped to <code>INVALID_JSONPATH</code> by callers) and returns the <em>first</em> match as <code>Option&lt;&amp;Value&gt;</code> — borrowed, no clone. <code>cached_regex(pattern)</code> keeps a process-wide map of compiled regexes for the <code>matches</code> operator.</td><td><code>mapping.rs</code>, <code>shape.rs</code>, <code>operators.rs</code></td></tr>
+  <tr><td><code>mapping.rs</code></td><td><code>resolve(mapping, context)</code> walks the mapping value recursively: strings with <code>$.</code> → <code>query_first</code> against the state document (absence = <code>MAPPING_PATH_NOT_FOUND</code>); <code>$$.</code> → literal escape; objects/arrays recurse; everything else copies.</td><td><code>handlers/task.rs</code> (input), <code>handlers/foreach.rs</code> (items), <code>handlers/event.rs</code> (end output), <code>handlers/subworkflow.rs</code> (child trigger)</td></tr>
+  <tr><td><code>shape.rs</code></td><td><code>apply_shape(shape, source)</code> — same recursive walk but with <code>@.</code> against a <em>local</em> document, and absence yields <code>null</code> (shapes tolerate optional data; mappings treat absence as a definition bug).</td><td><code>task/profile.rs</code> (bind/output), <code>data.transform</code>/<code>data.map</code> in the data extension</td></tr>
+  <tr><td><code>operators.rs</code></td><td>Condition <em>evaluation</em> + the operator registry (below). The syntax types live in <code>spec::condition</code>; this split keeps spec logic-free.</td><td><code>handlers/gateway.rs::pick_branch</code>, <code>validate/rules/conditions.rs</code></td></tr>
 </table>
 
-<h4>The operator registry</h4>
+<h4>The operator registry — anatomy</h4>
 <pre><code>pub trait ConditionOperator: Send + Sync + 'static {
     fn key(&amp;self) -&gt; &amp;'static str;
     fn evaluate(&amp;self, value: Option&lt;&amp;Value&gt;, operand: &amp;Value)
         -&gt; Result&lt;bool, WorkflowError&gt;;
 }
 
+pub struct OperatorRegistry {            // RwLock&lt;HashMap&lt;String, Arc&lt;dyn ConditionOperator&gt;&gt;&gt;
+    pub fn register(&amp;self, op)           // overwrites same key
+    pub fn get / contains / list
+}
 pub fn global() -&gt; &amp;'static OperatorRegistry   // OnceLock, process-wide</code></pre>
-<ul>
-  <li><code>Condition::evaluate(context)</code> / <code>Comparison::evaluate(context)</code> use the global registry; <code>evaluate_with(context, registry)</code> takes an explicit one (tests, isolated vocabularies).</li>
-  <li>Built-in operator semantics live here as one match over <code>CompareOp</code>; <code>Custom</code> variants are looked up in the registry — an unregistered key is <code>UNKNOWN_CONDITION_OPERATOR</code> at evaluation, but the validation rule catches it at build time first.</li>
-  <li>Absence contract: operators receive <code>value: None</code> when the path did not resolve and decide their own semantics. Built-ins return <code>false</code> (except <code>exists</code>). Operators must only fail on <em>definition</em> errors, never on data.</li>
-</ul>
+<p>Evaluation walks the condition tree: <code>And</code> short-circuits on the first <code>false</code>, <code>Or</code> on the first <code>true</code>, <code>Not</code> inverts, <code>Compare</code> resolves <code>path</code> via <code>query_first</code> and dispatches on <code>CompareOp</code>. Built-in semantics are a single match; <code>Custom { key, operand }</code> does <code>registry.get(key)</code> → <code>op.evaluate(value, operand)</code>, or <code>UNKNOWN_CONDITION_OPERATOR</code> if unregistered (the validation rule catches this at build first). <code>evaluate()</code> uses <code>global()</code>; <code>evaluate_with(context, registry)</code> takes an explicit registry for tests and isolated vocabularies.</p>
+<p><strong>Absence contract</strong> — operators receive <code>value: None</code> when the path did not resolve and decide their own semantics. Built-ins return <code>false</code> (except <code>exists</code>, which answers the question directly). Operators must only fail on <em>definition</em> errors (bad regex, bad path), never on data.</p>
 
-<h3 id="fam-validate">4.3 <code>validate/</code> — static rules</h3>
-<p>Everything detectable before execution is detected here. Validation is a <strong>pipeline of rules</strong> that share one error vector and <em>accumulate</em> (never stop at the first error — a document gets fixed in one pass).</p>
+<h3 id="fam-validate">5.3 <code>validate/</code> — the rule pipeline</h3>
+<p>Everything detectable before execution is detected here. Validation is a <strong>pipeline of rules</strong> sharing one error vector that <em>accumulates</em> — a document gets fixed in one pass, never error-by-error.</p>
 <pre><code>pub trait ValidationRule: Send + Sync {
-    fn codes(&amp;self) -&gt; &amp;'static [&amp;'static str];  // living documentation
+    fn codes(&amp;self) -&gt; &amp;'static [&amp;'static str];  // living documentation, test-enforced
     fn check(&amp;self, workflow: &amp;WorkflowDefinition,
              ctx: &amp;ValidationCtx&lt;'_&gt;, errors: &amp;mut Vec&lt;WorkflowError&gt;);
-}
-
-pub fn validate(workflow) -&gt; Result&lt;(), Vec&lt;WorkflowError&gt;&gt;          // built-ins
-pub fn validate_with(workflow, extra: &amp;[&amp;dyn ValidationRule]) -&gt; …   // + host rules
-pub fn validate_tasks(workflow, registry) -&gt; …                       // needs the TaskRegistry</code></pre>
+}</code></pre>
+<p>The communication mechanics that make the pipeline work:</p>
 <ul>
-  <li><code>ValidationCtx</code> (<code>context.rs</code>) precomputes node lookup, outgoing/incoming edge indexes and start nodes once, shared by all rules.</li>
-  <li><code>rules::BUILTIN: &amp;[&amp;dyn ValidationRule]</code> fixes the execution order. Host rules run <em>after</em> built-ins and can inspect already-reported errors.</li>
-  <li><code>validate_with</code> recurses into the document's inline <code>workflows</code>, prefixing child errors with the child's name.</li>
-  <li><code>codes()</code> is verified by test: every built-in rule's declared codes must exist in <code>error::codes::ALL</code>.</li>
+  <li><code>ValidationCtx&lt;'w&gt;</code> (<code>context.rs</code>) is built <strong>once</strong> per document and borrowed by every rule: node lookup map, outgoing/incoming edge indexes, and the start-node list. Rules never re-scan <code>workflow.edges</code>.</li>
+  <li><code>rules::BUILTIN: &amp;[&amp;dyn ValidationRule]</code> fixes execution order. Host rules (from <code>builder().rule(…)</code>) are chained <em>after</em> built-ins: <code>BUILTIN.iter().chain(extra)</code>.</li>
+  <li><strong>The shared error vector is also a communication channel between rules.</strong> <code>Reachability</code> and <code>Acyclicity</code> inspect <code>errors</code> for a prior <code>UNKNOWN_NODE_REF</code> and self-disable — BFS/Kahn over a graph with dangling references would only produce noise. This is why rule <em>order</em> in <code>BUILTIN</code> is part of the design: structural rules first, graph analysis last.</li>
+  <li><code>validate_with</code> recurses into the document's inline <code>workflows</code> with the same rule set, prefixing child errors with <code>"in the inline sub-workflow '&lt;name&gt;': …"</code>.</li>
+  <li><code>validate_tasks(workflow, registry)</code> is deliberately a separate function: it is the only check that needs the <code>TaskRegistry</code>, so pure-document validation (<code>validate()</code>) stays usable by tooling without a registry.</li>
 </ul>
 <table>
   <tr><th>File</th><th>Rules (→ codes)</th></tr>
@@ -278,120 +534,281 @@ pub fn validate_tasks(workflow, registry) -&gt; …                       // nee
   <tr><td><code>rules/nodes.rs</code></td><td><code>ForeachConcurrency</code> (FOREACH_INVALID_CONCURRENCY) · <code>SubworkflowName</code> (SUBWORKFLOW_MISSING_NAME) · <code>InlineWorkflowNames</code> (SUBWORKFLOW_DUPLICATE_NAME)</td></tr>
   <tr><td><code>rules/gateway.rs</code></td><td><code>GatewayCoherence</code> (GATEWAY_NO_BRANCHES, GATEWAY_MULTIPLE_ELSE, GATEWAY_BRANCH_WITHOUT_WHEN, GATEWAY_BRANCH_WITHOUT_EDGE, GATEWAY_EDGE_WITHOUT_BRANCH, GATEWAY_BRANCHES_IGNORED, PARALLEL_TOO_FEW_OUTPUTS, JOIN_TOO_FEW_INPUTS)</td></tr>
   <tr><td><code>rules/edges.rs</code></td><td><code>EdgeTriggers</code> (ERROR_EDGE_INVALID_SOURCE, ERROR_EDGE_TO_JOIN)</td></tr>
-  <tr><td><code>rules/graph.rs</code></td><td><code>Reachability</code> (UNREACHABLE_NODE, BFS from start) · <code>Acyclicity</code> (CYCLE_DETECTED, Kahn). Both <strong>self-disable</strong> if a previous rule reported UNKNOWN_NODE_REF — graph analysis over broken references would produce noise.</td></tr>
-  <tr><td><code>rules/conditions.rs</code></td><td><code>KnownConditionOperators</code> (UNKNOWN_CONDITION_OPERATOR) — walks every gateway condition tree; each <code>CompareOp::Custom</code> must exist in <code>operators::global()</code>. This is why hosts must register operators <em>before</em> building executors.</td></tr>
+  <tr><td><code>rules/graph.rs</code></td><td><code>Reachability</code> (UNREACHABLE_NODE, BFS from start) · <code>Acyclicity</code> (CYCLE_DETECTED, Kahn's algorithm). Both self-disable on prior UNKNOWN_NODE_REF.</td></tr>
+  <tr><td><code>rules/conditions.rs</code></td><td><code>KnownConditionOperators</code> (UNKNOWN_CONDITION_OPERATOR) — walks every gateway branch's condition tree with a visitor (<code>walk()</code>); each <code>CompareOp::Custom</code> must exist in <code>operators::global()</code>. This is the build-time bridge between <code>validate</code> and <code>expr</code>, and the reason hosts must register operators before building executors.</td></tr>
 </table>
+<p>Hygiene is test-enforced: a test asserts every built-in rule's <code>codes()</code> exist in <code>error::codes::ALL</code>, and another that host rules injected via the builder actually run.</p>
 
-<h3 id="fam-runtime">4.4 <code>runtime/</code> — execution</h3>
+<h3 id="fam-runtime">5.4 <code>runtime/</code> — execution</h3>
+<p>The runtime is split so that <code>executor.rs</code> knows only <em>traversal</em>, never node semantics:</p>
 <table>
   <tr><th>File</th><th>Responsibility</th></tr>
-  <tr><td><code>executor.rs</code></td><td><strong>Orchestration only</strong>: validated construction (<code>build_internal</code>), graph traversal (<code>execute_from</code> dispatching on kind, <code>continue_through</code> following edges, <code>after_task_result</code> applying the error/panic routing ladder), run lifecycle (<code>run</code> → <code>run_with_ctx</code> → blob cleanup at the root), event emission (<code>emit</code>), <code>RunState</code> (join arrivals + end results), and the builder.</td></tr>
-  <tr><td><code>context.rs</code></td><td><code>WorkflowContext</code>: the state document under <code>RwLock&lt;Value&gt;</code> (<code>with_state</code>, <code>snapshot</code>, <code>set_node_output</code>, <code>set_node_error</code>, <code>node_output</code>), execution id (UUID v7), elapsed clock, blob store handle, atomic event-sequence counter. <code>child_of()</code> builds a subworkflow context: own id and state, <em>shared</em> blob store and event counter.</td></tr>
-  <tr><td><code>handlers/</code></td><td>Per-kind semantics as <code>impl WorkflowExecutor</code> blocks: <code>event.rs</code> (run_start/run_end), <code>task.rs</code> (run_task), <code>foreach.rs</code> (run_foreach + per-item driver: semaphore concurrency, throttle, collect/fail), <code>gateway.rs</code> (run_gateway + pick_branch), <code>subworkflow.rs</code> (run_subworkflow: child context, child executor, output/error propagation). <code>mod.rs</code> documents the pattern and the add-a-kind checklist.</td></tr>
-  <tr><td><code>policy.rs</code></td><td><code>execute_with_policy</code>: the retry/timeout/panic envelope around every task invocation — attempt loop, <code>backoff_delay</code> (exponential/linear/fixed, overflow-safe), <code>tokio::time::timeout</code> per attempt, <code>catch_unwind</code> → <code>TASK_PANIC</code> via <code>panic_error</code>. Unit-tested in isolation.</td></tr>
-  <tr><td><code>graph.rs</code> <span class="muted">(pub(crate))</span></td><td><code>GraphIndex</code>: prebuilt adjacency (outgoing by trigger, incoming counts, node lookup) so traversal never scans <code>Vec&lt;FlowEdge&gt;</code>.</td></tr>
-  <tr><td><code>schemas.rs</code> <span class="muted">(pub(crate))</span></td><td><code>CompiledSchemas</code>: every JSON Schema in the document and the referenced task manifests, compiled once at build (<code>INVALID_SCHEMA</code> on failure) and reused on every run.</td></tr>
-  <tr><td><code>registry.rs</code></td><td><code>WorkflowRegistry</code>: shared name→definition store for subworkflows (<code>WORKFLOW_NAME_CONFLICT</code> on duplicates).</td></tr>
+  <tr><td><code>executor.rs</code></td><td>Construction (<code>build_internal</code>, §4), the builder, run lifecycle (<code>run</code> → <code>run_with_ctx</code> → <code>run_inner</code>), graph traversal (<code>execute_from</code> / <code>continue_through</code>), the failure ladder (<code>after_task_result</code>), event emission (<code>emit</code>), and <code>RunState</code>.</td></tr>
+  <tr><td><code>context.rs</code></td><td><code>WorkflowContext</code> — the per-run state container (details below).</td></tr>
+  <tr><td><code>handlers/</code></td><td>Per-kind semantics as <code>impl WorkflowExecutor</code> blocks: <code>event.rs</code>, <code>task.rs</code>, <code>foreach.rs</code>, <code>gateway.rs</code>, <code>subworkflow.rs</code>. <code>mod.rs</code> documents the pattern and the add-a-kind checklist.</td></tr>
+  <tr><td><code>policy.rs</code></td><td><code>execute_with_policy</code> — the shared invocation envelope: schema validation, per-attempt timeout, panic capture, retry/backoff (details in §6.2).</td></tr>
+  <tr><td><code>graph.rs</code> <span class="muted">(pub(crate))</span></td><td><code>GraphIndex</code> — adjacency buckets per edge trigger + join in-degrees (§4 step 4).</td></tr>
+  <tr><td><code>schemas.rs</code> <span class="muted">(pub(crate))</span></td><td><code>CompiledSchemas</code> + <code>validate_compiled(validator, value)</code> (joins all violations into one message).</td></tr>
+  <tr><td><code>registry.rs</code></td><td><code>WorkflowRegistry</code> — shared name→definition store for subworkflows (<code>WORKFLOW_NAME_CONFLICT</code> on duplicates).</td></tr>
 </table>
 
-<h4>Construction (<code>build_internal</code>) — the order matters</h4>
-<ol>
-  <li><strong>Scoped profiles</strong>: if the document has inline <code>tasks</code>, a <em>scoped copy</em> of the registry is created and profiles registered into it (resolving <code>$secret</code> via the provider). The shared registry is never polluted; children are built with the <em>original</em> registry, so inline profiles stay local to their document.</li>
-  <li><strong><code>validate_with</code></strong> (built-ins + host rules) and <strong><code>validate_tasks</code></strong> (every referenced task id exists in the registry).</li>
-  <li><strong><code>CompiledSchemas::build</code></strong> and <strong><code>GraphIndex::build</code></strong>.</li>
-  <li><strong>Subworkflow resolution</strong>: each <code>subworkflow</code> node resolves its name (inline section first, shared registry second) and the child executor is built <em>recursively right here</em>, carrying an ancestry stack to detect cycles (<code>SUBWORKFLOW_CYCLE</code>) and a depth cap of 8 (<code>SUBWORKFLOW_DEPTH_EXCEEDED</code>). Child errors bubble up prefixed with the child's name. A missing name is <code>SUBWORKFLOW_NOT_FOUND</code> — at build, never at runtime.</li>
-</ol>
+<h4><code>WorkflowContext</code> — the run's nervous system</h4>
+<p>Created per run by <code>WorkflowContext::with_blob_factory(workflow, trigger, factory)</code>. It is the <em>only</em> mutable surface during execution; the executor itself stays <code>&amp;self</code>.</p>
+<pre><code>pub struct WorkflowContext {
+    execution_id: String,                         // UUID v7
+    parent_execution_id: Option&lt;String&gt;,          // set by child_of()
+    started_at: Instant,                          // elapsed_ms in events
+    state: RwLock&lt;Value&gt;,                         // { trigger, nodes: {}, workflow }
+    blobs: Arc&lt;dyn BlobStore&gt;,                    // factory.create(execution_id)
+    event_seq: Arc&lt;AtomicU64&gt;,                    // total order, shared with children
+}</code></pre>
+<table>
+  <tr><th>Method</th><th>Used by</th><th>Mechanics</th></tr>
+  <tr><td><code>with_state(|s| …)</code></td><td>mapping/condition resolution</td><td>Read lock, closure gets <code>&amp;Value</code> — no clone of the (potentially large) document.</td></tr>
+  <tr><td><code>set_node_output(id, v)</code></td><td><code>after_task_result</code>, handlers</td><td>Write lock, sets <code>state["nodes"][id] = { "output": v }</code>.</td></tr>
+  <tr><td><code>set_node_error(id, v)</code></td><td>error routing</td><td>Write lock, sets <code>state["nodes"][id]["error"]</code> — preserves a prior output if any.</td></tr>
+  <tr><td><code>blobs()</code></td><td>extension tasks</td><td>The blob store handle; tasks never touch the filesystem directly.</td></tr>
+  <tr><td><code>next_event_seq()</code></td><td><code>emit()</code></td><td><code>fetch_add(1, SeqCst)</code> on the shared counter.</td></tr>
+  <tr><td><code>child_of(workflow, trigger, parent)</code></td><td><code>run_subworkflow</code></td><td>New execution id and state document; <strong>clones the parent's <code>Arc</code></strong> for blobs and event_seq. That single line is the whole subworkflow-sharing design.</td></tr>
+</table>
 
-<h4>Traversal &amp; the failure ladder</h4>
-<ul>
-  <li><code>execute_from(node)</code> dispatches on <code>NodeKind</code> to the handler; handlers return the node result; <code>continue_through</code> fans out over outgoing normal edges (<code>try_join_all</code> for parallelism).</li>
-  <li>Join nodes accumulate arrivals in <code>RunState::joins</code> under a mutex; the last arrival continues the flow.</li>
-  <li><code>after_task_result</code> implements the ladder: success → continue; error + <code>on: error</code> edge → publish <code>$.nodes.&lt;id&gt;.error</code>, emit <code>node_failed(error_routed=true)</code>, continue through the error edge; panic + <code>on: panic</code> edge → same through panic edges; otherwise the run fails.</li>
-  <li>End of run: <code>RunState::ends</code> holds the end-node results; no end reached → <code>NO_OUTPUT</code>; pending joins → <code>JOIN_INCOMPLETE</code>. Only the <strong>root</strong> execution cleans up the blob store.</li>
-</ul>
-
-<h3 id="fam-task">4.5 <code>task/</code> — the extension contract</h3>
+<h3 id="fam-task">5.5 <code>task/</code> — the extension contract</h3>
 <pre><code>#[async_trait]
 pub trait Task: Send + Sync + 'static {
     fn manifest(&amp;self) -&gt; &amp;TaskManifest;   // id, description, input/output JSON Schemas
     async fn execute(&amp;self, ctx: &amp;WorkflowContext, input: WorkflowData) -&gt; WorkflowResult;
 }</code></pre>
+<p>How the pieces connect:</p>
 <ul>
-  <li><code>TaskManifest</code> is serializable: the full catalog of available tasks can be exported as JSON and used by external tooling (designers, validators) without the engine.</li>
-  <li><code>TaskRegistry</code> (<code>registry.rs</code>): thread-safe id→task map. <code>scoped()</code> produces a copy-on-write child registry used for inline profiles. <code>register_profile(profile, secrets)</code> resolves <code>$secret</code> references in <code>bind</code> and wraps the base task.</li>
-  <li><code>ProfileTask</code> (<code>profile.rs</code>): the derived task that executes a profile — validate against the profile's input schema → <code>apply_shape(bind, input)</code> → run the base task (<code>PROFILE_BIND_INVALID</code> if the base rejects the bound input) → <code>apply_shape(output, base_output)</code> → validate against the profile's output schema. Once registered, indistinguishable from any other task.</li>
-  <li><code>WorkflowData</code> is a thin newtype over <code>serde_json::Value</code> with <code>Deref</code> and <code>From</code> conversions; <code>WorkflowResult = Result&lt;WorkflowData, WorkflowError&gt;</code>.</li>
+  <li><code>TaskManifest</code> is serializable: the full catalog of available tasks can be exported as JSON and consumed by external tooling (designers, validators) without the engine. <code>CompiledSchemas</code> reads the manifest schemas at build; <code>policy.rs</code> enforces them at run.</li>
+  <li><code>TaskRegistry</code> (<code>registry.rs</code>): thread-safe id→<code>Arc&lt;dyn Task&gt;</code> map. <code>scoped()</code> produces the copy-on-write child used for inline profiles (§4 step 1). <code>register_profile(profile, secrets)</code> checks <code>extends</code> exists (<code>PROFILE_BASE_NOT_FOUND</code>), the id is free (<code>PROFILE_ID_CONFLICT</code>), resolves <code>$secret</code> in <code>bind</code>, and inserts a <code>ProfileTask</code>.</li>
+  <li><code>ProfileTask</code> (<code>profile.rs</code>) is the adapter pattern in miniature — it wraps the base <code>Arc&lt;dyn Task&gt;</code> and implements <code>Task</code> itself: <em>execute</em> = apply <code>bind</code> shape to the profile input → call the base (a base-side schema rejection becomes <code>PROFILE_BIND_INVALID</code>) → apply <code>output</code> shape to the base output. Its manifest carries the profile's own schemas, so <code>CompiledSchemas</code>/<code>policy</code> validate the <em>profile</em> contract at the boundary. Once registered, callers cannot distinguish a profile from a hand-written task.</li>
+  <li><code>WorkflowData</code> is a newtype over <code>serde_json::Value</code> (<code>Deref</code> + <code>From</code> both ways); <code>WorkflowResult = Result&lt;WorkflowData, WorkflowError&gt;</code>. It marks the engine↔extension boundary in signatures.</li>
 </ul>
 
-<h3 id="fam-io">4.6 <code>io/</code> — host resources</h3>
+<h3 id="fam-io">5.6 <code>io/</code> — host resources</h3>
 <h4>Blobs (<code>blob.rs</code>)</h4>
-<pre><code>#[async_trait]
-pub trait BlobStore: Send + Sync + 'static {
-    async fn put(&amp;self, data: Vec&lt;u8&gt;, name: Option&lt;String&gt;) -&gt; Result&lt;BlobRef, _&gt;;
-    async fn get(&amp;self, blob: &amp;BlobRef) -&gt; Result&lt;Vec&lt;u8&gt;, _&gt;;
-    async fn import_file(&amp;self, path: &amp;Path, name: Option&lt;String&gt;) -&gt; Result&lt;BlobRef, _&gt;;
-    fn local_path(&amp;self, blob: &amp;BlobRef) -&gt; Result&lt;PathBuf, _&gt;;   // streaming consumers
-    async fn cleanup(&amp;self) -&gt; Result&lt;(), _&gt;;
-}
+<figure class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant E as WorkflowExecutor.run()
+    participant F as BlobStoreFactory
+    participant S as BlobStore (per execution)
+    participant P as Producer task<br/>(http.request response_body=blob)
+    participant C as Consumer task<br/>(sftp.put / tabular.parse)
 
-pub trait BlobStoreFactory: Send + Sync {
-    fn create(&amp;self, execution_id: &amp;str) -&gt; Arc&lt;dyn BlobStore&gt;;
-}</code></pre>
+    E->>F: create(execution_id)
+    F-->>E: Arc dyn BlobStore  → into WorkflowContext
+    P->>P: stream download to temp file
+    P->>S: import_file(path, name)
+    S-->>P: BlobRef { $blob: uuid7, name, size }
+    Note over P: BlobRef serialized into the node's<br/>output → state document
+    C->>S: local_path(BlobRef)  — id validated first
+    S-->>C: PathBuf → open + stream upload
+    Note over E,S: subworkflow contexts clone the same<br/>Arc (child_of) — refs cross boundaries
+    E->>S: cleanup()  — root execution only, success or failure
+    Note over S: TempDirBlobStore also removes<br/>the dir on Drop (panic safety net)
+</pre>
+<figcaption>Blob lifecycle: factory per execution, streaming via import_file/local_path, root-only cleanup.</figcaption>
+</figure>
 <ul>
-  <li>The injectable thing is the <strong>factory</strong>, not a store: stores have per-execution lifecycle (created with the execution id, cleaned by the root run).</li>
-  <li><code>TempDirBlobStore</code> (v1 default): one temp directory per execution, lazily created, removed on cleanup <em>and</em> on <code>Drop</code> as a safety net. Blob ids are store-generated UUID v7; <code>blob_path</code> rejects any id that is not alphanumeric/dash — forged references (path traversal) are <code>INVALID_BLOB_ID</code>.</li>
-  <li>Streaming contract: producers write to a temp file then <code>import_file</code>; consumers read via <code>local_path</code>. <code>put</code>/<code>get</code> are the convenience whole-buffer pair.</li>
+  <li>The injectable thing is the <strong>factory</strong>, not a store: stores have per-execution lifecycle (created with the execution id, cleaned by the root run). <code>TempDirBlobFactory</code> is the default.</li>
+  <li><code>TempDirBlobStore</code>: one temp directory per execution (<code>workflow-forge-&lt;execution_id&gt;</code>), lazily created on first write, removed on <code>cleanup()</code> <em>and</em> on <code>Drop</code> as a safety net. Ids are store-generated UUID v7; <code>blob_path</code> rejects any id that is not alphanumeric/dash — forged references (path traversal like <code>../../etc/passwd</code>) are <code>INVALID_BLOB_ID</code> before touching the filesystem.</li>
+  <li>Streaming contract: producers write to a temp file then <code>import_file</code> (a copy into the store); consumers read via <code>local_path</code> and stream from disk. <code>put</code>/<code>get</code> are the whole-buffer convenience pair for small payloads.</li>
 </ul>
 <h4>Secrets (<code>secret.rs</code>)</h4>
 <pre><code>pub trait SecretProvider: Send + Sync {
     fn get(&amp;self, name: &amp;str) -&gt; Option&lt;String&gt;;
 }
 pub fn resolve_secrets(value: &amp;mut Value, provider: &amp;dyn SecretProvider) -&gt; Result&lt;(), _&gt;</code></pre>
-<p><code>resolve_secrets</code> walks a JSON document replacing every single-key <code>{"$secret": "NAME"}</code> object with the provider's value (<code>SECRET_NOT_FOUND</code> if absent; objects with extra keys are left untouched). It is called <strong>at profile registration</strong> — secrets exist in memory inside baked profile configs, never in the serialized document.</p>
+<p><code>resolve_secrets</code> walks a JSON document in place, replacing every <em>single-key</em> <code>{"$secret": "NAME"}</code> object with the provider's value (<code>SECRET_NOT_FOUND</code> if absent; objects with extra keys are deliberately left untouched — they are data, not references). It is called exactly once per profile, <strong>at registration during build</strong>: secrets live only in the in-memory baked profile config, never in the serialized document, never re-fetched per run.</p>
 
-<h3 id="fam-observe">4.7 <code>observe/</code> — observability</h3>
+<h3 id="fam-observe">5.7 <code>observe/</code> — observability</h3>
+<figure class="diagram">
+<pre class="mermaid">
+flowchart LR
+    subgraph EXEC["Execution tree"]
+        ROOT["root executor<br/>emit()"]
+        CHILD["subworkflow executor<br/>emit()"]
+    end
+    SEQ["ctx.event_seq<br/>Arc AtomicU64<br/><i>shared via child_of</i>"]
+    EV["ExecutionEvent<br/>execution_id · parent_execution_id ·<br/>seq · elapsed_ms · EventKind"]
+    OBS["ExecutionObserver::on_event<br/><i>synchronous — must not block</i>"]
+    HIST["InMemoryHistory<br/>Mutex Vec of events"]
+    REP["ExecutionReport<br/>status + per-node timeline"]
+    HOSTOBS["host observer<br/>channel → DB / OTLP"]
+    ROOT --> SEQ
+    CHILD --> SEQ
+    SEQ --> EV
+    EV --> OBS
+    OBS --> HIST
+    OBS --> HOSTOBS
+    HIST -->|"events() sorted by seq"| REP
+    HIST -->|"report_for(execution_id)"| REP
+</pre>
+<figcaption>Event flow: one shared atomic sequence orders the whole tree; the observer Arc is propagated to every child executor.</figcaption>
+</figure>
 <ul>
-  <li><code>ExecutionObserver::on_event(&amp;ExecutionEvent)</code> — called <em>synchronously</em> from the executor. The contract demands non-blocking implementations; slow sinks must buffer.</li>
-  <li><code>ExecutionEvent</code>: <code>execution_id</code>, optional <code>parent_execution_id</code>, <code>seq</code> (atomic counter <em>shared with subworkflows</em> → total order over the whole execution tree), <code>elapsed_ms</code>, flattened <code>EventKind</code> (<code>type</code> snake_case tag in JSON).</li>
-  <li><code>EventKind</code>: workflow_started/completed/failed, node_started/completed/failed (with <code>error_routed</code>), task_attempt_started (resolved input on attempt 1 only) / task_attempt_failed (<code>will_retry</code>, <code>next_delay_ms</code>), foreach_item_completed/failed.</li>
-  <li>The JSON encoding is <strong>stable by design</strong>: events are intended to become the journal of a future durable executor (event sourcing) without redesign. Add variants; never change existing ones.</li>
-  <li><code>history.rs</code>: <code>InMemoryHistory</code> (the built-in observer) and <code>ExecutionReport</code>/<code>NodeReport</code> — a per-node status/attempts/duration summary derived purely from events. <code>report()</code> covers the root execution; <code>report_for(id)</code> a specific one; <code>executions()</code> lists the tree.</li>
+  <li><code>emit(ctx, kind)</code> (<code>executor.rs</code>) is the single emission point: it stamps <code>execution_id</code>, <code>parent_execution_id</code>, <code>seq</code> (via <code>ctx.next_event_seq()</code>) and <code>elapsed_ms</code>, then calls <code>observer.on_event</code> — a no-op if no observer is registered.</li>
+  <li><code>EventKind</code> serializes with a snake_case <code>type</code> tag: workflow_started/completed/failed, node_started/completed/failed (with <code>error_routed</code>), task_attempt_started (resolved input on attempt 1 only — retries reuse it) / task_attempt_failed (<code>will_retry</code>, <code>next_delay_ms</code>), foreach_item_completed/failed. The JSON encoding is <strong>stable by design</strong>: events are earmarked as the journal of a future durable executor (event sourcing). Add variants; never change existing ones.</li>
+  <li><code>InMemoryHistory</code> is the built-in observer (a <code>Mutex&lt;Vec&gt;</code>); <code>events()</code> returns them sorted by <code>seq</code>. <code>ExecutionReport::from_events</code> folds events into per-node status (<code>running/completed/failed/error_routed</code>), attempts and durations — derived <em>purely</em> from events, which doubles as a proof that the event stream is sufficient to reconstruct an execution.</li>
 </ul>
 
-<h3 id="fam-error">4.8 <code>error/</code> — the failure contract</h3>
+<h3 id="fam-error">5.8 <code>error/</code> — the failure contract</h3>
 <ul>
-  <li><code>WorkflowError</code> (<code>mod.rs</code>): <code>code</code> + <code>message</code> + optional <code>source_task</code> + optional boxed source. Serializable; travels in events and node error documents.</li>
+  <li><code>WorkflowError</code> (<code>mod.rs</code>): <code>code</code> + <code>message</code> + optional <code>source_task</code> + optional boxed source. Serializable; it travels in events, in <code>$.nodes.&lt;id&gt;.error</code>, and as the error-edge token.</li>
   <li><code>codes.rs</code>: the <strong>catalog</strong> — ~50 documented <code>pub const</code> strings grouped by phase (definition / construction / expressions / execution / host resources), plus <code>ALL</code> for tooling and a uniqueness test. Convention: <code>FAMILY_DETAIL</code> in SCREAMING_SNAKE_CASE; the constant's value equals its name.</li>
 </ul>
-<div class="warn"><strong>Codes are public contract.</strong> They are matched by host code and stored in persisted events. Never rename or repurpose one — only add. New codes go into <code>codes.rs</code> with a doc comment and into <code>ALL</code>.</div>
+<div class="warn"><strong>Codes are public contract.</strong> They are matched by host code (<code>err.code == codes::TASK_PANIC</code> drives the panic-routing decision <em>inside the engine itself</em>) and stored in persisted events. Never rename or repurpose one — only add. New codes go into <code>codes.rs</code> with a doc comment and into <code>ALL</code>.</div>
 
-<h2 id="lifecycle">5. Life of an Execution</h2>
-<pre><code>WorkflowExecutor::builder(document, registry).….build()
- ├─ inline profiles → scoped registry (+ $secret resolution)     [task, io::secret]
- ├─ validate_with(built-ins + host rules) + validate_tasks       [validate]
- ├─ CompiledSchemas::build + GraphIndex::build                   [runtime]
- └─ recursive subworkflow resolution (cycle/depth checked)       [runtime]
+<h2 id="lifecycle">6. Life of an Execution</h2>
 
-executor.run(trigger)
- ├─ WorkflowContext::with_blob_factory(…)  → execution_id (UUIDv7), state doc, BlobStore
- ├─ emit workflow_started
- ├─ run_start: defaults merged, trigger validated against start.schema
- ├─ traversal: execute_from(kind handler) → continue_through(edges)
- │    ├─ task/foreach: mapping::resolve(input) → schema check
- │    │     → policy::execute_with_policy(Task::execute)   ← retry/timeout/catch_unwind
- │    │     → output schema check → ctx.set_node_output → events
- │    ├─ gateway exclusive: Condition::evaluate(state) → labeled edge
- │    ├─ gateway parallel: try_join_all over outgoing edges
- │    ├─ gateway join: RunState.joins accumulates; last arrival continues
- │    └─ subworkflow: ctx.child_of(…) → child.run_with_ctx(…)
- ├─ run_end: end.output mapping (or predecessor token) + end.schema check
- ├─ emit workflow_completed / workflow_failed
- └─ root only: ctx.blobs().cleanup()</code></pre>
+<h3 id="life-traversal">6.1 The traversal engine</h3>
+<p><code>run(trigger)</code> creates the <code>WorkflowContext</code> (execution id, state document, blob store), wraps <code>run_with_ctx</code> (which emits <code>workflow_started/completed/failed</code> around <code>run_inner</code>), and — root only — cleans up blobs. <code>run_inner</code> allocates the per-run <code>RunState { joins, ends }</code> on the stack and kicks off <code>execute_from(start, Arc(trigger), None, …)</code>.</p>
 
-<h2 id="extension-points">6. Extension Points</h2>
+<figure class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant H as Host
+    participant X as WorkflowExecutor
+    participant C as WorkflowContext
+    participant HD as handlers/*
+    participant PL as policy
+    participant T as Task (extension)
+    participant O as Observer
+
+    H->>X: run(trigger)
+    X->>C: with_blob_factory(workflow, trigger, blobs)
+    Note over C: execution_id = UUIDv7<br/>state = {trigger, nodes:{}, workflow}<br/>blob store created
+    X->>O: emit workflow_started
+    X->>X: run_inner → execute_from(start, Arc(trigger))
+
+    X->>HD: run_start
+    HD->>HD: validate trigger vs start.schema<br/>merge defaults (non-object → {_input})
+    HD->>C: set_node_output(start)
+    HD->>X: continue_through(outgoing edges)
+
+    X->>HD: run_task(node)
+    HD->>C: with_state(|s| mapping::resolve(input, s))
+    HD->>PL: execute_with_policy(task, input, {retry, timeout, emit_attempts})
+    PL->>PL: input vs compiled input_schema
+    loop attempts
+        PL->>O: emit task_attempt_started (input on #1)
+        PL->>T: catch_unwind( timeout( task.execute(ctx, input) ) )
+        T-->>PL: Ok(output) | Err | panic | timeout
+        alt failure and retries left (never on panic)
+            PL->>O: emit task_attempt_failed {will_retry, next_delay_ms}
+            PL->>PL: sleep(backoff_delay(attempt))
+        end
+    end
+    PL->>PL: output vs compiled output_schema
+    PL-->>X: Result(Value)
+    X->>X: after_task_result  — §6.2
+    X->>C: set_node_output(node)
+    X->>O: emit node_completed
+    X->>X: continue_through(outgoing edges, Arc(output))
+
+    X->>HD: run_end
+    HD->>C: resolve end.output mapping (or carried token)
+    HD->>HD: validate vs end.schema
+    HD->>X: RunState.ends.push((id, result))
+    X->>O: emit workflow_completed
+    X->>C: blobs().cleanup()  — root only
+    X-->>H: WorkflowResult
+</pre>
+<figcaption>The run sequence for a linear start → task → end path. Every family appears at its exact call site.</figcaption>
+</figure>
+
+<p>Key mechanics of <code>execute_from</code> / <code>continue_through</code> (<code>executor.rs</code>):</p>
+<ul>
+  <li><strong>Signature:</strong> <code>execute_from(node_id, carried: Arc&lt;Value&gt;, origin: Option&lt;NodeId&gt;, ctx, state) -&gt; BoxFuture</code>. <code>carried</code> is the predecessor's output (the token); <code>origin</code> identifies the predecessor — joins need it to label arrivals. The future is boxed because graph traversal is async recursion.</li>
+  <li><strong>Dispatch</strong> is a single match on <code>NodeKind</code>: start/end → <code>event.rs</code>; task/foreach/subworkflow → their handler, then <code>after_task_result</code> (the three "task-executing" kinds share the failure ladder); gateway → <code>gateway.rs</code> (it manages its own continuation).</li>
+  <li><strong><code>continue_through(edges, carried, …)</code></strong>: zero edges → branch ends; one edge → tail call; N edges → <code>try_join_all</code>, cloning only the <code>Arc</code>. <em>First error cancels sibling branches</em> (dropping their futures) — the engine is fail-fast across parallel branches.</li>
+  <li><strong>Node events:</strong> <code>node_started</code> is emitted on entry — except for joins, which "start" once per arrival; their started+completed pair is emitted when the join completes.</li>
+  <li><strong>End of run:</strong> <code>RunState.ends</code> drives the result — 0 ends reached → <code>NO_OUTPUT</code>; 1 → its value; several (parallel branches reaching different ends) → an object keyed by end-node id. Leftover entries in <code>RunState.joins</code> are starved joins: if no end was reached they become a <code>JOIN_INCOMPLETE</code> error whose message lists <code>received k/n branches (arrived: […])</code> per join; if an end <em>was</em> reached they are logged as a warning.</li>
+</ul>
+
+<h3 id="life-failure">6.2 The failure ladder</h3>
+<figure class="diagram">
+<pre class="mermaid">
+flowchart TB
+    A["task / foreach / subworkflow result"] --> OK{Ok?}
+    OK -- yes --> PUB["emit node_completed<br/>ctx.set_node_output(id)"]
+    PUB --> CT["continue_through(normal edges,<br/>Arc(output))"]
+    OK -- no --> PANIC{"err.code ==<br/>TASK_PANIC?"}
+    PANIC -- yes --> PEDGES{"panic_edges(id)<br/>non-empty?"}
+    PANIC -- no --> EEDGES{"error_edges(id)<br/>non-empty?"}
+    PEDGES -- yes --> ROUTE
+    EEDGES -- yes --> ROUTE
+    ROUTE["emit node_failed {error_routed: true}<br/>ctx.set_node_error(id, err)<br/>continue_through(route edges,<br/>Arc(serialized error))"]
+    PEDGES -- no --> FAIL["emit node_failed {error_routed: false}<br/>return Err — run fails"]
+    EEDGES -- no --> FAIL
+    style ROUTE fill:#ecf4fb
+    style FAIL fill:#fdecec
+</pre>
+<figcaption>after_task_result: panics route only through on:panic edges (never falling back to on:error — the task may have left side effects half-applied).</figcaption>
+</figure>
+
+<p>Upstream of the ladder, <code>policy.rs::execute_with_policy</code> is the shared envelope for <em>every</em> extension invocation (task nodes with <code>emit_attempts: true</code>, foreach elements with <code>false</code> — elements have their own item events). Its loop, precisely:</p>
+<ol>
+  <li>Validate input against the precompiled input validator → <code>TASK_INPUT_INVALID</code> (no attempt happens).</li>
+  <li>Per attempt: wrap <code>task.execute</code> in <code>AssertUnwindSafe(…).catch_unwind()</code>; if <code>timeout_ms</code> is set, wrap that in <code>tokio::time::timeout</code>. Outcomes: output / task error / <code>TASK_TIMEOUT</code> / <code>TASK_PANIC</code> (payload downcast to <code>&amp;str</code>/<code>String</code> for the message). <code>AssertUnwindSafe</code> is sound because a panicked attempt's result is discarded and engine state only mutates via the executor <em>after</em> a success.</li>
+  <li>On success: validate output → <code>TASK_OUTPUT_INVALID</code> (not retried — a contract violation is a bug, not a transient).</li>
+  <li>On failure: fill <code>source_task</code> if empty; retry iff <code>code != TASK_PANIC</code> and <code>attempt &lt;= retry.max</code>; compute <code>backoff_delay</code> (exponential <code>initial·2^(n−1)</code> / linear <code>initial·n</code> / fixed, all <code>saturating_*</code> against overflow); emit <code>task_attempt_failed</code>; sleep; loop.</li>
+</ol>
+
+<h3 id="life-foreach">6.3 Foreach mechanics</h3>
+<figure class="diagram">
+<pre class="mermaid">
+flowchart TB
+    R["resolve items mapping<br/>(must be an array →<br/>FOREACH_ITEMS_NOT_ARRAY)"] --> FUT["one boxed future per element<br/>foreach_item(index, item)"]
+    FUT --> BUF["stream::iter(futures)<br/>.buffered(concurrency)<br/><i>at most N in flight, results in order</i>"]
+    BUF --> GATE["throttle gate: Mutex(Instant)<br/>each start reserves next slot =<br/>max(next, now) + throttle_ms<br/>then sleeps until its slot"]
+    GATE --> POL["execute_with_policy per element<br/>(retry/timeout per item,<br/>emit_attempts: false)"]
+    POL --> EV["emit foreach_item_completed /<br/>foreach_item_failed {index}"]
+    EV --> MODE{on_item_error}
+    MODE -- fail --> FF["first Err short-circuits:<br/>drop of the buffered stream<br/>cancels in-flight elements<br/>→ node fails with that error"]
+    MODE -- collect --> CO["accumulate ok[] / failed[{index, item, error}]<br/>node never fails for item errors —<br/>EXCEPT a TASK_PANIC, which aborts<br/>the whole node"]
+    FF --> OUTF["output: [outputs in order]"]
+    CO --> OUTC["output: { ok, failed }"]
+</pre>
+<figcaption>run_foreach: bounded concurrency via buffered(n), start-rate limiting via a shared Instant gate, two error policies.</figcaption>
+</figure>
+<p>Implementation notes worth knowing before touching this file:</p>
+<ul>
+  <li>The throttle gate spaces element <em>starts</em>, not completions, and holds under concurrency: each element locks the <code>Mutex&lt;Instant&gt;</code>, reserves <code>start_at = max(next, now)</code>, advances <code>next = start_at + throttle</code>, releases the lock, <em>then</em> sleeps — the critical section never contains the sleep.</li>
+  <li><code>buffered(n)</code> (not <code>buffer_unordered</code>) keeps results in input order, which is what makes the <code>fail</code> output a positionally-stable array.</li>
+  <li>Each element future is boxed (<code>BoxFuture</code>) because rustc cannot prove <code>Send</code> for the unboxed async closure chain inside the recursive executor.</li>
+  <li>In <code>collect</code> mode a <code>TASK_PANIC</code> still aborts the node: collect tolerates <em>data</em> failures, not extension bugs.</li>
+</ul>
+
+<h3 id="life-join">6.4 Parallel &amp; join mechanics</h3>
+<figure class="diagram">
+<pre class="mermaid">
+flowchart TB
+    P["gateway parallel<br/>publish token as output"] --> CT["continue_through(ALL outgoing edges)<br/>try_join_all — concurrent,<br/>first error cancels siblings"]
+    CT --> B1["branch A …"] & B2["branch B …"] & B3["branch C …"]
+    B1 --> J
+    B2 --> J
+    B3 --> J
+    subgraph JOIN["gateway join — executes once per arrival"]
+        J["lock RunState.joins<br/>arrivals.push((origin, token))"] --> Q{"arrivals.len() ==<br/>index.incoming_count?"}
+        Q -- no --> STOP["Ok(()) — this branch ends here;<br/>the LAST arrival continues"]
+        Q -- yes --> REMOVE["joins.remove(node_id)<br/><i>leftovers at run end =<br/>starved joins diagnostics</i>"]
+    end
+    REMOVE --> OUT["output = { origin_id: token, … }<br/>deterministic object keyed by<br/>predecessor node id"]
+    OUT --> NEXT["emit node_started + node_completed<br/>continue_through(outgoing edges)"]
+</pre>
+<figcaption>Join fan-in: arrivals accumulate under the RunState mutex; the completing arrival removes the entry and carries a per-origin output object forward.</figcaption>
+</figure>
+<p>The join's output is an object <code>{ "&lt;predecessor-id&gt;": &lt;its token&gt;, … }</code> — deterministic regardless of arrival order. This is why <code>execute_from</code> threads <code>origin</code> through the traversal: it is the join's only way to know <em>which</em> branch a token came from. Exclusive gateways, by contrast, are pure routing: <code>pick_branch</code> evaluates branch conditions in declaration order under a single <code>with_state</code> read lock, falls back to the <code>else</code> branch, and the winner's label filters the outgoing edges.</p>
+
+<h2 id="extension-points">7. Extension Points</h2>
 <p>This is the expanded version of the "Where do I add…?" table in <code>lib.rs</code>.</p>
 
-<h3 id="ext-task">6.1 A new task / extension crate</h3>
+<h3 id="ext-task">7.1 A new task / extension crate</h3>
 <ol>
   <li>Create <code>crates/extensions/&lt;name&gt;</code> as <code>workflow-forge-ext-&lt;name&gt;</code>, depending on <code>workflow-forge-core</code>.</li>
   <li>Implement <code>Task</code> for each unit of work. Use namespaced ids (<code>"&lt;name&gt;.&lt;task&gt;"</code>). Build schemas with the re-exported <code>workflow_forge_core::schemars</code> (no direct schemars dependency needed).</li>
@@ -421,14 +838,14 @@ impl Task for Reverse {
 }</code></pre>
 <p>Rules of the contract:</p>
 <ul>
-  <li>The engine validates input/output against your schemas <em>around</em> <code>execute</code> — inside it you may trust the schema.</li>
+  <li>The engine validates input/output against your schemas <em>around</em> <code>execute</code> (in <code>policy.rs</code>, using precompiled validators) — inside it you may trust the schema.</li>
   <li>Return <code>WorkflowError</code> with a <em>specific, documented code</em> for every failure mode (extension codes live with the extension, e.g. <code>HTTP_STATUS_ERROR</code>).</li>
   <li>Reach files only through <code>ctx.blobs()</code> — never the filesystem directly. Stream large payloads via <code>import_file</code> / <code>local_path</code>.</li>
   <li>Don't panic. A panic is caught and reported as <code>TASK_PANIC</code>, but it is treated as a bug: no retry, no <code>on: error</code> routing.</li>
   <li>Don't block: <code>execute</code> runs on the Tokio runtime; use async I/O or <code>spawn_blocking</code> for CPU-bound work.</li>
 </ul>
 
-<h3 id="ext-operator">6.2 A new condition operator ("reserved word")</h3>
+<h3 id="ext-operator">7.2 A new condition operator ("reserved word")</h3>
 <pre><code>use workflow_forge_core::expr::operators::{self, ConditionOperator};
 
 struct Between;
@@ -454,7 +871,7 @@ operators::global().register(Between);</code></pre>
   <li>For isolated vocabularies (e.g. multi-tenant hosts), build a private <code>OperatorRegistry</code> and use <code>evaluate_with</code> — but note the executor's gateway evaluation uses the global registry in v1.</li>
 </ul>
 
-<h3 id="ext-rule">6.3 A new validation rule</h3>
+<h3 id="ext-rule">7.3 A new validation rule</h3>
 <pre><code>struct NoHttpUrls;
 impl ValidationRule for NoHttpUrls {
     fn codes(&amp;self) -&gt; &amp;'static [&amp;'static str] { &amp;["HOST_INSECURE_URL"] }
@@ -470,10 +887,10 @@ let executor = WorkflowExecutor::builder(wf, registry)
 <ul>
   <li>Host rules run after the built-ins, also over every subworkflow (inline or registry).</li>
   <li>Declare your codes in <code>codes()</code>. Host-specific codes live in the host; engine codes go through <code>error::codes</code>.</li>
-  <li>A <em>built-in</em> rule instead goes in <code>validate/rules/&lt;area&gt;.rs</code>, gets appended to <code>rules::BUILTIN</code>, declares catalog codes, and ships with its own tests.</li>
+  <li>A <em>built-in</em> rule instead goes in <code>validate/rules/&lt;area&gt;.rs</code>, gets appended to <code>rules::BUILTIN</code> (mind the order — graph rules read prior errors), declares catalog codes, and ships with its own tests.</li>
 </ul>
 
-<h3 id="ext-blob">6.4 A new blob store (e.g. S3)</h3>
+<h3 id="ext-blob">7.4 A new blob store (e.g. S3)</h3>
 <pre><code>struct S3Factory { bucket: String, client: aws_sdk_s3::Client }
 impl BlobStoreFactory for S3Factory {
     fn create(&amp;self, execution_id: &amp;str) -&gt; Arc&lt;dyn BlobStore&gt; {
@@ -484,41 +901,42 @@ impl BlobStoreFactory for S3Factory {
 
 builder.blobs(Arc::new(S3Factory { … }))</code></pre>
 <ul>
-  <li>Keep the per-execution lifecycle: namespace objects by <code>execution_id</code>; <code>cleanup()</code> removes the whole namespace.</li>
+  <li>Keep the per-execution lifecycle: namespace objects by <code>execution_id</code>; <code>cleanup()</code> removes the whole namespace. Remember subworkflows share the root store — your namespace must hold the whole tree.</li>
   <li>Generate ids yourself (UUID v7 recommended) and validate them in lookups — the id check is your forgery defense.</li>
   <li><code>local_path</code> is the streaming contract; a remote store may materialize to a temp file. (v1 assumes file-backed blobs.)</li>
 </ul>
 
-<h3 id="ext-secret">6.5 A new secret provider</h3>
+<h3 id="ext-secret">7.5 A new secret provider</h3>
 <pre><code>struct VaultSecrets { client: VaultClient }
 impl SecretProvider for VaultSecrets {
     fn get(&amp;self, name: &amp;str) -&gt; Option&lt;String&gt; { self.client.read(name).ok() }
 }
 
 builder.secrets(&amp;vault)   // note: borrowed, must outlive the build call</code></pre>
-<p>The provider is only consulted during <strong>build</strong> (profile registration). It is synchronous by design; wrap async vault clients with a blocking handle or pre-fetch.</p>
+<p>The provider is only consulted during <strong>build</strong> (profile registration, §4 step 1). It is synchronous by design; wrap async vault clients with a blocking handle or pre-fetch.</p>
 
-<h3 id="ext-observer">6.6 A new observer</h3>
+<h3 id="ext-observer">7.6 A new observer</h3>
 <pre><code>struct PgObserver { tx: tokio::sync::mpsc::UnboundedSender&lt;ExecutionEvent&gt; }
 impl ExecutionObserver for PgObserver {
     fn on_event(&amp;self, event: &amp;ExecutionEvent) {
         let _ = self.tx.send(event.clone());   // never block here
     }
 }</code></pre>
-<p>One observer instance receives the whole execution tree (the executor propagates it to subworkflow children). Reconstruct ordering with <code>seq</code>; group with <code>execution_id</code> / <code>parent_execution_id</code>.</p>
+<p>One observer instance receives the whole execution tree (the executor propagates the <code>Arc</code> to every child at registration). Reconstruct ordering with <code>seq</code>; group with <code>execution_id</code> / <code>parent_execution_id</code>. <code>on_event</code> runs synchronously on the execution hot path — hand off through a channel.</p>
 
-<h3 id="ext-kind">6.7 A new node kind — a spec change</h3>
+<h3 id="ext-kind">7.7 A new node kind — a spec change</h3>
 <p>This is deliberately heavier than the other extension points, because it changes the language every consumer must understand. The checklist (also in <code>runtime/handlers/mod.rs</code>):</p>
 <ol>
   <li><code>spec/node/&lt;kind&gt;.rs</code>: the node struct (serde) + variant in <code>NodeKind</code> + arm in <code>NodeKind::name()</code>.</li>
-  <li><code>runtime/handlers/&lt;kind&gt;.rs</code>: an <code>impl WorkflowExecutor</code> block with <code>run_&lt;kind&gt;</code>; declare the module in <code>handlers/mod.rs</code>; add the dispatch arm in <code>executor.rs::execute_from</code>.</li>
+  <li><code>runtime/handlers/&lt;kind&gt;.rs</code>: an <code>impl WorkflowExecutor</code> block with <code>run_&lt;kind&gt;</code>; declare the module in <code>handlers/mod.rs</code>; add the dispatch arm in <code>executor.rs::execute_from</code>. Decide whether the kind "executes work" — if so, route its result through <code>after_task_result</code> to inherit retry-error-panic routing for free.</li>
   <li><code>validate/rules/</code>: structural rules for the kind + appended to <code>rules::BUILTIN</code>; new codes documented in <code>error/codes.rs</code> + <code>ALL</code>.</li>
+  <li>If the kind affects edges or in-degrees, revisit <code>GraphIndex::build</code> and the join arithmetic.</li>
   <li>Decide event semantics (<code>observe::EventKind</code> — new variant if node/task events don't fit).</li>
   <li>Tests: rule tests, handler integration test under <code>crates/core/tests/</code>, and a spec-document example.</li>
   <li>Bump the spec discussion: if 1.0 documents must not break, the kind belongs to a future spec version (<code>SUPPORTED_SPECS</code>).</li>
 </ol>
 
-<h2 id="testing">7. Testing Strategy</h2>
+<h2 id="testing">8. Testing Strategy</h2>
 <table>
   <tr><th>Layer</th><th>Where</th><th>What it locks</th></tr>
   <tr><td>Unit, per family</td><td><code>#[cfg(test)]</code> in each module</td><td>Condition serde + error messages, mapping/shape rules, operator registry, backoff math, blob store roundtrip + forged-id rejection, secret resolution, each validation rule (one focused test per rule family), code-catalog uniqueness, rules-declare-catalog-codes.</td></tr>
@@ -528,23 +946,26 @@ impl ExecutionObserver for PgObserver {
 </table>
 <p>Run with <code>cargo test --workspace</code>; lint with <code>cargo clippy --workspace --all-targets</code> (kept at zero warnings) and <code>cargo fmt</code>. When you add behavior, add the test at the <em>lowest</em> layer that can express it — rules and operators almost never need an integration test.</p>
 
-<h2 id="invariants">8. Invariants &amp; Gotchas</h2>
+<h2 id="invariants">9. Invariants &amp; Gotchas</h2>
 <ul>
   <li><strong>Error codes never change value.</strong> Add, never rename. <code>codes.rs</code> is the single source of truth; its uniqueness test and the rules-vs-catalog test enforce hygiene.</li>
   <li><strong>Event JSON is stable.</strong> The <code>type</code> tags and field names of <code>EventKind</code> are persisted by hosts and earmarked as the future durable journal. Additive changes only.</li>
   <li><strong>Identifiers are UUID v7</strong> (<code>Uuid::now_v7()</code>) — time-ordered, index-friendly. Never v4.</li>
   <li><strong>Mappings error on absence; shapes and conditions tolerate it.</strong> <code>$.</code>-absence is <code>MAPPING_PATH_NOT_FOUND</code>; <code>@.</code>-absence is <code>null</code>; condition-path absence is <code>false</code>. Don't "fix" one to behave like another — documents rely on it.</li>
-  <li><strong>Panic ≠ error.</strong> <code>policy.rs</code> converts panics to <code>TASK_PANIC</code>, which skips retry and <code>on: error</code> routing by design — a bug must not be retried into a side-effecting API.</li>
+  <li><strong>Panic ≠ error.</strong> <code>policy.rs</code> converts panics to <code>TASK_PANIC</code>, which skips retry and <code>on: error</code> routing by design — a bug must not be retried into a side-effecting API, and a half-applied effect must not flow down a compensation path built for clean failures. Foreach <code>collect</code> aborts on panic for the same reason.</li>
+  <li><strong>Validation is a license for <code>expect()</code>.</strong> Runtime code unwraps registry lookups, start-node presence and edge references <em>because</em> build-order guarantees them. If you reorder <code>build_internal</code>, you revoke those licenses — audit every <code>expect("validación …")</code>.</li>
   <li><strong>Inline profiles are scoped.</strong> <code>build_internal</code> registers them into <code>registry.scoped()</code>, and children get the <em>original</em> registry. Breaking this leaks document-local definitions across tenants.</li>
   <li><strong>Secrets resolve at registration, not at run.</strong> The serialized document never holds secret values; the in-memory baked profile does. Keep it that way.</li>
   <li><strong>Blob ids are validated.</strong> <code>TempDirBlobStore::blob_path</code> rejects non-UUID-shaped ids — that's the path-traversal defense. Any new store needs the same property.</li>
-  <li><strong>Subworkflows share the root blob store and event counter</strong> but have their own state document and execution id. Cleanup belongs only to the root run.</li>
-  <li><strong>Graph rules self-disable on broken references.</strong> <code>Reachability</code>/<code>Acyclicity</code> check for prior <code>UNKNOWN_NODE_REF</code> errors before running — they read the shared error vector. Rule order in <code>BUILTIN</code> matters.</li>
+  <li><strong>Subworkflows share the root blob store and event counter</strong> (one <code>Arc</code> clone each in <code>child_of</code>) but have their own state document and execution id. Cleanup belongs only to the root run.</li>
+  <li><strong>Graph rules self-disable on broken references.</strong> <code>Reachability</code>/<code>Acyclicity</code> read the shared error vector for prior <code>UNKNOWN_NODE_REF</code>. Rule order in <code>BUILTIN</code> matters.</li>
+  <li><strong>The token is an <code>Arc</code>.</strong> Parallel fan-out clones the handle, not the payload. If you add a code path that needs an owned <code>Value</code>, use <code>Arc::unwrap_or_clone</code> — don't sprinkle <code>.clone()</code> on the inner value.</li>
+  <li><strong><code>try_join_all</code> is fail-fast.</strong> A failing branch cancels its siblings by drop. If a future kind needs "wait for all even on failure", that's a semantic change to <code>continue_through</code>, not a local fix.</li>
   <li><strong>Observer calls are synchronous</strong> on the execution's hot path. Anything slow inside <code>on_event</code> slows the workflow.</li>
   <li><strong>Register operators before building executors</strong>, or <code>KnownConditionOperators</code> will reject documents that would work at runtime.</li>
 </ul>
 
-<h2 id="conventions">9. Conventions</h2>
+<h2 id="conventions">10. Conventions</h2>
 <ul>
   <li><strong>Docs are enforced</strong>: <code>#![warn(missing_docs)]</code> in <code>lib.rs</code>; every public item carries a doc comment; every module a <code>//!</code> header explaining what/how/why. The crate-level doc in <code>lib.rs</code> holds the family map and the "Where do I add…?" quick table — keep both in sync with reality.</li>
   <li><strong>Spec types stay logic-free.</strong> Evaluation goes to <code>expr</code>, checking to <code>validate</code>, execution to <code>runtime</code>. If you're adding a method with behavior to a <code>spec</code> struct, you're probably in the wrong family.</li>
@@ -558,6 +979,99 @@ impl ExecutionObserver for PgObserver {
 <hr>
 <p class="muted">workflow-forge · Infrastructure Manual · For the workflow-author perspective, see the <a href="usage.html">User Manual</a>.</p>
 
+
+
+
+
+
+
+
+
+
 </main>
+
+<div id="viewer">
+  <div class="toolbar">
+    <button id="v-in" title="Zoom in">+</button>
+    <button id="v-out" title="Zoom out">−</button>
+    <button id="v-fit" title="Fit">⤢</button>
+    <button id="v-close" title="Close">✕</button>
+  </div>
+  <div class="stage" id="v-stage"><div class="canvas" id="v-canvas"></div></div>
+  <div class="hint">scroll to zoom · drag to pan · Esc to close</div>
+</div>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose",
+                       flowchart: { htmlLabels: true } });
+
+  // ── Interactive viewer: click a diagram → zoomable/pannable modal ──
+  (function () {
+    const viewer = document.getElementById("viewer");
+    const stage  = document.getElementById("v-stage");
+    const canvas = document.getElementById("v-canvas");
+    let scale = 1, tx = 0, ty = 0, drag = null;
+
+    function apply() {
+      canvas.style.transform =
+        "translate(-50%, -50%) translate(" + tx + "px," + ty + "px) scale(" + scale + ")";
+    }
+    function fit() {
+      const svg = canvas.querySelector("svg");
+      if (!svg) return;
+      const r = svg.getBoundingClientRect ? svg.viewBox.baseVal : null;
+      const w = (r && r.width)  ? r.width  : svg.clientWidth  || 800;
+      const h = (r && r.height) ? r.height : svg.clientHeight || 600;
+      scale = Math.min((window.innerWidth - 120) / w, (window.innerHeight - 120) / h, 2.5);
+      if (!isFinite(scale) || scale <= 0) scale = 1;
+      tx = 0; ty = 0; apply();
+    }
+    function open(svgEl) {
+      canvas.innerHTML = "";
+      const clone = svgEl.cloneNode(true);
+      clone.removeAttribute("width");
+      clone.style.maxWidth = "none";
+      if (clone.viewBox && clone.viewBox.baseVal && clone.viewBox.baseVal.width) {
+        clone.setAttribute("width",  clone.viewBox.baseVal.width + "px");
+        clone.setAttribute("height", clone.viewBox.baseVal.height + "px");
+      }
+      canvas.appendChild(clone);
+      viewer.classList.add("open");
+      fit();
+    }
+    function close() { viewer.classList.remove("open"); canvas.innerHTML = ""; }
+
+    document.addEventListener("click", function (e) {
+      const fig = e.target.closest(".diagram");
+      if (fig && !viewer.classList.contains("open")) {
+        const svg = fig.querySelector("svg");
+        if (svg) open(svg);
+      }
+    });
+    document.getElementById("v-close").addEventListener("click", close);
+    document.getElementById("v-fit").addEventListener("click", fit);
+    document.getElementById("v-in").addEventListener("click", function () { scale *= 1.25; apply(); });
+    document.getElementById("v-out").addEventListener("click", function () { scale /= 1.25; apply(); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+
+    stage.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      scale *= (e.deltaY < 0 ? 1.12 : 1 / 1.12);
+      scale = Math.min(Math.max(scale, 0.1), 8);
+      apply();
+    }, { passive: false });
+
+    stage.addEventListener("pointerdown", function (e) {
+      drag = { x: e.clientX - tx, y: e.clientY - ty };
+      stage.classList.add("dragging");
+      stage.setPointerCapture(e.pointerId);
+    });
+    stage.addEventListener("pointermove", function (e) {
+      if (!drag) return;
+      tx = e.clientX - drag.x; ty = e.clientY - drag.y; apply();
+    });
+    stage.addEventListener("pointerup", function () { drag = null; stage.classList.remove("dragging"); });
+  })();
+</script>
 </body>
 </html>
