@@ -36,18 +36,12 @@
 
 #![warn(missing_docs)]
 
-// TODO(refactor): los #[path] explícitos son temporales mientras existen los
-// archivos legacy (error.rs, observe.rs, task.rs) junto a las carpetas
-// nuevas; al eliminarlos, estos atributos sobran.
-#[path = "error/mod.rs"]
 pub mod error;
 pub mod expr;
 pub mod io;
-#[path = "observe/mod.rs"]
 pub mod observe;
 pub mod runtime;
 pub mod spec;
-#[path = "task/mod.rs"]
 pub mod task;
 pub mod validate;
 

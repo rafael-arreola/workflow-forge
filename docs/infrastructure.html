@@ -1,577 +1,563 @@
 <!DOCTYPE html>
-<html lang="en" class="scroll-smooth">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Workflow Forge — Core Engine Infrastructure & Guts Manual</title>
-    <!-- Tailwind CSS v4 CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <!-- PrismJS Dark Theme & JS CDN -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
-    <!-- Mermaid.js for diagrams -->
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-    <script>
-        mermaid.initialize({
-            startOnLoad: true,
-            theme: 'dark',
-            flowchart: { useWidth: true, htmlLabels: true, curve: 'basis' },
-            securityLevel: 'loose'
-        });
-    </script>
-    <style>
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #0f172a; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>workflow-forge — Infrastructure Manual</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1c2330;
+    --muted: #5b6675;
+    --accent: #1e5a8a;
+    --accent-soft: #ecf4fb;
+    --border: #e3e7ee;
+    --code-bg: #14181f;
+    --code-fg: #d8dee9;
+    --inline-bg: #f1f3f7;
+    --sidebar-w: 280px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.65;
+  }
+  nav {
+    position: fixed; top: 0; left: 0; bottom: 0;
+    width: var(--sidebar-w);
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 1.25rem 3rem;
+    font-size: 0.85rem;
+    background: #fafbfc;
+  }
+  nav h1 { font-size: 1rem; margin: 0 0 0.25rem; }
+  nav .subtitle { color: var(--muted); font-size: 0.75rem; margin-bottom: 1.25rem; }
+  nav a { display: block; color: var(--fg); text-decoration: none; padding: 0.15rem 0; }
+  nav a:hover { color: var(--accent); }
+  nav .l2 { padding-left: 1rem; color: var(--muted); }
+  main {
+    margin-left: var(--sidebar-w);
+    padding: 2.5rem 3rem 6rem;
+    max-width: 60rem;
+  }
+  h1, h2, h3, h4 { line-height: 1.3; scroll-margin-top: 1rem; }
+  h1 { font-size: 2rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+  h2 { font-size: 1.5rem; margin-top: 3rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.15rem; margin-top: 2rem; }
+  h4 { font-size: 1rem; margin-top: 1.5rem; }
+  code {
+    font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+    font-size: 0.85em;
+    background: var(--inline-bg);
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+  }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: 1rem 1.25rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    line-height: 1.55;
+  }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 0.45rem 0.7rem; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  .note {
+    background: var(--accent-soft);
+    border-left: 4px solid var(--accent);
+    padding: 0.75rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .warn {
+    background: #fdf3ec;
+    border-left: 4px solid #b3541e;
+    padding: 0.75rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .muted { color: var(--muted); }
+</style>
 </head>
-<body class="bg-slate-950 text-slate-100 font-sans antialiased selection:bg-indigo-500 selection:text-white">
+<body>
 
-    <!-- Header / Navbar -->
-    <header class="sticky top-0 z-50 flex items-center justify-between border-b border-slate-800 bg-slate-950/80 px-6 py-4 backdrop-blur-md">
-        <div class="flex items-center space-x-3">
-            <a href="index.html" class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 font-black text-white shadow-lg shadow-indigo-500/20 hover:scale-105 transition-transform">
-                WF
-            </a>
-            <div>
-                <span class="text-lg font-bold tracking-tight text-white">Workflow Forge</span>
-                <span class="ml-2 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-500 border border-amber-500/20">Systems Manual</span>
-            </div>
-        </div>
-        <div class="flex items-center space-x-4">
-            <a href="index.html" class="text-sm font-medium text-slate-400 hover:text-white transition-colors">Portal Home</a>
-            <span class="text-slate-700">|</span>
-            <a href="usage.html" class="text-sm font-medium text-slate-400 hover:text-white transition-colors">Developer Manual</a>
-            <span class="text-slate-700">|</span>
-            <a href="architecture.html" class="text-sm font-medium text-slate-400 hover:text-white transition-colors">Architecture Guide</a>
-        </div>
-    </header>
+<nav>
+  <h1>workflow-forge</h1>
+  <div class="subtitle">Infrastructure Manual · engine internals</div>
+  <a href="#purpose">1. Purpose &amp; Scope</a>
+  <a href="#workspace">2. Workspace Layout</a>
+  <a href="#architecture">3. Core Architecture</a>
+  <a href="#families">4. The Families</a>
+  <a class="l2" href="#fam-spec">spec</a>
+  <a class="l2" href="#fam-expr">expr</a>
+  <a class="l2" href="#fam-validate">validate</a>
+  <a class="l2" href="#fam-runtime">runtime</a>
+  <a class="l2" href="#fam-task">task</a>
+  <a class="l2" href="#fam-io">io</a>
+  <a class="l2" href="#fam-observe">observe</a>
+  <a class="l2" href="#fam-error">error</a>
+  <a href="#lifecycle">5. Life of an Execution</a>
+  <a href="#extension-points">6. Extension Points</a>
+  <a class="l2" href="#ext-task">New task / extension crate</a>
+  <a class="l2" href="#ext-operator">New condition operator</a>
+  <a class="l2" href="#ext-rule">New validation rule</a>
+  <a class="l2" href="#ext-blob">New blob store</a>
+  <a class="l2" href="#ext-secret">New secret provider</a>
+  <a class="l2" href="#ext-observer">New observer</a>
+  <a class="l2" href="#ext-kind">New node kind (spec change)</a>
+  <a href="#testing">7. Testing Strategy</a>
+  <a href="#invariants">8. Invariants &amp; Gotchas</a>
+  <a href="#conventions">9. Conventions</a>
+</nav>
 
-    <!-- Main Container Grid -->
-    <div class="flex min-h-[calc(100vh-73px)]">
+<main>
 
-        <!-- Left Sidebar Navigation -->
-        <aside class="fixed top-[73px] bottom-0 left-0 hidden w-64 overflow-y-auto border-r border-slate-800 bg-slate-950 p-6 lg:block">
-            <nav class="space-y-6">
-                <div>
-                    <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Crates & Modules</h3>
-                    <ul class="mt-3 space-y-2 text-sm">
-                        <li><a href="#physical-layout" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Physical Repository Layout</a></li>
-                        <li><a href="#crates-relations" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Crate Relationships</a></li>
-                    </ul>
-                </div>
+<h1>workflow-forge — Infrastructure Manual</h1>
+<p class="muted">The engineering reference for <strong>maintaining, extending and improving</strong> the workflow-forge engine. It documents every component of the core, how they work, how they communicate, and exactly where to plug in new behavior. If you only want to <em>use</em> the library, read the <a href="usage.html">User Manual</a> instead.</p>
 
-                <div>
-                    <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Engine Guts (Core)</h3>
-                    <ul class="mt-3 space-y-2 text-sm">
-                        <li><a href="#thread-safety" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">State RwLock Mutex</a></li>
-                        <li><a href="#concurrency-engine" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">try_join_all Concurrency</a></li>
-                        <li><a href="#binary-streams" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Blob Storage Streams</a></li>
-                        <li><a href="#component-sequence" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Execution Sequence</a></li>
-                    </ul>
-                </div>
+<h2 id="purpose">1. Purpose &amp; Scope</h2>
+<p>The engine (<code>crates/core</code>, package <code>workflow-forge-core</code>) executes workflow documents conforming to <strong>spec 1.0</strong>. Its architecture pursues four goals, in this order:</p>
+<ol>
+  <li><strong>Extensible</strong> — every behavior a host might want to change is behind a trait with a registration point; the engine knows no concrete task, storage, or operator in advance.</li>
+  <li><strong>Curable</strong> — responsibilities are closed per module ("family"); a bug in gateway routing can only live in a handful of known files.</li>
+  <li><strong>Testable</strong> — every unit (rule, operator, handler, policy) is testable in isolation; behavior is locked by ~160 tests across the workspace.</li>
+  <li><strong>Documented</strong> — <code>#![warn(missing_docs)]</code> is enforced; every module opens with a <code>//!</code> header stating what it does, how, and why.</li>
+</ol>
 
-                <div>
-                    <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Official Extensions</h3>
-                    <ul class="mt-3 space-y-2 text-sm">
-                        <li><a href="#ext-http-internals" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">http — Reqwest Pipes</a></li>
-                        <li><a href="#ext-data-internals" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">data — Casting Loops</a></li>
-                        <li><a href="#ext-sftp-internals" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">sftp — Blocking Offload</a></li>
-                    </ul>
-                </div>
+<h2 id="workspace">2. Workspace Layout</h2>
+<pre><code>workflow-forge/
+├── crates/core/                  # the engine (this manual's subject)
+│   └── src/
+│       ├── lib.rs                # crate map + "where do I add X?" table + prelude
+│       ├── spec/                 # the language: serde types of the document
+│       ├── expr/                 # expression resolution ($., @., conditions)
+│       ├── validate/             # static rules over the definition
+│       ├── runtime/              # execution: executor, context, handlers, policy
+│       ├── task/                 # the extension contract: Task, registry, profiles
+│       ├── io/                   # host resources: blobs ($blob), secrets ($secret)
+│       ├── observe/              # execution events, in-memory history, reports
+│       └── error/                # WorkflowError + the error-code catalog
+├── crates/extensions/
+│   ├── util/                     # workflow-forge-ext-util
+│   ├── data/                     # workflow-forge-ext-data
+│   ├── http/                     # workflow-forge-ext-http
+│   ├── tabular/                  # workflow-forge-ext-tabular
+│   └── sftp/                     # workflow-forge-ext-sftp
+└── crates/forge/                 # workflow-forge: facade + feature flags</code></pre>
+<table>
+  <tr><th>Property</th><th>Value</th></tr>
+  <tr><td>Rust edition</td><td>2024 (workspace-wide)</td></tr>
+  <tr><td>Async runtime</td><td>Tokio (full features)</td></tr>
+  <tr><td>Key shared deps</td><td>serde/serde_json, jsonpath-rust, jsonschema, schemars, async-trait, futures, thiserror, tracing, uuid (v7), regex</td></tr>
+  <tr><td>Extension naming</td><td><code>workflow-forge-ext-&lt;name&gt;</code>; task ids namespaced <code>&lt;name&gt;.&lt;task&gt;</code></td></tr>
+  <tr><td>Facade features</td><td><code>default = [util, data, http]</code>, <code>full</code> adds <code>tabular</code>, <code>sftp</code>; <code>register_extensions()</code> / <code>default_registry()</code> wire them in</td></tr>
+</table>
 
-                <div>
-                    <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Error Boundaries</h3>
-                    <ul class="mt-3 space-y-2 text-sm">
-                        <li><a href="#panic-boundaries" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Panic Isolation Model</a></li>
-                    </ul>
-                </div>
-            </nav>
-        </aside>
+<h2 id="architecture">3. Core Architecture</h2>
+<p>The core is organized in <strong>eight families</strong> with closed responsibilities. The compile pipeline goes top-down; the supporting families serve the pipeline sideways:</p>
+<pre><code>          ┌────────────────────────────────────────────────┐
+          │  spec      the language: pure serde data types  │
+          └───────────────────────┬────────────────────────┘
+                                  ▼
+          ┌────────────────────────────────────────────────┐
+          │  validate  static rules, accumulate all errors  │
+          └───────────────────────┬────────────────────────┘
+                                  ▼
+          ┌────────────────────────────────────────────────┐
+          │  runtime   executor · context · handlers · policy │
+          └────────────────────────────────────────────────┘
 
-        <!-- Main Content Area -->
-        <main class="flex-1 px-6 py-10 lg:ml-64 lg:px-12 max-w-5xl overflow-hidden">
+   expr     $. mappings, @. shapes, condition evaluation + operator registry
+   task     the extension contract: Task, TaskRegistry, profiles
+   io       BlobStore/Factory ($blob) · SecretProvider ($secret)
+   observe  ExecutionObserver · ExecutionEvent · InMemoryHistory
+   error    WorkflowError + error::codes catalog</code></pre>
 
-            <div class="mb-12 border-b border-slate-850 pb-8">
-                <h1 class="bg-gradient-to-r from-white via-slate-200 to-amber-400 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent sm:text-5xl">
-                    Internal Engine Code & Infrastructure Guide
-                </h1>
-                <p class="mt-4 text-lg text-slate-400 max-w-3xl leading-relaxed">
-                    A systems-level manual dissecting the Rust implementation of Workflow Forge. Learn how the async core manages memory, locks, and task coordination across thread pools.
-                </p>
-            </div>
+<h3>Who talks to whom</h3>
+<table>
+  <tr><th>From</th><th>To</th><th>Through</th></tr>
+  <tr><td><code>runtime</code></td><td><code>spec</code></td><td>Reads the definition; dispatches on <code>NodeKind</code>.</td></tr>
+  <tr><td><code>runtime</code></td><td><code>validate</code></td><td><code>validate_with()</code> + <code>validate_tasks()</code> during <code>build_internal</code>. Runtime never executes an unvalidated document.</td></tr>
+  <tr><td><code>runtime</code></td><td><code>expr</code></td><td><code>mapping::resolve</code> for inputs/items/outputs; <code>Condition::evaluate</code> for gateways.</td></tr>
+  <tr><td><code>runtime</code></td><td><code>task</code></td><td><code>TaskRegistry::get</code> → <code>Task::execute(ctx, input)</code>, wrapped by <code>policy</code>.</td></tr>
+  <tr><td><code>runtime</code></td><td><code>io</code></td><td><code>BlobStoreFactory::create(execution_id)</code> per run; secrets resolved at profile registration.</td></tr>
+  <tr><td><code>runtime</code></td><td><code>observe</code></td><td><code>WorkflowExecutor::emit()</code> → <code>ExecutionObserver::on_event</code>.</td></tr>
+  <tr><td><code>validate</code></td><td><code>expr</code></td><td>Only the <code>KnownConditionOperators</code> rule queries <code>operators::global()</code>.</td></tr>
+  <tr><td>extensions</td><td><code>task</code> + <code>io</code></td><td>Implement <code>Task</code>; reach blobs via <code>ctx.blobs()</code> — extensions never touch the filesystem directly.</td></tr>
+  <tr><td>everyone</td><td><code>error</code></td><td>All failures are <code>WorkflowError</code> with a code from <code>error::codes</code>.</td></tr>
+</table>
 
-            <!-- PHYSICAL REPOSITORY LAYOUT -->
-            <section id="physical-layout" class="scroll-mt-24 space-y-6">
-                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">1. Physical Repository Layout</h2>
-                <p class="text-slate-300 leading-relaxed text-sm">
-                    The Cargo workspace isolates core engine logic from standard extension tasks. This keeps the execution core independent of specific network, tabular, or SFTP dependencies:
-                </p>
+<h3>Where dependency injection lives</h3>
+<p>The single DI point of the runtime is <code>WorkflowExecutorBuilder</code> (<code>runtime/executor.rs</code>):</p>
+<table>
+  <tr><th>Builder method</th><th>Trait injected</th><th>Default</th></tr>
+  <tr><td><code>.secrets()</code></td><td><code>io::secret::SecretProvider</code></td><td><code>EnvSecrets</code> (environment variables)</td></tr>
+  <tr><td><code>.workflows()</code></td><td><code>runtime::WorkflowRegistry</code> (shared subworkflows)</td><td>none</td></tr>
+  <tr><td><code>.blobs()</code></td><td><code>io::blob::BlobStoreFactory</code></td><td><code>TempDirBlobFactory</code></td></tr>
+  <tr><td><code>.observer()</code></td><td><code>observe::ExecutionObserver</code></td><td>none</td></tr>
+  <tr><td><code>.rule()</code></td><td><code>validate::ValidationRule</code> (repeatable)</td><td>built-in rules only</td></tr>
+</table>
+<p>Two more extension surfaces are registries rather than builder arguments: <code>task::TaskRegistry</code> (tasks/profiles) and <code>expr::operators::global()</code> (condition operators, process-wide).</p>
 
-                <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-xs font-mono text-slate-300">
-                    <pre>workflow-forge/
-├── crates/
-│   ├── core/                  # Crate: workflow-forge-core (The main execution engine)
-│   │   ├── src/
-│   │   │   ├── blob.rs        # TempDirBlobStore & streamed BoxBlobReader definitions
-│   │   │   ├── condition.rs   # In-memory conditional evaluator
-│   │   │   ├── context.rs     # WorkflowContext containing RwLock&lt;Value&gt; global state
-│   │   │   ├── error.rs       # Static WorkflowError & TaskError types
-│   │   │   ├── executor.rs    # Topological execution traversal loop under Tokio
-│   │   │   ├── lib.rs         # Library entrypoints & public exports
-│   │   │   ├── mapping.rs     # JSONPath selector extractor & mapping engine
-│   │   │   ├── node.rs        # Node kind definitions (start, end, task, gateways)
-│   │   │   ├── observe.rs     # Event emissions & tracing hooks
-│   │   │   ├── profile.rs     # Task profile inheritance & extends resolution
-│   │   │   ├── registry.rs    # TaskRegistry catalog containing registered manifests
-│   │   │   ├── secret.rs      # SecretsProvider dynamic replacement filter
-│   │   │   ├── shape.rs       # In-memory relative shapes resolver (@. pathing)
-│   │   │   ├── validation.rs  # Compiler analysis checks (cycles, orphans, edges)
-│   │   │   └── workflow.rs    # Schema definitions & deserialization bindings
-│   │
-│   ├── extensions/            # Official decoupled extensions
-│   │   ├── util/              # ext-util (noop, delay, log)
-│   │   ├── data/              # ext-data (transform, map, cast, merge, template)
-│   │   ├── http/              # ext-http (reqwest integration, body streaming)
-│   │   ├── tabular/           # ext-tabular (csv & calamine xlsx spreadsheet parsing)
-│   │   └── sftp/              # ext-sftp (ssh2 channels, sftp client streams)
-│   │
-│   └── forge/                 # Crate: workflow-forge (Unified facade bundling all modules)
-│       ├── Cargo.toml         # Features definitions (util, http, data, full)
-│       └── src/lib.rs         # Re-exports of core & registered extensions</pre>
-                </div>
-            </section>
+<div class="note"><strong>A deliberate non-trait:</strong> node kinds. <code>spec::node::NodeKind</code> is a <em>closed enum</em> — the node vocabulary belongs to the spec, not to hosts. Engine extensibility flows through tasks, not through new kinds. The per-kind execution logic is organized as <code>impl WorkflowExecutor</code> blocks in separate files (<code>runtime/handlers/</code>), which gives the same modularity as a <code>NodeHandler</code> trait without dynamic-dispatch ceremony for a vocabulary that cannot grow at runtime. Adding a kind is a spec change with a documented checklist (<a href="#ext-kind">§6.7</a>).</div>
 
-            <!-- CRATE RELATIONSHIPS -->
-            <section id="crates-relations" class="scroll-mt-24 space-y-6 pt-8">
-                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">2. Crate Relationships</h2>
-                <p class="text-slate-300 leading-relaxed text-sm">
-                    In order to support compile-time trees that remain modular, sibling extension crates do not have access to each other. They depend solely on the core, which acts as a common contract layer. The facade crate wraps everything up using feature flags:
-                </p>
+<h2 id="families">4. The Families</h2>
 
-                <div class="flex justify-center my-6 bg-slate-900 p-6 rounded-lg border border-slate-800">
-                    <div class="mermaid">
-graph TD
-    Forge[Crate: workflow-forge] -->|features| ExtUtil[Crate: ext-util]
-    Forge --> ExtHttp[Crate: ext-http]
-    Forge --> ExtData[Crate: ext-data]
-    Forge --> ExtTabular[Crate: ext-tabular]
-    Forge --> ExtSftp[Crate: ext-sftp]
+<h3 id="fam-spec">4.1 <code>spec/</code> — the language</h3>
+<p><strong>Pure data, zero logic.</strong> Everything here is serde types mirroring the JSON document. If a struct in <code>spec</code> needs behavior beyond (de)serialization and trivial accessors, that behavior belongs in another family.</p>
+<table>
+  <tr><th>File</th><th>Contains</th></tr>
+  <tr><td><code>workflow.rs</code></td><td><code>WorkflowDefinition</code> (spec, id, name, version, tasks, workflows, nodes, edges), <code>FlowEdge</code> (from/to/label/on), <code>EdgeTrigger</code> (<code>Error</code> | <code>Panic</code>)</td></tr>
+  <tr><td><code>node/mod.rs</code></td><td><code>NodeId</code>, <code>Node</code> (id + flattened kind), <code>NodeKind</code> enum (closed; <code>kind</code> is the JSON tag; <code>name()</code> returns the discriminator string), <code>SubworkflowNode</code></td></tr>
+  <tr><td><code>node/event.rs</code></td><td><code>StartNode</code> (schema, defaults), <code>EndNode</code> (status, output, schema), <code>EndStatus</code></td></tr>
+  <tr><td><code>node/task.rs</code></td><td><code>TaskNode</code> (task, input, retry, timeout_ms), <code>RetryPolicy</code> (max, backoff, initial_ms=500), <code>Backoff</code> (Exponential default | Linear | Fixed)</td></tr>
+  <tr><td><code>node/foreach.rs</code></td><td><code>ForeachNode</code> (task, items, concurrency=1, throttle_ms, on_item_error, retry, timeout_ms), <code>OnItemError</code> (Fail default | Collect)</td></tr>
+  <tr><td><code>node/gateway.rs</code></td><td><code>GatewayNode</code>, <code>GatewayKind</code> (Exclusive | Parallel | Join), <code>Branch</code> (when, is_else as <code>"else"</code>, edge)</td></tr>
+  <tr><td><code>condition.rs</code></td><td><code>Condition</code> (And/Or/Not/Compare), <code>Comparison</code> (path + op), <code>CompareOp</code> — 13 typed variants + <code>Custom { key, operand }</code></td></tr>
+  <tr><td><code>profile.rs</code></td><td><code>TaskProfile</code> — the declarative profile definition (id, extends, schemas, bind, output). The executable counterpart lives in <code>task::profile</code>.</td></tr>
+</table>
 
-    ExtUtil -->|depends on| Core[Crate: workflow-forge-core]
-    ExtHttp -->|depends on| Core
-    ExtData -->|depends on| Core
-    ExtTabular -->|depends on| Core
-    ExtSftp -->|depends on| Core
+<h4>Hand-written serde, on purpose</h4>
+<p>Three deserializers are manual, all for the same reason — <em>error quality</em> and <em>open vocabulary</em>:</p>
+<ul>
+  <li><code>Condition</code>: an untagged derive produces the useless "data did not match any variant"; the manual impl reports exactly which key is missing or extraneous ("expected 'and', 'or', 'not' or a comparison with 'path'; keys found: [foo]").</li>
+  <li><code>Comparison</code>: enforces "exactly one operator key next to <code>path</code>" with a precise message.</li>
+  <li><code>CompareOp::from_key_operand</code>: the 13 spec keys are matched and their operand <em>types</em> verified (<code>in</code> wants an array, <code>exists</code> a bool, <code>matches</code> a string…). <strong>Any unknown key becomes <code>CompareOp::Custom</code></strong> — this is the deserialization-side half of the extensible operator vocabulary. Serialization round-trips Custom keys verbatim.</li>
+</ul>
 
-    style Core fill:#1e1b4b,stroke:#4f46e5,stroke-width:2px,color:#fff
-    style Forge fill:#4f46e5,stroke:#818cf8,stroke-width:2px,color:#fff
-                    </div>
-                </div>
-            </section>
+<h3 id="fam-expr">4.2 <code>expr/</code> — expression resolution</h3>
+<table>
+  <tr><th>File</th><th>Contains</th></tr>
+  <tr><td><code>path.rs</code></td><td>The single JSONPath engine of the crate: <code>query_first(doc, path)</code> (first match or <code>None</code>, parse error as <code>Err(String)</code>) and <code>cached_regex()</code> (process-wide compiled-regex cache for the <code>matches</code> operator). <em>Every</em> path resolution in the engine funnels through here — change JSONPath behavior in exactly one place.</td></tr>
+  <tr><td><code>mapping.rs</code></td><td><code>resolve(mapping, context)</code> — the <code>$.</code> convention used by node inputs, foreach items and end outputs. <code>$$.</code> escapes to a literal <code>$.</code>. Unresolved path → <code>MAPPING_PATH_NOT_FOUND</code> (inputs treat absence as a definition bug).</td></tr>
+  <tr><td><code>shape.rs</code></td><td><code>apply_shape(shape, source)</code> — the <code>@.</code> convention used by profile <code>bind</code>/<code>output</code> and <code>data.transform</code>/<code>data.map</code>. Relative to a local document; missing paths yield <code>null</code> (shapes tolerate absence, mappings do not).</td></tr>
+  <tr><td><code>operators.rs</code></td><td>Condition <em>evaluation</em> (the syntax lives in <code>spec::condition</code>) and the operator extension point — below.</td></tr>
+</table>
 
-            <!-- ENGINE GUTS (CORE) -->
-            <section id="core-guts" class="scroll-mt-24 space-y-12 pt-8 border-t border-slate-800">
-                <div class="border-l-4 border-indigo-500 pl-4">
-                    <h2 class="text-3xl font-bold tracking-tight text-white">3. Guts of the Engine (Rust Internals)</h2>
-                    <p class="text-sm text-slate-400 mt-1">Under the hood of WorkflowContext, RwLocks, topological schedulers, and binary streams.</p>
-                </div>
+<h4>The operator registry</h4>
+<pre><code>pub trait ConditionOperator: Send + Sync + 'static {
+    fn key(&amp;self) -&gt; &amp;'static str;
+    fn evaluate(&amp;self, value: Option&lt;&amp;Value&gt;, operand: &amp;Value)
+        -&gt; Result&lt;bool, WorkflowError&gt;;
+}
 
-                <!-- Thread Safety -->
-                <div id="thread-safety" class="scroll-mt-24 space-y-3">
-                    <h3 class="text-2xl font-bold text-white">3.1 Safe Concurrent State Mutation (`RwLock`)</h3>
-                    <p class="text-slate-300 leading-relaxed text-sm">
-                        Since Workflow Forge traverses branching nodes concurrently across multiple system threads, avoiding data races is critical. The global state inside <code class="text-indigo-400">WorkflowContext</code> is backed by a read-write lock:
-                    </p>
+pub fn global() -&gt; &amp;'static OperatorRegistry   // OnceLock, process-wide</code></pre>
+<ul>
+  <li><code>Condition::evaluate(context)</code> / <code>Comparison::evaluate(context)</code> use the global registry; <code>evaluate_with(context, registry)</code> takes an explicit one (tests, isolated vocabularies).</li>
+  <li>Built-in operator semantics live here as one match over <code>CompareOp</code>; <code>Custom</code> variants are looked up in the registry — an unregistered key is <code>UNKNOWN_CONDITION_OPERATOR</code> at evaluation, but the validation rule catches it at build time first.</li>
+  <li>Absence contract: operators receive <code>value: None</code> when the path did not resolve and decide their own semantics. Built-ins return <code>false</code> (except <code>exists</code>). Operators must only fail on <em>definition</em> errors, never on data.</li>
+</ul>
 
-                    <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-xs font-mono">
-                        <pre><code class="language-rust">// Inside crates/core/src/context.rs
-pub struct WorkflowContext {
-    execution_id: String,
-    parent_execution_id: Option<String>,
-    started_at: Instant,
-    state: RwLock<Value>, // The global context document
-    blobs: Arc<dyn BlobStore>,
-    event_seq: Arc<std::sync::atomic::AtomicU64>,
+<h3 id="fam-validate">4.3 <code>validate/</code> — static rules</h3>
+<p>Everything detectable before execution is detected here. Validation is a <strong>pipeline of rules</strong> that share one error vector and <em>accumulate</em> (never stop at the first error — a document gets fixed in one pass).</p>
+<pre><code>pub trait ValidationRule: Send + Sync {
+    fn codes(&amp;self) -&gt; &amp;'static [&amp;'static str];  // living documentation
+    fn check(&amp;self, workflow: &amp;WorkflowDefinition,
+             ctx: &amp;ValidationCtx&lt;'_&gt;, errors: &amp;mut Vec&lt;WorkflowError&gt;);
+}
+
+pub fn validate(workflow) -&gt; Result&lt;(), Vec&lt;WorkflowError&gt;&gt;          // built-ins
+pub fn validate_with(workflow, extra: &amp;[&amp;dyn ValidationRule]) -&gt; …   // + host rules
+pub fn validate_tasks(workflow, registry) -&gt; …                       // needs the TaskRegistry</code></pre>
+<ul>
+  <li><code>ValidationCtx</code> (<code>context.rs</code>) precomputes node lookup, outgoing/incoming edge indexes and start nodes once, shared by all rules.</li>
+  <li><code>rules::BUILTIN: &amp;[&amp;dyn ValidationRule]</code> fixes the execution order. Host rules run <em>after</em> built-ins and can inspect already-reported errors.</li>
+  <li><code>validate_with</code> recurses into the document's inline <code>workflows</code>, prefixing child errors with the child's name.</li>
+  <li><code>codes()</code> is verified by test: every built-in rule's declared codes must exist in <code>error::codes::ALL</code>.</li>
+</ul>
+<table>
+  <tr><th>File</th><th>Rules (→ codes)</th></tr>
+  <tr><td><code>rules/structure.rs</code></td><td><code>SpecSupported</code> (UNSUPPORTED_SPEC) · <code>UniqueNodeIds</code> (DUPLICATE_NODE_ID) · <code>EdgeReferences</code> (UNKNOWN_NODE_REF) · <code>StartEndPresence</code> (NO_START_NODE, MULTIPLE_START_NODES, NO_END_NODE) · <code>StartEndEdges</code> (START_HAS_INCOMING, END_HAS_OUTGOING)</td></tr>
+  <tr><td><code>rules/nodes.rs</code></td><td><code>ForeachConcurrency</code> (FOREACH_INVALID_CONCURRENCY) · <code>SubworkflowName</code> (SUBWORKFLOW_MISSING_NAME) · <code>InlineWorkflowNames</code> (SUBWORKFLOW_DUPLICATE_NAME)</td></tr>
+  <tr><td><code>rules/gateway.rs</code></td><td><code>GatewayCoherence</code> (GATEWAY_NO_BRANCHES, GATEWAY_MULTIPLE_ELSE, GATEWAY_BRANCH_WITHOUT_WHEN, GATEWAY_BRANCH_WITHOUT_EDGE, GATEWAY_EDGE_WITHOUT_BRANCH, GATEWAY_BRANCHES_IGNORED, PARALLEL_TOO_FEW_OUTPUTS, JOIN_TOO_FEW_INPUTS)</td></tr>
+  <tr><td><code>rules/edges.rs</code></td><td><code>EdgeTriggers</code> (ERROR_EDGE_INVALID_SOURCE, ERROR_EDGE_TO_JOIN)</td></tr>
+  <tr><td><code>rules/graph.rs</code></td><td><code>Reachability</code> (UNREACHABLE_NODE, BFS from start) · <code>Acyclicity</code> (CYCLE_DETECTED, Kahn). Both <strong>self-disable</strong> if a previous rule reported UNKNOWN_NODE_REF — graph analysis over broken references would produce noise.</td></tr>
+  <tr><td><code>rules/conditions.rs</code></td><td><code>KnownConditionOperators</code> (UNKNOWN_CONDITION_OPERATOR) — walks every gateway condition tree; each <code>CompareOp::Custom</code> must exist in <code>operators::global()</code>. This is why hosts must register operators <em>before</em> building executors.</td></tr>
+</table>
+
+<h3 id="fam-runtime">4.4 <code>runtime/</code> — execution</h3>
+<table>
+  <tr><th>File</th><th>Responsibility</th></tr>
+  <tr><td><code>executor.rs</code></td><td><strong>Orchestration only</strong>: validated construction (<code>build_internal</code>), graph traversal (<code>execute_from</code> dispatching on kind, <code>continue_through</code> following edges, <code>after_task_result</code> applying the error/panic routing ladder), run lifecycle (<code>run</code> → <code>run_with_ctx</code> → blob cleanup at the root), event emission (<code>emit</code>), <code>RunState</code> (join arrivals + end results), and the builder.</td></tr>
+  <tr><td><code>context.rs</code></td><td><code>WorkflowContext</code>: the state document under <code>RwLock&lt;Value&gt;</code> (<code>with_state</code>, <code>snapshot</code>, <code>set_node_output</code>, <code>set_node_error</code>, <code>node_output</code>), execution id (UUID v7), elapsed clock, blob store handle, atomic event-sequence counter. <code>child_of()</code> builds a subworkflow context: own id and state, <em>shared</em> blob store and event counter.</td></tr>
+  <tr><td><code>handlers/</code></td><td>Per-kind semantics as <code>impl WorkflowExecutor</code> blocks: <code>event.rs</code> (run_start/run_end), <code>task.rs</code> (run_task), <code>foreach.rs</code> (run_foreach + per-item driver: semaphore concurrency, throttle, collect/fail), <code>gateway.rs</code> (run_gateway + pick_branch), <code>subworkflow.rs</code> (run_subworkflow: child context, child executor, output/error propagation). <code>mod.rs</code> documents the pattern and the add-a-kind checklist.</td></tr>
+  <tr><td><code>policy.rs</code></td><td><code>execute_with_policy</code>: the retry/timeout/panic envelope around every task invocation — attempt loop, <code>backoff_delay</code> (exponential/linear/fixed, overflow-safe), <code>tokio::time::timeout</code> per attempt, <code>catch_unwind</code> → <code>TASK_PANIC</code> via <code>panic_error</code>. Unit-tested in isolation.</td></tr>
+  <tr><td><code>graph.rs</code> <span class="muted">(pub(crate))</span></td><td><code>GraphIndex</code>: prebuilt adjacency (outgoing by trigger, incoming counts, node lookup) so traversal never scans <code>Vec&lt;FlowEdge&gt;</code>.</td></tr>
+  <tr><td><code>schemas.rs</code> <span class="muted">(pub(crate))</span></td><td><code>CompiledSchemas</code>: every JSON Schema in the document and the referenced task manifests, compiled once at build (<code>INVALID_SCHEMA</code> on failure) and reused on every run.</td></tr>
+  <tr><td><code>registry.rs</code></td><td><code>WorkflowRegistry</code>: shared name→definition store for subworkflows (<code>WORKFLOW_NAME_CONFLICT</code> on duplicates).</td></tr>
+</table>
+
+<h4>Construction (<code>build_internal</code>) — the order matters</h4>
+<ol>
+  <li><strong>Scoped profiles</strong>: if the document has inline <code>tasks</code>, a <em>scoped copy</em> of the registry is created and profiles registered into it (resolving <code>$secret</code> via the provider). The shared registry is never polluted; children are built with the <em>original</em> registry, so inline profiles stay local to their document.</li>
+  <li><strong><code>validate_with</code></strong> (built-ins + host rules) and <strong><code>validate_tasks</code></strong> (every referenced task id exists in the registry).</li>
+  <li><strong><code>CompiledSchemas::build</code></strong> and <strong><code>GraphIndex::build</code></strong>.</li>
+  <li><strong>Subworkflow resolution</strong>: each <code>subworkflow</code> node resolves its name (inline section first, shared registry second) and the child executor is built <em>recursively right here</em>, carrying an ancestry stack to detect cycles (<code>SUBWORKFLOW_CYCLE</code>) and a depth cap of 8 (<code>SUBWORKFLOW_DEPTH_EXCEEDED</code>). Child errors bubble up prefixed with the child's name. A missing name is <code>SUBWORKFLOW_NOT_FOUND</code> — at build, never at runtime.</li>
+</ol>
+
+<h4>Traversal &amp; the failure ladder</h4>
+<ul>
+  <li><code>execute_from(node)</code> dispatches on <code>NodeKind</code> to the handler; handlers return the node result; <code>continue_through</code> fans out over outgoing normal edges (<code>try_join_all</code> for parallelism).</li>
+  <li>Join nodes accumulate arrivals in <code>RunState::joins</code> under a mutex; the last arrival continues the flow.</li>
+  <li><code>after_task_result</code> implements the ladder: success → continue; error + <code>on: error</code> edge → publish <code>$.nodes.&lt;id&gt;.error</code>, emit <code>node_failed(error_routed=true)</code>, continue through the error edge; panic + <code>on: panic</code> edge → same through panic edges; otherwise the run fails.</li>
+  <li>End of run: <code>RunState::ends</code> holds the end-node results; no end reached → <code>NO_OUTPUT</code>; pending joins → <code>JOIN_INCOMPLETE</code>. Only the <strong>root</strong> execution cleans up the blob store.</li>
+</ul>
+
+<h3 id="fam-task">4.5 <code>task/</code> — the extension contract</h3>
+<pre><code>#[async_trait]
+pub trait Task: Send + Sync + 'static {
+    fn manifest(&amp;self) -&gt; &amp;TaskManifest;   // id, description, input/output JSON Schemas
+    async fn execute(&amp;self, ctx: &amp;WorkflowContext, input: WorkflowData) -&gt; WorkflowResult;
 }</code></pre>
-                    </div>
+<ul>
+  <li><code>TaskManifest</code> is serializable: the full catalog of available tasks can be exported as JSON and used by external tooling (designers, validators) without the engine.</li>
+  <li><code>TaskRegistry</code> (<code>registry.rs</code>): thread-safe id→task map. <code>scoped()</code> produces a copy-on-write child registry used for inline profiles. <code>register_profile(profile, secrets)</code> resolves <code>$secret</code> references in <code>bind</code> and wraps the base task.</li>
+  <li><code>ProfileTask</code> (<code>profile.rs</code>): the derived task that executes a profile — validate against the profile's input schema → <code>apply_shape(bind, input)</code> → run the base task (<code>PROFILE_BIND_INVALID</code> if the base rejects the bound input) → <code>apply_shape(output, base_output)</code> → validate against the profile's output schema. Once registered, indistinguishable from any other task.</li>
+  <li><code>WorkflowData</code> is a thin newtype over <code>serde_json::Value</code> with <code>Deref</code> and <code>From</code> conversions; <code>WorkflowResult = Result&lt;WorkflowData, WorkflowError&gt;</code>.</li>
+</ul>
 
-                    <p class="text-slate-300 leading-relaxed text-sm">
-                        Wrapping the state in an <code class="text-indigo-400">RwLock&lt;Value&gt;</code> has a major benefit: multiple concurrent threads can read parts of the context simultaneously (e.g. evaluating inputs or gateway branch conditions) by obtaining a read lock via <code class="text-indigo-300">.read()</code>. When a node completes, it obtains an exclusive write lock via <code class="text-indigo-300">.write()</code> to update its results safely, preventing race conditions.
-                    </p>
-                </div>
+<h3 id="fam-io">4.6 <code>io/</code> — host resources</h3>
+<h4>Blobs (<code>blob.rs</code>)</h4>
+<pre><code>#[async_trait]
+pub trait BlobStore: Send + Sync + 'static {
+    async fn put(&amp;self, data: Vec&lt;u8&gt;, name: Option&lt;String&gt;) -&gt; Result&lt;BlobRef, _&gt;;
+    async fn get(&amp;self, blob: &amp;BlobRef) -&gt; Result&lt;Vec&lt;u8&gt;, _&gt;;
+    async fn import_file(&amp;self, path: &amp;Path, name: Option&lt;String&gt;) -&gt; Result&lt;BlobRef, _&gt;;
+    fn local_path(&amp;self, blob: &amp;BlobRef) -&gt; Result&lt;PathBuf, _&gt;;   // streaming consumers
+    async fn cleanup(&amp;self) -&gt; Result&lt;(), _&gt;;
+}
 
-                <!-- Concurrency Engine -->
-                <div id="concurrency-engine" class="scroll-mt-24 space-y-3 pt-4">
-                    <h3 class="text-2xl font-bold text-white">3.2 Topological Graph Traversal & Forking (`try_join_all`)</h3>
-                    <p class="text-slate-300 leading-relaxed text-sm">
-                        The traversal of the graph is handled in `crates/core/src/executor.rs`. When multiple edges diverge from a node, the executor schedules them concurrently using the <code class="text-indigo-400">try_join_all</code> future combinator:
-                    </p>
-                    <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-xs font-mono">
-                        <pre><code class="language-rust">// Inside crates/core/src/executor.rs
-async fn continue_through(
-    &self,
-    edges: &[FlowEdge],
-    carried: Arc<Value>,
-    ctx: &WorkflowContext,
-    state: &RunState,
-) -> Result<(), WorkflowError> {
-    match edges {
-        [] => Ok(()),
-        [edge] => {
-            self.execute_from(&edge.to, carried, Some(edge.from.clone()), ctx, state).await
-        }
-        many => {
-            // Spawn and run all branches concurrently!
-            try_join_all(many.iter().map(|edge| {
-                self.execute_from(
-                    &edge.to,
-                    Arc::clone(&carried),
-                    Some(edge.from.clone()),
-                    ctx,
-                    state,
-                )
-            }))
-            .await
-            .map(|_| ())
-        }
+pub trait BlobStoreFactory: Send + Sync {
+    fn create(&amp;self, execution_id: &amp;str) -&gt; Arc&lt;dyn BlobStore&gt;;
+}</code></pre>
+<ul>
+  <li>The injectable thing is the <strong>factory</strong>, not a store: stores have per-execution lifecycle (created with the execution id, cleaned by the root run).</li>
+  <li><code>TempDirBlobStore</code> (v1 default): one temp directory per execution, lazily created, removed on cleanup <em>and</em> on <code>Drop</code> as a safety net. Blob ids are store-generated UUID v7; <code>blob_path</code> rejects any id that is not alphanumeric/dash — forged references (path traversal) are <code>INVALID_BLOB_ID</code>.</li>
+  <li>Streaming contract: producers write to a temp file then <code>import_file</code>; consumers read via <code>local_path</code>. <code>put</code>/<code>get</code> are the convenience whole-buffer pair.</li>
+</ul>
+<h4>Secrets (<code>secret.rs</code>)</h4>
+<pre><code>pub trait SecretProvider: Send + Sync {
+    fn get(&amp;self, name: &amp;str) -&gt; Option&lt;String&gt;;
+}
+pub fn resolve_secrets(value: &amp;mut Value, provider: &amp;dyn SecretProvider) -&gt; Result&lt;(), _&gt;</code></pre>
+<p><code>resolve_secrets</code> walks a JSON document replacing every single-key <code>{"$secret": "NAME"}</code> object with the provider's value (<code>SECRET_NOT_FOUND</code> if absent; objects with extra keys are left untouched). It is called <strong>at profile registration</strong> — secrets exist in memory inside baked profile configs, never in the serialized document.</p>
+
+<h3 id="fam-observe">4.7 <code>observe/</code> — observability</h3>
+<ul>
+  <li><code>ExecutionObserver::on_event(&amp;ExecutionEvent)</code> — called <em>synchronously</em> from the executor. The contract demands non-blocking implementations; slow sinks must buffer.</li>
+  <li><code>ExecutionEvent</code>: <code>execution_id</code>, optional <code>parent_execution_id</code>, <code>seq</code> (atomic counter <em>shared with subworkflows</em> → total order over the whole execution tree), <code>elapsed_ms</code>, flattened <code>EventKind</code> (<code>type</code> snake_case tag in JSON).</li>
+  <li><code>EventKind</code>: workflow_started/completed/failed, node_started/completed/failed (with <code>error_routed</code>), task_attempt_started (resolved input on attempt 1 only) / task_attempt_failed (<code>will_retry</code>, <code>next_delay_ms</code>), foreach_item_completed/failed.</li>
+  <li>The JSON encoding is <strong>stable by design</strong>: events are intended to become the journal of a future durable executor (event sourcing) without redesign. Add variants; never change existing ones.</li>
+  <li><code>history.rs</code>: <code>InMemoryHistory</code> (the built-in observer) and <code>ExecutionReport</code>/<code>NodeReport</code> — a per-node status/attempts/duration summary derived purely from events. <code>report()</code> covers the root execution; <code>report_for(id)</code> a specific one; <code>executions()</code> lists the tree.</li>
+</ul>
+
+<h3 id="fam-error">4.8 <code>error/</code> — the failure contract</h3>
+<ul>
+  <li><code>WorkflowError</code> (<code>mod.rs</code>): <code>code</code> + <code>message</code> + optional <code>source_task</code> + optional boxed source. Serializable; travels in events and node error documents.</li>
+  <li><code>codes.rs</code>: the <strong>catalog</strong> — ~50 documented <code>pub const</code> strings grouped by phase (definition / construction / expressions / execution / host resources), plus <code>ALL</code> for tooling and a uniqueness test. Convention: <code>FAMILY_DETAIL</code> in SCREAMING_SNAKE_CASE; the constant's value equals its name.</li>
+</ul>
+<div class="warn"><strong>Codes are public contract.</strong> They are matched by host code and stored in persisted events. Never rename or repurpose one — only add. New codes go into <code>codes.rs</code> with a doc comment and into <code>ALL</code>.</div>
+
+<h2 id="lifecycle">5. Life of an Execution</h2>
+<pre><code>WorkflowExecutor::builder(document, registry).….build()
+ ├─ inline profiles → scoped registry (+ $secret resolution)     [task, io::secret]
+ ├─ validate_with(built-ins + host rules) + validate_tasks       [validate]
+ ├─ CompiledSchemas::build + GraphIndex::build                   [runtime]
+ └─ recursive subworkflow resolution (cycle/depth checked)       [runtime]
+
+executor.run(trigger)
+ ├─ WorkflowContext::with_blob_factory(…)  → execution_id (UUIDv7), state doc, BlobStore
+ ├─ emit workflow_started
+ ├─ run_start: defaults merged, trigger validated against start.schema
+ ├─ traversal: execute_from(kind handler) → continue_through(edges)
+ │    ├─ task/foreach: mapping::resolve(input) → schema check
+ │    │     → policy::execute_with_policy(Task::execute)   ← retry/timeout/catch_unwind
+ │    │     → output schema check → ctx.set_node_output → events
+ │    ├─ gateway exclusive: Condition::evaluate(state) → labeled edge
+ │    ├─ gateway parallel: try_join_all over outgoing edges
+ │    ├─ gateway join: RunState.joins accumulates; last arrival continues
+ │    └─ subworkflow: ctx.child_of(…) → child.run_with_ctx(…)
+ ├─ run_end: end.output mapping (or predecessor token) + end.schema check
+ ├─ emit workflow_completed / workflow_failed
+ └─ root only: ctx.blobs().cleanup()</code></pre>
+
+<h2 id="extension-points">6. Extension Points</h2>
+<p>This is the expanded version of the "Where do I add…?" table in <code>lib.rs</code>.</p>
+
+<h3 id="ext-task">6.1 A new task / extension crate</h3>
+<ol>
+  <li>Create <code>crates/extensions/&lt;name&gt;</code> as <code>workflow-forge-ext-&lt;name&gt;</code>, depending on <code>workflow-forge-core</code>.</li>
+  <li>Implement <code>Task</code> for each unit of work. Use namespaced ids (<code>"&lt;name&gt;.&lt;task&gt;"</code>). Build schemas with the re-exported <code>workflow_forge_core::schemars</code> (no direct schemars dependency needed).</li>
+  <li>Expose a <code>pub fn register(registry: &amp;TaskRegistry)</code> registering every task.</li>
+  <li>Wire into the facade: feature flag in <code>crates/forge/Cargo.toml</code> + the conditional call in <code>register_extensions()</code>.</li>
+</ol>
+<pre><code>pub struct Reverse { manifest: TaskManifest }
+
+impl Reverse {
+    pub fn new() -&gt; Self {
+        Self { manifest: TaskManifest {
+            id: "text.reverse".into(),
+            description: Some("Reverses a string".into()),
+            input_schema: Some(/* {"type":"object","required":["text"], …} */),
+            output_schema: Some(/* {"type":"string"} */),
+        } }
     }
-}</code></pre>
-                    </div>
-                    <p class="text-slate-300 leading-relaxed text-sm">
-                        This model yields extreme concurrency and thread safety:
-                    </p>
-                    <ul class="list-disc list-inside text-slate-400 text-xs space-y-1 pl-4">
-                        <li><strong>Concurrency</strong>: Diverging branches are scheduled concurrently on Tokio's worker pool, maximizing CPU core utilization.</li>
-                        <li><strong>Short-Circuiting Failures</strong>: Under <code class="text-indigo-400">try_join_all</code>, the first branch that returns an error immediately aborts and cancels all other sibling branches, preventing wasted computations on failed runs.</li>
-                    </ul>
-                </div>
+}
 
-                <!-- Binary Storage Streams -->
-                <div id="binary-streams" class="scroll-mt-24 space-y-3 pt-4">
-                    <h3 class="text-2xl font-bold text-white">3.3 Memory-Efficient Binary Streaming (`BlobStore`)</h3>
-                    <p class="text-slate-300 leading-relaxed text-sm">
-                        To process heavy files (such as 100MB+ spreadsheets or binary reports) without risking out-of-memory crashes, Workflow Forge avoids loading entire files into RAM.
-                    </p>
-                    <p class="text-slate-300 leading-relaxed text-sm">
-                        Instead, the <code class="text-indigo-400">BlobStore</code> trait manages files as pinned reader streams (<code class="text-indigo-400">BoxBlobReader</code>). During operations like an SFTP download or HTTP upload, data is piped chunk-by-chunk through async IO streams. The context document only stores the lightweight UUID reference (<code class="text-indigo-300">{"$blob": "..."}</code>), keeping the execution state highly responsive.
-                    </p>
-                </div>
-
-                <!-- Component Communication Sequence -->
-                <div id="component-sequence" class="scroll-mt-24 space-y-3 pt-4">
-                    <h3 class="text-2xl font-bold text-white">3.4 Step-by-Step Component Communication Sequence</h3>
-                    <p class="text-slate-300 leading-relaxed text-sm">
-                        To customize or patch Workflow Forge, it is vital to understand how its core abstractions collaborate. The sequence diagram below maps the precise execution lifecycle from graph compilation to final trigger run-to-completion, illustrating when thread locks are acquired and how binary streams travel:
-                    </p>
-                    <div class="flex justify-center my-6 bg-slate-900 p-6 rounded-lg border border-slate-800">
-                        <div class="mermaid">
-sequenceDiagram
-    autonumber
-    actor Host as Host App
-    participant Exec as WorkflowExecutor
-    participant Ctx as WorkflowContext
-    participant State as RunState
-    participant Registry as TaskRegistry
-    participant Task as Extension Task
-    participant Blobs as Blob Storage
-
-    Host->>Exec: WorkflowExecutor::new(workflow, registry)
-    activate Exec
-    Note over Exec: Static compilation pass:<br/>DFS Cycle Check,<br/>Orphans scan,<br/>Task Profiles compile
-    Exec-->>Host: return Compiled Executor
-    deactivate Exec
-
-    Host->>Exec: run(trigger_payload)
-    activate Exec
-
-    Exec->>Ctx: Instantiate (WorkflowContext::new)
-    Note over Ctx: state: RwLock(Value)<br/>event_seq: AtomicU64<br/>execution_id: UUID v7
-    Ctx->>Blobs: Instantiate TempDirBlobStore
-
-    Exec->>State: Instantiate (RunState::new)
-    Note over State: joins: Mutex(HashMap)<br/>ends: Mutex(Vec)
-
-    Exec->>Exec: execute_from(start_node)
-
-    loop Traversal Loop (execute_from)
-        Exec->>Ctx: Query predecessors outputs
-        Ctx->>Ctx: .read() read lock
-        Ctx-->>Exec: return payload data (Arc(Value))
-
-        Exec->>Exec: mapping::resolve(...) inputs
-
-        Exec->>Exec: Validate resolved input against input_schema
-
-        Exec->>Registry: Resolve task implementation
-        Registry-->>Exec: return Task trait reference
-
-        Exec->>Task: execute(context, input_data)
-        activate Task
-
-        opt Download File
-            Task->>Blobs: put(filename, stream)
-            Blobs-->>Task: return BlobRef
-        end
-        opt Upload File
-            Task->>Blobs: get(UUID)
-            Blobs-->>Task: return BoxBlobReader (bytes stream)
-        end
-
-        Task-->>Exec: return Ok(raw_output)
-        deactivate Task
-
-        Exec->>Exec: Validate & Reshape raw_output
-
-        Exec->>Ctx: set_node_output(node_id, output)
-        Ctx->>Ctx: .write() write lock
-        Note over Ctx: Update nodes[id].output
-        Ctx-->>Exec: Ok()
-
-        opt Downstream Parallel Fork (many edges)
-            Note over Exec: Spawns futures concurrently via try_join_all
-        end
-
-        opt Arrive at Join Gateway
-            Exec->>State: Register Join Arrival (edge origin)
-            State->>State: Lock Mutex
-            State-->>Exec: All branches arrived?
-            alt Starved Join
-                Note over Exec: Halt current branch future and yield control back
-            else All Arrived
-                Note over Exec: Resume traversal downstream
-            end
-        end
-
-        opt Arrive at End Node
-            Exec->>State: Register reached end node output
-            State->>State: Lock Mutex
-            State-->>Exec: Ok()
-        end
-    end
-
-    Exec->>Ctx: cleanup()
-    Ctx->>Blobs: delete all files
-    Blobs-->>Ctx: Ok
-
-    Exec->>State: Get collected ends outputs
-    State-->>Exec: return outputs
-
-    Exec-->>Host: return WorkflowResult (JSON)
-    deactivate Exec
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- EXTENSIONS INTERNALS -->
-            <section id="ext-internals" class="scroll-mt-24 space-y-12 pt-12 border-t border-slate-800">
-                <div class="border-l-4 border-indigo-500 pl-4">
-                    <h2 class="text-3xl font-bold tracking-tight text-white">4. Under the Hood: Official Extensions</h2>
-                    <p class="text-sm text-slate-400 mt-1">A detailed look at the physical implementations of official extension crates.</p>
-                </div>
-
-                <!-- http -->
-                <div id="ext-http-internals" class="space-y-4 scroll-mt-24">
-                    <h3 class="text-2xl font-bold text-white">4.1 `ext-http` — Stream-Piped Network Requests</h3>
-                    <p class="text-slate-300 leading-relaxed text-sm">
-                        The `http.request` task is built on the asynchronous <code class="text-indigo-400">reqwest</code> library. When uploading or downloading files, it bridges the <code class="text-indigo-400">BlobStore</code> directly with the network stream:
-                    </p>
-                    <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-xs font-mono">
-                        <pre><code class="language-rust">// Conceptual implementation inside crates/extensions/http/src/lib.rs
-let blob_store = ctx.blobs();
-let stream = blob_store.get(&blob_id).await?;
-
-// reqwest streams data from the BlobStore directly to the server
-let request = client.post(url)
-    .body(reqwest::Body::wrap_stream(stream));</code></pre>
-                    </div>
-                    <p class="text-slate-300 leading-relaxed text-sm">
-                        For downloads, if <code class="text-indigo-300">response_body</code> is configured as <code class="text-indigo-400">"blob"</code>, the response byte stream is piped chunk-by-chunk into the `BlobStore` disk, avoiding memory overhead entirely:
-                    </p>
-                    <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-xs font-mono">
-                        <pre><code class="language-rust">let mut response = client.execute(request).await?;
-let stream = response.bytes_stream();
-
-// Pipes network stream directly to the BlobStore
-let blob_ref = blob_store.put("downloaded_file", Box::new(stream)).await?;</code></pre>
-                    </div>
-                </div>
-
-                <!-- data -->
-                <div id="ext-data-internals" class="space-y-4 scroll-mt-24">
-                    <h3 class="text-2xl font-bold text-white">4.2 `ext-data` — In-Memory Transformation Engine</h3>
-                    <p class="text-slate-300 leading-relaxed text-sm">
-                        The `data.cast` and `data.transform` tasks are designed for high-performance in-memory processing. The `data.cast` task parses fields sequentially. When parsing tabular data (such as CSVs), it applies a list of cast operations dynamically:
-                    </p>
-                    <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-xs font-mono">
-                        <pre><code class="language-rust">// Inside crates/extensions/data/src/cast.rs
-for row in dataset {
-    for (field_path, operations) in config.fields {
-        let mut value = extract_value_at(row, field_path);
-        for op in operations {
-            value = match op {
-                CastOp::Date { from, to } => cast_date(value, from, to)?,
-                CastOp::Number { dec, thou } => cast_number(value, dec, thou)?,
-                CastOp::Bool => cast_boolean(value)?,
-                CastOp::Default { val } => value.or(val),
-                // ... other ops
-            };
-        }
-        row.insert(field_path, value);
+#[async_trait]
+impl Task for Reverse {
+    fn manifest(&amp;self) -&gt; &amp;TaskManifest { &amp;self.manifest }
+    async fn execute(&amp;self, _ctx: &amp;WorkflowContext, input: WorkflowData) -&gt; WorkflowResult {
+        let text = input["text"].as_str().unwrap_or_default();  // schema already enforced it
+        Ok(json!(text.chars().rev().collect::&lt;String&gt;()).into())
     }
 }</code></pre>
-                    </div>
-                </div>
+<p>Rules of the contract:</p>
+<ul>
+  <li>The engine validates input/output against your schemas <em>around</em> <code>execute</code> — inside it you may trust the schema.</li>
+  <li>Return <code>WorkflowError</code> with a <em>specific, documented code</em> for every failure mode (extension codes live with the extension, e.g. <code>HTTP_STATUS_ERROR</code>).</li>
+  <li>Reach files only through <code>ctx.blobs()</code> — never the filesystem directly. Stream large payloads via <code>import_file</code> / <code>local_path</code>.</li>
+  <li>Don't panic. A panic is caught and reported as <code>TASK_PANIC</code>, but it is treated as a bug: no retry, no <code>on: error</code> routing.</li>
+  <li>Don't block: <code>execute</code> runs on the Tokio runtime; use async I/O or <code>spawn_blocking</code> for CPU-bound work.</li>
+</ul>
 
-                <!-- sftp -->
-                <div id="ext-sftp-internals" class="space-y-4 scroll-mt-24">
-                    <h3 class="text-2xl font-bold text-white">4.3 `ext-sftp` — Async SSH2 Pipes</h3>
-                    <p class="text-slate-300 leading-relaxed text-sm">
-                        SFTP connections run on a multi-threaded async framework. Since raw SSH2 connections rely on blocking calls, `ext-sftp` handles them off Tokio's main threadpool:
-                    </p>
-                    <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-xs font-mono">
-                        <pre><code class="language-rust">// Inside crates/extensions/sftp/src/lib.rs
-// Uses tokio::task::spawn_blocking to offload blocking SSH IO operations
-let sftp_session = tokio::task::spawn_blocking(move || {
-    let tcp = TcpStream::connect(host)?;
-    let mut sess = Session::new()?;
-    sess.handshake(&tcp)?;
-    sess.userauth_password(user, pass)?;
-    sess.sftp()
-}).await??;</code></pre>
-                    </div>
-                    <p class="text-slate-300 leading-relaxed text-sm">
-                        This ensures that heavy, blocking SFTP transfer operations do not block Tokio's main cooperative threadpool, keeping the rest of the application responsive.
-                    </p>
-                </div>
-            </section>
+<h3 id="ext-operator">6.2 A new condition operator ("reserved word")</h3>
+<pre><code>use workflow_forge_core::expr::operators::{self, ConditionOperator};
 
-            <!-- PANIC BOUNDARIES -->
-            <section id="panic-boundaries" class="scroll-mt-24 space-y-6 pt-12 border-t border-slate-800">
-                <div class="border-l-4 border-indigo-500 pl-4">
-                    <h2 class="text-3xl font-bold tracking-tight text-white">5. Error Handling & Panic Isolation Boundaries</h2>
-                    <p class="text-sm text-slate-400 mt-1">Analyzing how catch_unwind isolates thread failures at node boundaries.</p>
-                </div>
-
-                <p class="text-slate-300 leading-relaxed text-sm">
-                    In a production workflow orchestrator, a single malformed custom task or indexing bug inside a third-party plugin must never crash the hosting process. Workflow Forge guarantees runtime safety by isolating panics at the node execution level.
-                </p>
-
-                <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-xs font-mono">
-                    <pre><code class="language-rust">// Inside crates/core/src/executor.rs
-// Wraps the task execution future in a catch_unwind boundary
-let result = AssertUnwindSafe(self.run_task(node, task_node, carried, ctx))
-    .catch_unwind()
-    .await;
-
-match result {
-    Ok(Ok(output)) => {
-        // Task completed successfully
-        self.after_task_success(node_id, output, ctx, state).await
+struct Between;
+impl ConditionOperator for Between {
+    fn key(&amp;self) -&gt; &amp;'static str { "between" }
+    fn evaluate(&amp;self, value: Option&lt;&amp;Value&gt;, operand: &amp;Value)
+        -&gt; Result&lt;bool, WorkflowError&gt; {
+        let (Some(v), Some(range)) = (value.and_then(Value::as_f64), operand.as_array())
+            else { return Ok(false) };
+        let (Some(lo), Some(hi)) = (range.first().and_then(Value::as_f64),
+                                    range.get(1).and_then(Value::as_f64))
+            else { return Ok(false) };
+        Ok(lo &lt;= v &amp;&amp; v &lt;= hi)
     }
-    Ok(Err(task_error)) => {
-        // Task returned a standard, expected error (e.g. network timeout)
-        self.route_error_path(node_id, task_error, ctx, state).await
+}
+
+// at host startup, BEFORE building any executor:
+operators::global().register(Between);</code></pre>
+<ul>
+  <li>Keys must not collide with the 13 spec operators (those never reach <code>Custom</code>).</li>
+  <li>Handle <code>value: None</code> (unresolved path) deliberately; returning <code>false</code> matches built-in behavior.</li>
+  <li>Register at startup so the <code>KnownConditionOperators</code> validation rule sees it — otherwise documents using the operator fail to build.</li>
+  <li>For isolated vocabularies (e.g. multi-tenant hosts), build a private <code>OperatorRegistry</code> and use <code>evaluate_with</code> — but note the executor's gateway evaluation uses the global registry in v1.</li>
+</ul>
+
+<h3 id="ext-rule">6.3 A new validation rule</h3>
+<pre><code>struct NoHttpUrls;
+impl ValidationRule for NoHttpUrls {
+    fn codes(&amp;self) -&gt; &amp;'static [&amp;'static str] { &amp;["HOST_INSECURE_URL"] }
+    fn check(&amp;self, workflow: &amp;WorkflowDefinition,
+             _ctx: &amp;ValidationCtx&lt;'_&gt;, errors: &amp;mut Vec&lt;WorkflowError&gt;) {
+        // walk workflow.nodes, push WorkflowError per violation — accumulate, don't stop
     }
-    Err(_panic_payload) => {
-        // Task panicked! Catch_unwind intercepted it safely.
-        // The host application survives. We write errors and transition down 'on: panic' edge.
-        self.route_panic_path(node_id, ctx, state).await
+}
+
+let executor = WorkflowExecutor::builder(wf, registry)
+    .rule(NoHttpUrls)
+    .build()?;</code></pre>
+<ul>
+  <li>Host rules run after the built-ins, also over every subworkflow (inline or registry).</li>
+  <li>Declare your codes in <code>codes()</code>. Host-specific codes live in the host; engine codes go through <code>error::codes</code>.</li>
+  <li>A <em>built-in</em> rule instead goes in <code>validate/rules/&lt;area&gt;.rs</code>, gets appended to <code>rules::BUILTIN</code>, declares catalog codes, and ships with its own tests.</li>
+</ul>
+
+<h3 id="ext-blob">6.4 A new blob store (e.g. S3)</h3>
+<pre><code>struct S3Factory { bucket: String, client: aws_sdk_s3::Client }
+impl BlobStoreFactory for S3Factory {
+    fn create(&amp;self, execution_id: &amp;str) -&gt; Arc&lt;dyn BlobStore&gt; {
+        Arc::new(S3Store::new(self.client.clone(), self.bucket.clone(), execution_id))
+    }
+}
+// implement BlobStore for S3Store: put/get/import_file/local_path/cleanup
+
+builder.blobs(Arc::new(S3Factory { … }))</code></pre>
+<ul>
+  <li>Keep the per-execution lifecycle: namespace objects by <code>execution_id</code>; <code>cleanup()</code> removes the whole namespace.</li>
+  <li>Generate ids yourself (UUID v7 recommended) and validate them in lookups — the id check is your forgery defense.</li>
+  <li><code>local_path</code> is the streaming contract; a remote store may materialize to a temp file. (v1 assumes file-backed blobs.)</li>
+</ul>
+
+<h3 id="ext-secret">6.5 A new secret provider</h3>
+<pre><code>struct VaultSecrets { client: VaultClient }
+impl SecretProvider for VaultSecrets {
+    fn get(&amp;self, name: &amp;str) -&gt; Option&lt;String&gt; { self.client.read(name).ok() }
+}
+
+builder.secrets(&amp;vault)   // note: borrowed, must outlive the build call</code></pre>
+<p>The provider is only consulted during <strong>build</strong> (profile registration). It is synchronous by design; wrap async vault clients with a blocking handle or pre-fetch.</p>
+
+<h3 id="ext-observer">6.6 A new observer</h3>
+<pre><code>struct PgObserver { tx: tokio::sync::mpsc::UnboundedSender&lt;ExecutionEvent&gt; }
+impl ExecutionObserver for PgObserver {
+    fn on_event(&amp;self, event: &amp;ExecutionEvent) {
+        let _ = self.tx.send(event.clone());   // never block here
     }
 }</code></pre>
-                </div>
+<p>One observer instance receives the whole execution tree (the executor propagates it to subworkflow children). Reconstruct ordering with <code>seq</code>; group with <code>execution_id</code> / <code>parent_execution_id</code>.</p>
 
-                <p class="text-slate-300 leading-relaxed text-sm">
-                    By leveraging Rust's <code class="text-indigo-400">catch_unwind</code> future wrapper, any unhandled thread panic (like an index out of bounds or an explicit panic call inside an extension) is safely intercepted at the async task boundary. This ensures complete reliability and uptime for high-scale enterprise deployments.
-                </p>
-            </section>
+<h3 id="ext-kind">6.7 A new node kind — a spec change</h3>
+<p>This is deliberately heavier than the other extension points, because it changes the language every consumer must understand. The checklist (also in <code>runtime/handlers/mod.rs</code>):</p>
+<ol>
+  <li><code>spec/node/&lt;kind&gt;.rs</code>: the node struct (serde) + variant in <code>NodeKind</code> + arm in <code>NodeKind::name()</code>.</li>
+  <li><code>runtime/handlers/&lt;kind&gt;.rs</code>: an <code>impl WorkflowExecutor</code> block with <code>run_&lt;kind&gt;</code>; declare the module in <code>handlers/mod.rs</code>; add the dispatch arm in <code>executor.rs::execute_from</code>.</li>
+  <li><code>validate/rules/</code>: structural rules for the kind + appended to <code>rules::BUILTIN</code>; new codes documented in <code>error/codes.rs</code> + <code>ALL</code>.</li>
+  <li>Decide event semantics (<code>observe::EventKind</code> — new variant if node/task events don't fit).</li>
+  <li>Tests: rule tests, handler integration test under <code>crates/core/tests/</code>, and a spec-document example.</li>
+  <li>Bump the spec discussion: if 1.0 documents must not break, the kind belongs to a future spec version (<code>SUPPORTED_SPECS</code>).</li>
+</ol>
 
-            <!-- Footer -->
-            <footer class="mt-20 border-t border-slate-850 py-8 text-center text-sm text-slate-500">
-                <p>&copy; 2026 Workflow Forge. Dual licensed under MIT &amp; Apache 2.0.</p>
-                <p class="mt-1">Generated by expert engineering agent inside Zed Editor.</p>
-            </footer>
-        </main>
-    </div>
+<h2 id="testing">7. Testing Strategy</h2>
+<table>
+  <tr><th>Layer</th><th>Where</th><th>What it locks</th></tr>
+  <tr><td>Unit, per family</td><td><code>#[cfg(test)]</code> in each module</td><td>Condition serde + error messages, mapping/shape rules, operator registry, backoff math, blob store roundtrip + forged-id rejection, secret resolution, each validation rule (one focused test per rule family), code-catalog uniqueness, rules-declare-catalog-codes.</td></tr>
+  <tr><td>Integration, core</td><td><code>crates/core/tests/</code></td><td>End-to-end document execution: foreach (concurrency/collect), gateways, panic routing, profiles, subworkflows (depth/cycle/blob sharing), observability event streams, spec schema examples.</td></tr>
+  <tr><td>Integration, extensions</td><td><code>crates/extensions/*/tests</code>, <code>crates/forge/tests</code></td><td>Each task against real fixtures (<code>httpmock</code> for HTTP, real CSV/XLSX bytes for tabular) and full facade scenarios.</td></tr>
+  <tr><td>Doctests</td><td><code>//!</code> examples</td><td>The operator-registration example in <code>expr/operators.rs</code> compiles and runs.</td></tr>
+</table>
+<p>Run with <code>cargo test --workspace</code>; lint with <code>cargo clippy --workspace --all-targets</code> (kept at zero warnings) and <code>cargo fmt</code>. When you add behavior, add the test at the <em>lowest</em> layer that can express it — rules and operators almost never need an integration test.</p>
 
-    <!-- Fullscreen Diagram Modal -->
-    <div id="mermaid-modal" class="fixed inset-0 z-50 hidden flex-col items-center justify-center bg-slate-950/95 p-6 backdrop-blur-lg">
-        <button id="close-modal" class="absolute top-6 right-6 rounded-full bg-slate-800 p-3 text-slate-400 hover:bg-slate-700 hover:text-white transition-all cursor-pointer">
-            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-        </button>
-        <div id="modal-content" class="w-full max-w-5xl max-h-[85vh] overflow-auto flex items-center justify-center bg-slate-900/40 p-8 rounded-2xl border border-slate-800">
-            <!-- Dynamic SVG target -->
-        </div>
-        <p class="mt-4 text-xs text-slate-500">Press ESC, click the close button, or click the background to exit fullscreen</p>
-    </div>
+<h2 id="invariants">8. Invariants &amp; Gotchas</h2>
+<ul>
+  <li><strong>Error codes never change value.</strong> Add, never rename. <code>codes.rs</code> is the single source of truth; its uniqueness test and the rules-vs-catalog test enforce hygiene.</li>
+  <li><strong>Event JSON is stable.</strong> The <code>type</code> tags and field names of <code>EventKind</code> are persisted by hosts and earmarked as the future durable journal. Additive changes only.</li>
+  <li><strong>Identifiers are UUID v7</strong> (<code>Uuid::now_v7()</code>) — time-ordered, index-friendly. Never v4.</li>
+  <li><strong>Mappings error on absence; shapes and conditions tolerate it.</strong> <code>$.</code>-absence is <code>MAPPING_PATH_NOT_FOUND</code>; <code>@.</code>-absence is <code>null</code>; condition-path absence is <code>false</code>. Don't "fix" one to behave like another — documents rely on it.</li>
+  <li><strong>Panic ≠ error.</strong> <code>policy.rs</code> converts panics to <code>TASK_PANIC</code>, which skips retry and <code>on: error</code> routing by design — a bug must not be retried into a side-effecting API.</li>
+  <li><strong>Inline profiles are scoped.</strong> <code>build_internal</code> registers them into <code>registry.scoped()</code>, and children get the <em>original</em> registry. Breaking this leaks document-local definitions across tenants.</li>
+  <li><strong>Secrets resolve at registration, not at run.</strong> The serialized document never holds secret values; the in-memory baked profile does. Keep it that way.</li>
+  <li><strong>Blob ids are validated.</strong> <code>TempDirBlobStore::blob_path</code> rejects non-UUID-shaped ids — that's the path-traversal defense. Any new store needs the same property.</li>
+  <li><strong>Subworkflows share the root blob store and event counter</strong> but have their own state document and execution id. Cleanup belongs only to the root run.</li>
+  <li><strong>Graph rules self-disable on broken references.</strong> <code>Reachability</code>/<code>Acyclicity</code> check for prior <code>UNKNOWN_NODE_REF</code> errors before running — they read the shared error vector. Rule order in <code>BUILTIN</code> matters.</li>
+  <li><strong>Observer calls are synchronous</strong> on the execution's hot path. Anything slow inside <code>on_event</code> slows the workflow.</li>
+  <li><strong>Register operators before building executors</strong>, or <code>KnownConditionOperators</code> will reject documents that would work at runtime.</li>
+</ul>
 
-    <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const checkInterval = setInterval(() => {
-                const diagrams = document.querySelectorAll(".mermaid[data-processed='true']");
-                if (diagrams.length > 0) {
-                    clearInterval(checkInterval);
-                    setupModal();
-                }
-            }, 100);
+<h2 id="conventions">9. Conventions</h2>
+<ul>
+  <li><strong>Docs are enforced</strong>: <code>#![warn(missing_docs)]</code> in <code>lib.rs</code>; every public item carries a doc comment; every module a <code>//!</code> header explaining what/how/why. The crate-level doc in <code>lib.rs</code> holds the family map and the "Where do I add…?" quick table — keep both in sync with reality.</li>
+  <li><strong>Spec types stay logic-free.</strong> Evaluation goes to <code>expr</code>, checking to <code>validate</code>, execution to <code>runtime</code>. If you're adding a method with behavior to a <code>spec</code> struct, you're probably in the wrong family.</li>
+  <li><strong>One JSONPath funnel.</strong> All path queries go through <code>expr::path::query_first</code>. Don't call <code>jsonpath_rust</code> anywhere else.</li>
+  <li><strong>Errors are codes + helpful messages.</strong> Messages name the offending node/edge/operator and, where possible, what was expected. Use <code>.with_source_task(node_id)</code> whenever a node is known.</li>
+  <li><strong>Terminology</strong>: the crates under <code>crates/extensions/</code> are called <em>extensions</em> (never "plugins").</li>
+  <li><strong>Validation accumulates.</strong> Rules push into the shared vector and keep going. Anything that aborts at the first error is a regression.</li>
+  <li><strong>Build-time over runtime.</strong> When adding a feature, ask first: can its misuse be detected by a validation rule or at <code>build_internal</code>? Runtime errors are the fallback, not the default.</li>
+</ul>
 
-            function setupModal() {
-                const modal = document.getElementById("mermaid-modal");
-                const modalContent = document.getElementById("modal-content");
-                const closeBtn = document.getElementById("close-modal");
-                const diagrams = document.querySelectorAll(".mermaid");
+<hr>
+<p class="muted">workflow-forge · Infrastructure Manual · For the workflow-author perspective, see the <a href="usage.html">User Manual</a>.</p>
 
-                diagrams.forEach(diag => {
-                    diag.classList.add("cursor-zoom-in", "hover:opacity-90", "transition-opacity");
-                    diag.setAttribute("title", "Click to view fullscreen");
-
-                    diag.addEventListener("click", () => {
-                        const svg = diag.querySelector("svg");
-                        if (svg) {
-                            const clone = svg.cloneNode(true);
-                            clone.setAttribute("width", "100%");
-                            clone.setAttribute("height", "100%");
-                            clone.style.maxWidth = "100%";
-                            clone.style.maxHeight = "100%";
-
-                            modalContent.innerHTML = "";
-                            modalContent.appendChild(clone);
-
-                            modal.classList.remove("hidden");
-                            modal.classList.add("flex");
-                            document.body.classList.add("overflow-hidden");
-                        }
-                    });
-                });
-
-                const closeModalFn = () => {
-                    modal.classList.add("hidden");
-                    modal.classList.remove("flex");
-                    document.body.classList.remove("overflow-hidden");
-                    modalContent.innerHTML = "";
-                };
-
-                closeBtn.addEventListener("click", closeModalFn);
-
-                document.addEventListener("keydown", (e) => {
-                    if (e.key === "Escape") {
-                        closeModalFn();
-                    }
-                });
-
-                modal.addEventListener("click", (e) => {
-                    if (e.target === modal) {
-                        closeModalFn();
-                    }
-                });
-            }
-        });
-    </script>
+</main>
 </body>
 </html>
