@@ -312,8 +312,8 @@
           "type": "string"
         },
         "on": {
-          "description": "Disparador alternativo: error enruta cuando el nodo origen agota sus reintentos",
-          "enum": ["error"]
+          "description": "Disparador alternativo: error enruta cuando el nodo origen agota sus reintentos; panic cuando la tarea panickea (sin retry ni fallback a error)",
+          "enum": ["error", "panic"]
         }
       },
       "additionalProperties": false

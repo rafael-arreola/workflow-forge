@@ -9,10 +9,15 @@ repository.workspace = true
 [dependencies]
 workflow-forge-core = { workspace = true }
 async-trait = { workspace = true }
+futures = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
+async-trait = { workspace = true }
 httpmock = { workspace = true }
 tokio = { workspace = true }

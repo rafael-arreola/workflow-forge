@@ -44,6 +44,8 @@ embebiendo el core en su aplicación Rust. El core publica dos contratos:
 | 21 | Secrets | Convención `{"$secret": "NOMBRE"}` en el `bind` de perfiles, resuelta al registrar vía trait `SecretProvider` (default: variables de entorno) | Tokens literales en JSON; diferir a v1.x |
 | 22 | Iteración | Nodo `foreach`: invoca una tarea por cada elemento de un array, con concurrencia elegible (default secuencial), throttle entre arranques y políticas `fail`/`collect` por elemento | Nodo de loop genérico; iteración dentro de data.map; sin iteración en v1 |
 | 23 | Observabilidad | Trait `ExecutionObserver` + eventos tipados serializables (`ExecutionEvent`) emitidos por el executor; `InMemoryHistory` → `ExecutionReport` integrado. Los eventos son la semilla del journal durable (post-v1) | Solo tracing; reporte sin streaming; diferir todo a la fase durable |
+| 24 | Panics | Tercera salida por nodo: `on: "panic"`. Un panic en una extensión se captura (`catch_unwind`), no tumba la ejecución, **no reintenta** (es bug, no fallo transitorio) y **no cae en `on: error`** (pudo dejar efectos a medias); sin arista panic el workflow falla. En foreach un panic de un elemento siempre aborta el nodo (aun con `collect`) | Que el panic tumbe el proceso; tratarlo como error normal; fallback a `on: error` |
+| 25 | HTTP completo | `http.request` cubre todos los cuerpos — `body` (JSON), `form` (urlencoded), `text` (raw), `body_blob` (binario streamed) y `multipart` (form-data con partes texto/json/blob) — mutuamente excluyentes; y `response_body: auto\|text\|blob` para descargar binarios al BlobStore. Blobs siempre por streaming | Solo JSON; cargar binarios a memoria/base64; extensión aparte para multipart |
 
 ## Modelo conceptual
 
@@ -147,10 +149,23 @@ condición).
 ```json
 { "from": "check-status", "label": "ok", "to": "notify" }
 { "from": "fetch-user", "on": "error", "to": "alert" }
+{ "from": "fetch-user", "on": "panic", "to": "cleanup" }
 ```
 
 - `label` conecta ramas de un gateway.
 - `on: "error"` define la ruta cuando un nodo agota sus reintentos.
+- `on: "panic"` define la ruta cuando la tarea panickea (bug en la extensión;
+  error `TASK_PANIC`). Cada nodo que ejecuta tareas tiene así **tres salidas
+  ruteables**: success (default), error y panic. Semántica:
+  - El panic se captura con `catch_unwind`: el runtime sobrevive.
+  - **Nunca reintenta**, aunque el nodo tenga `retry` (un bug no es transitorio).
+  - **Sin fallback**: sin arista `on: panic` el workflow falla; jamás cae en
+    `on: error`, porque un panic pudo dejar efectos a medias y la rama de
+    errores operacionales no debe tratarlo como caso conocido.
+  - En `foreach`, el panic de un elemento aborta el nodo completo (incluso con
+    `on_item_error: collect`) y rutea por el `on: panic` del foreach.
+  - Las aristas con trigger (`on: error`/`on: panic`) solo salen de nodos
+    `task`/`foreach` y no pueden entrar a un gateway `join`.
 
 ### Contexto y datos
 
@@ -419,7 +434,17 @@ Docs, ejemplos, CI, licencias, publicación en crates.io, anuncio.
   para no romper la cadena del token.
 - **`http.request`**: un status 4xx/5xx NO es error por default (el status es
   dato, se rutea con gateways); con `fail_on_error_status: true` la tarea
-  falla y aplican `retry`/`on_error` del nodo.
+  falla y aplican `retry`/`on_error` del nodo. Cuerpos de petición mutuamente
+  excluyentes (`HTTP_INPUT_INVALID` si hay más de uno): `body` (JSON), `form`
+  (urlencoded), `text` (raw; content-type vía headers, default `text/plain`),
+  `body_blob` (binario **streamed** desde un `$blob`; default
+  `application/octet-stream`) y `multipart` (form-data; partes
+  `"texto"` | `{text, content_type?}` | `{json}` | `{blob, filename?, content_type?}`,
+  los blobs van streamed con su longitud). Respuesta: `response_body` =
+  `auto` (default: JSON si el content-type es json, string en otro caso) |
+  `text` (fuerza string) | `blob` (descarga streamed al BlobStore; el `body`
+  del output es la referencia `{"$blob", name, size}`, con `name` tomado del
+  `content-disposition` si viene).
 
 ## Preguntas abiertas
 

@@ -255,17 +255,18 @@ pub fn validate(workflow: &WorkflowDefinition) -> Result<(), Vec<WorkflowError>>
             }
         }
 
-        // aristas on:error solo salen de nodos que ejecutan tareas
+        // aristas con trigger (on: error/panic) solo salen de nodos que
+        // ejecutan tareas
         for edge in out {
-            if edge.on == Some(EdgeTrigger::Error)
-                && !matches!(node.kind, NodeKind::Task(_) | NodeKind::Foreach(_))
-            {
+            if edge.on.is_some() && !matches!(node.kind, NodeKind::Task(_) | NodeKind::Foreach(_)) {
                 errors.push(
                     WorkflowError::new(
                         "ERROR_EDGE_INVALID_SOURCE",
                         format!(
-                            "La arista de error {}→{} debe originarse en un nodo task o foreach",
-                            edge.from, edge.to
+                            "La arista {}→{} con `on: {}` debe originarse en un nodo task o foreach",
+                            edge.from,
+                            edge.to,
+                            trigger_name(edge.on)
                         ),
                     )
                     .with_source_task(node.id.to_string()),
@@ -273,10 +274,10 @@ pub fn validate(workflow: &WorkflowDefinition) -> Result<(), Vec<WorkflowError>>
             }
         }
 
-        // aristas on:error no pueden entrar a un join: el conteo de llegadas
-        // del join solo considera el flujo normal
+        // aristas con trigger no pueden entrar a un join: el conteo de
+        // llegadas del join solo considera el flujo normal
         for edge in inc {
-            if edge.on == Some(EdgeTrigger::Error)
+            if edge.on.is_some()
                 && matches!(
                     &node.kind,
                     NodeKind::Gateway(gw) if gw.gateway == GatewayKind::Join
@@ -286,8 +287,10 @@ pub fn validate(workflow: &WorkflowDefinition) -> Result<(), Vec<WorkflowError>>
                     WorkflowError::new(
                         "ERROR_EDGE_TO_JOIN",
                         format!(
-                            "La arista de error {}→{} no puede apuntar a un gateway join",
-                            edge.from, edge.to
+                            "La arista {}→{} con `on: {}` no puede apuntar a un gateway join",
+                            edge.from,
+                            edge.to,
+                            trigger_name(edge.on)
                         ),
                     )
                     .with_source_task(node.id.to_string()),
@@ -354,6 +357,14 @@ pub fn validate(workflow: &WorkflowDefinition) -> Result<(), Vec<WorkflowError>>
         Ok(())
     } else {
         Err(errors)
+    }
+}
+
+fn trigger_name(on: Option<EdgeTrigger>) -> &'static str {
+    match on {
+        Some(EdgeTrigger::Error) => "error",
+        Some(EdgeTrigger::Panic) => "panic",
+        None => "",
     }
 }
 

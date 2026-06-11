@@ -343,3 +343,87 @@ async fn lote_de_cliente_via_foreach_y_perfil_con_reporte() {
     assert_eq!(node.items_ok, Some(2));
     assert_eq!(node.items_failed, Some(1));
 }
+
+/// Ciclo completo de archivos sin pasar por el contexto JSON: descargar un
+/// reporte binario de la API de un cliente (`response_body: blob`) y subirlo
+/// multipart a otra API, todo por streaming vía el BlobStore de la ejecución.
+#[tokio::test]
+async fn descargar_reporte_y_subirlo_multipart() {
+    use httpmock::prelude::*;
+
+    let origen = MockServer::start_async().await;
+    let destino = MockServer::start_async().await;
+
+    let contenido = "fecha,sku,unidades\n2026-06-10,A-1,3\n2026-06-10,B-2,7\n";
+    let descarga = origen
+        .mock_async(|when, then| {
+            when.method(GET)
+                .path("/reportes/diario")
+                .header("authorization", "Bearer tok-cliente");
+            then.status(200)
+                .header("content-type", "text/csv")
+                .header(
+                    "content-disposition",
+                    "attachment; filename=\"ventas-diarias.csv\"",
+                )
+                .body(contenido);
+        })
+        .await;
+    let subida = destino
+        .mock_async(|when, then| {
+            when.method(POST)
+                .path("/ingest")
+                .header_includes("content-type", "multipart/form-data")
+                .body_includes("name=\"origen\"")
+                .body_includes("cliente-acme")
+                .body_includes("name=\"archivo\"")
+                .body_includes("filename=\"ventas-diarias.csv\"")
+                .body_includes(contenido);
+            then.status(202)
+                .header("content-type", "application/json")
+                .json_body(json!({ "ingest_id": "ing-9" }));
+        })
+        .await;
+
+    let workflow: WorkflowDefinition = serde_json::from_value(json!({
+        "name": "sync-reporte-diario", "version": "0.1.0",
+        "nodes": [
+            { "id": "start", "kind": "start" },
+            { "id": "descarga", "kind": "task", "task": "http.request",
+              "input": {
+                  "url": format!("{}/reportes/diario", origen.base_url()),
+                  "auth": { "type": "bearer", "token": "tok-cliente" },
+                  "response_body": "blob",
+                  "fail_on_error_status": true
+              } },
+            { "id": "sube", "kind": "task", "task": "http.request",
+              "input": {
+                  "url": format!("{}/ingest", destino.base_url()),
+                  "method": "POST",
+                  "multipart": {
+                      "origen": "cliente-acme",
+                      "archivo": {
+                          "blob": "$.nodes.descarga.output.body",
+                          "content_type": "text/csv"
+                      }
+                  },
+                  "fail_on_error_status": true
+              } },
+            { "id": "end", "kind": "end" }
+        ],
+        "edges": [
+            { "from": "start", "to": "descarga" },
+            { "from": "descarga", "to": "sube" },
+            { "from": "sube", "to": "end" }
+        ]
+    }))
+    .unwrap();
+
+    let executor = WorkflowExecutor::new(workflow, workflow_forge::default_registry()).unwrap();
+    let result = executor.run(WorkflowData(json!({}))).await.unwrap();
+
+    descarga.assert_async().await;
+    subida.assert_async().await;
+    assert_eq!(result.0["status"], 202);
+    assert_eq!(result.0["body"], json!({ "ingest_id": "ing-9" }));
+}

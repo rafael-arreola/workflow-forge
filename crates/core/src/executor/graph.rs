@@ -10,6 +10,8 @@ pub(crate) struct GraphIndex {
     outgoing: HashMap<NodeId, Vec<FlowEdge>>,
     /// Aristas salientes de error (`on: error`)
     outgoing_error: HashMap<NodeId, Vec<FlowEdge>>,
+    /// Aristas salientes de panic (`on: panic`)
+    outgoing_panic: HashMap<NodeId, Vec<FlowEdge>>,
     /// Cantidad de aristas entrantes del flujo normal por nodo
     pub(crate) incoming_count: HashMap<NodeId, usize>,
     pub(crate) start: NodeId,
@@ -25,12 +27,19 @@ impl GraphIndex {
 
         let mut outgoing: HashMap<NodeId, Vec<FlowEdge>> = HashMap::new();
         let mut outgoing_error: HashMap<NodeId, Vec<FlowEdge>> = HashMap::new();
+        let mut outgoing_panic: HashMap<NodeId, Vec<FlowEdge>> = HashMap::new();
         let mut incoming_count: HashMap<NodeId, usize> = HashMap::new();
 
         for edge in &workflow.edges {
             match edge.on {
                 Some(EdgeTrigger::Error) => {
                     outgoing_error
+                        .entry(edge.from.clone())
+                        .or_default()
+                        .push(edge.clone());
+                }
+                Some(EdgeTrigger::Panic) => {
+                    outgoing_panic
                         .entry(edge.from.clone())
                         .or_default()
                         .push(edge.clone());
@@ -56,6 +65,7 @@ impl GraphIndex {
             nodes,
             outgoing,
             outgoing_error,
+            outgoing_panic,
             incoming_count,
             start,
         }
@@ -73,6 +83,13 @@ impl GraphIndex {
 
     pub(crate) fn error_edges(&self, id: &NodeId) -> &[FlowEdge] {
         self.outgoing_error
+            .get(id)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
+    pub(crate) fn panic_edges(&self, id: &NodeId) -> &[FlowEdge] {
+        self.outgoing_panic
             .get(id)
             .map(Vec::as_slice)
             .unwrap_or(&[])

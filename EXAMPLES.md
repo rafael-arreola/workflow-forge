@@ -28,6 +28,8 @@ let result = executor.run(WorkflowData(trigger_json)).await?;
 | Task profiles (preconfigured instances) + `$secret` | #8 |
 | `foreach` batches (concurrency, throttle, collect) | #9 |
 | Execution observability (`InMemoryHistory` report) | #9 |
+| Three routable exits per node (`on: "error"` / `on: "panic"`) | #10 |
+| Full HTTP bodies (multipart, form, raw, blob) + binary downloads | #11 |
 | HTTP, SFTP, tabular, data, util tasks | everywhere |
 
 ---
@@ -925,6 +927,146 @@ println!("{}", serde_json::to_string_pretty(&report)?);
 // Or stream raw events (workflow_started, node_completed, foreach_item_failed, …)
 // to your own sink: implement ExecutionObserver and ship them to a DB/OTLP.
 ```
+
+---
+
+## 10. Three routable exits: success, error and panic
+
+Every task-running node (`task`, `foreach`) has up to three labeled outcomes,
+each with its own edge:
+
+- **success** — the default edge.
+- **`on: "error"`** — the task failed *operationally* after exhausting its
+  retries. The structured error is the token (`$.nodes.<id>.error`).
+- **`on: "panic"`** — the task's *code* panicked (a bug in an extension).
+  The runtime survives (`catch_unwind`), but the semantics are stricter:
+  a panic **never retries** (bugs aren't transient) and **never falls back
+  to the error route** (it may have left side effects half-done). No panic
+  edge → the whole run fails.
+
+```json
+{
+  "spec": "1.0",
+  "name": "charge-with-cleanup",
+  "version": "1.0.0",
+  "nodes": [
+    { "id": "start", "kind": "start" },
+    { "id": "charge", "kind": "task", "task": "http.request",
+      "input": {
+        "url": "https://payments.internal/charge",
+        "method": "POST",
+        "body": { "order_id": "$.trigger.order_id" },
+        "fail_on_error_status": true
+      },
+      "retry": { "max": 3, "backoff": "exponential", "initial_ms": 500 } },
+
+    { "id": "notify_fail", "kind": "task", "task": "http.request",
+      "input": {
+        "url": "https://ops.internal/alerts",
+        "method": "POST",
+        "body": { "kind": "charge_failed", "error": "$.nodes.charge.error" }
+      } },
+
+    { "id": "page_oncall", "kind": "task", "task": "http.request",
+      "input": {
+        "url": "https://ops.internal/pages",
+        "method": "POST",
+        "body": { "kind": "extension_bug", "error": "$.nodes.charge.error" }
+      } },
+
+    { "id": "done", "kind": "end" },
+    { "id": "failed", "kind": "end" },
+    { "id": "bug", "kind": "end" }
+  ],
+  "edges": [
+    { "from": "start", "to": "charge" },
+    { "from": "charge", "to": "done" },
+    { "from": "charge", "on": "error", "to": "notify_fail" },
+    { "from": "charge", "on": "panic", "to": "page_oncall" },
+    { "from": "notify_fail", "to": "failed" },
+    { "from": "page_oncall", "to": "bug" }
+  ]
+}
+```
+
+What happens per outcome:
+
+| Outcome | Retries? | Route taken | Error code |
+|---------|----------|-------------|------------|
+| 2xx response | — | `charge → done` | — |
+| 5xx after 3 retries | yes (3) | `on: "error" → notify_fail` | `HTTP_STATUS_ERROR` |
+| Panic inside the task | **no** | `on: "panic" → page_oncall` | `TASK_PANIC` |
+| Panic, no panic edge | no | none — the run fails | `TASK_PANIC` |
+
+In a `foreach`, a panicking element always aborts the whole node — even with
+`on_item_error: "collect"` — and routes through the foreach's `on: "panic"`
+edge. A collected list of "rows that hit a bug" would look like data; it's not.
+
+---
+
+## 11. Files end-to-end: download a binary report, upload it as multipart
+
+`http.request` covers every body type — JSON (`body`), urlencoded (`form`),
+raw (`text`), binary (`body_blob`) and `multipart` — and can store binary
+*responses* in the per-run blob store with `response_body: "blob"`. Blobs are
+streamed on both legs; file bytes never enter the JSON context.
+
+```json
+{
+  "spec": "1.0",
+  "name": "sync-daily-report",
+  "version": "1.0.0",
+  "nodes": [
+    { "id": "start", "kind": "start" },
+
+    { "id": "download", "kind": "task", "task": "http.request",
+      "input": {
+        "url": "https://api.client.com/reports/daily",
+        "auth": { "type": "bearer", "token": "$.trigger.client_token" },
+        "response_body": "blob",
+        "fail_on_error_status": true
+      },
+      "retry": { "max": 2, "initial_ms": 1000 } },
+
+    { "id": "upload", "kind": "task", "task": "http.request",
+      "input": {
+        "url": "https://ingest.internal/files",
+        "method": "POST",
+        "multipart": {
+          "source": "client-acme",
+          "meta": { "json": { "kind": "daily_sales" } },
+          "file": {
+            "blob": "$.nodes.download.output.body",
+            "content_type": "text/csv"
+          }
+        },
+        "fail_on_error_status": true
+      } },
+
+    { "id": "end", "kind": "end",
+      "output": { "ingest_id": "$.nodes.upload.output.body.ingest_id" } }
+  ],
+  "edges": [
+    { "from": "start", "to": "download" },
+    { "from": "download", "to": "upload" },
+    { "from": "upload", "to": "end" }
+  ]
+}
+```
+
+Notes:
+
+- With `response_body: "blob"` the output `body` is the blob reference
+  (`{"$blob": "...", "name": "ventas-diarias.csv", "size": 51234}`); `name`
+  comes from the server's `content-disposition` when present, and is reused
+  as the multipart `filename` unless you override it.
+- Multipart parts: a bare string is a text part; `{ "json": ... }` serializes
+  with `application/json`; `{ "blob": ..., "filename"?, "content_type"? }`
+  streams a file part with its length.
+- Request bodies are mutually exclusive — sending `body` *and* `text`
+  fails with `HTTP_INPUT_INVALID` before any network call.
+- The downloaded blob lives in the run's `BlobStore` (temp dir) and is
+  cleaned up when the run ends.
 
 ---
 

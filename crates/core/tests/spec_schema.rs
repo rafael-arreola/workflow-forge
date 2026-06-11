@@ -232,6 +232,40 @@ fn el_schema_rechaza_foreach_invalidos() {
     );
 }
 
+#[test]
+fn workflow_con_arista_panic_valida() {
+    assert_valid_everywhere(json!({
+        "spec": "1.0",
+        "name": "con-panic", "version": "0.1.0",
+        "nodes": [
+            { "id": "start", "kind": "start" },
+            { "id": "t", "kind": "task", "task": "http.request" },
+            { "id": "end", "kind": "end" },
+            { "id": "end-panico", "kind": "end" }
+        ],
+        "edges": [
+            { "from": "start", "to": "t" },
+            { "from": "t", "to": "end" },
+            { "from": "t", "on": "panic", "to": "end-panico" }
+        ]
+    }));
+}
+
+#[test]
+fn el_schema_rechaza_triggers_de_arista_desconocidos() {
+    assert_schema_rejects(
+        json!({
+            "name": "x", "version": "1",
+            "nodes": [
+                { "id": "s", "kind": "start" },
+                { "id": "e", "kind": "end" }
+            ],
+            "edges": [ { "from": "s", "to": "e", "on": "explosion" } ]
+        }),
+        "trigger de arista desconocido",
+    );
+}
+
 fn profile_validator() -> jsonschema::Validator {
     let schema: Value =
         serde_json::from_str(include_str!("../../../schemas/1.0/profile.schema.json"))

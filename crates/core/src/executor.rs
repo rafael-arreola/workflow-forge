@@ -2,9 +2,11 @@ mod graph;
 mod schemas;
 
 use std::collections::HashMap;
+use std::panic::AssertUnwindSafe;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use futures::FutureExt;
 use futures::future::{BoxFuture, try_join_all};
 use futures::stream::{self, StreamExt};
 use serde_json::{Value, json};
@@ -26,6 +28,26 @@ use schemas::{CompiledSchemas, validate_compiled};
 
 /// Tokens que llegaron a un join, identificados por su nodo de origen.
 type JoinArrivals = Vec<(NodeId, Arc<Value>)>;
+
+/// Código de error de una tarea que panickeó (bug en la extensión).
+/// No reintenta y solo rutea por aristas `on: panic`.
+const TASK_PANIC: &str = "TASK_PANIC";
+
+/// Convierte el payload de un panic capturado en un `WorkflowError`.
+fn panic_error(
+    task_id: &crate::task::TaskId,
+    payload: Box<dyn std::any::Any + Send>,
+) -> WorkflowError {
+    let message = payload
+        .downcast_ref::<&str>()
+        .map(|s| (*s).to_string())
+        .or_else(|| payload.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "payload no textual".to_string());
+    WorkflowError::new(
+        TASK_PANIC,
+        format!("La tarea '{task_id}' panickeó: {message}"),
+    )
+}
 
 /// Estado mutable de una ejecución en curso.
 struct RunState {
@@ -414,8 +436,14 @@ impl WorkflowExecutor {
                 .await
             }
             Err(err) => {
-                let error_edges = self.index.error_edges(node_id);
-                let error_routed = !error_edges.is_empty();
+                // Un panic solo rutea por `on: panic` (sin fallback a error:
+                // pudo dejar efectos a medias); el resto rutea por `on: error`
+                let route_edges = if err.code == TASK_PANIC {
+                    self.index.panic_edges(node_id)
+                } else {
+                    self.index.error_edges(node_id)
+                };
+                let error_routed = !route_edges.is_empty();
                 self.emit(
                     ctx,
                     EventKind::NodeFailed {
@@ -427,11 +455,11 @@ impl WorkflowExecutor {
                 if !error_routed {
                     return Err(err);
                 }
-                // Ruta de error: el error serializado viaja como token
-                warn!(node_id = %node_id, code = %err.code, "Nodo falló; siguiendo ruta de error");
+                // Ruta alternativa: el error serializado viaja como token
+                warn!(node_id = %node_id, code = %err.code, "Nodo falló; siguiendo ruta alternativa");
                 let error_value = serde_json::to_value(&err).unwrap_or(Value::Null);
                 ctx.set_node_error(node_id, error_value.clone());
-                self.continue_through(error_edges, Arc::new(error_value), ctx, state)
+                self.continue_through(route_edges, Arc::new(error_value), ctx, state)
                     .await
             }
         }
@@ -512,18 +540,25 @@ impl WorkflowExecutor {
                     },
                 );
             }
-            let execution = task.execute(ctx, WorkflowData(input.clone()));
+            // AssertUnwindSafe: tras un panic el resultado se descarta y el
+            // estado del engine solo muta vía executor después de un éxito
+            let execution =
+                AssertUnwindSafe(task.execute(ctx, WorkflowData(input.clone()))).catch_unwind();
             let result = match policy.timeout_ms {
                 Some(ms) => {
                     match tokio::time::timeout(Duration::from_millis(ms), execution).await {
-                        Ok(result) => result,
+                        Ok(Ok(result)) => result,
+                        Ok(Err(payload)) => Err(panic_error(&task_id, payload)),
                         Err(_) => Err(WorkflowError::new(
                             "TASK_TIMEOUT",
                             format!("La tarea '{task_id}' superó el timeout de {ms}ms"),
                         )),
                     }
                 }
-                None => execution.await,
+                None => match execution.await {
+                    Ok(result) => result,
+                    Err(payload) => Err(panic_error(&task_id, payload)),
+                },
             };
 
             match result {
@@ -545,7 +580,9 @@ impl WorkflowExecutor {
                     if err.source_task.is_none() {
                         err.source_task = Some(node_id.to_string());
                     }
-                    let retries_left = policy.retry.is_some_and(|r| attempt <= r.max);
+                    // Un panic es un bug, no un fallo transitorio: jamás reintenta
+                    let retries_left =
+                        err.code != TASK_PANIC && policy.retry.is_some_and(|r| attempt <= r.max);
                     let delay = retries_left.then(|| {
                         backoff_delay(policy.retry.expect("retries_left lo implica"), attempt)
                     });
@@ -635,15 +672,15 @@ impl WorkflowExecutor {
                 }
                 Ok(Value::Array(outputs))
             }
-            // Ejecuta todo y separa éxitos de fallos; el nodo no falla
+            // Ejecuta todo y separa éxitos de fallos; el nodo no falla...
+            // salvo que un elemento panickee: eso aborta el nodo completo
             OnItemError::Collect => {
-                let results: Vec<(usize, Value, Result<Value, WorkflowError>)> =
-                    buffered.collect().await;
                 let mut ok = Vec::new();
                 let mut failed = Vec::new();
-                for (index, item, result) in results {
+                while let Some((index, item, result)) = buffered.next().await {
                     match result {
                         Ok(output) => ok.push(output),
+                        Err(error) if error.code == TASK_PANIC => return Err(error),
                         Err(error) => failed.push(json!({
                             "index": index,
                             "item": item,

@@ -15,22 +15,27 @@ workflow-forge-ext-data = { path = "crates/extensions/data", version = "0.1.0" }
 workflow-forge-ext-http = { path = "crates/extensions/http", version = "0.1.0" }
 workflow-forge-ext-tabular = { path = "crates/extensions/tabular", version = "0.1.0" }
 workflow-forge-ext-sftp = { path = "crates/extensions/sftp", version = "0.1.0" }
+
 async-trait = "0.1"
 futures = "0.3"
 jsonpath-rust = "1.0.4"
-jsonschema = "0.28"
+jsonschema = "0.46 "
 regex = "1"
 reqwest = { version = "0.13", default-features = false, features = [
     "json",
     "query",
     "charset",
     "rustls",
+    "form",
+    "multipart",
+    "stream",
 ] }
 httpmock = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
 tracing = "0.1"
 uuid = { version = "1", features = ["v7"] }
 schemars = "1.2.1"

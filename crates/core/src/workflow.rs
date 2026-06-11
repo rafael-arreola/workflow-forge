@@ -53,4 +53,7 @@ pub struct FlowEdge {
 pub enum EdgeTrigger {
     /// La arista se sigue cuando el nodo origen falla definitivamente
     Error,
+    /// La arista se sigue cuando la tarea del nodo origen panickea
+    /// (bug en la extensión). Un panic no reintenta ni cae en `on: error`.
+    Panic,
 }
