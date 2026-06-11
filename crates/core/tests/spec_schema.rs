@@ -266,6 +266,74 @@ fn el_schema_rechaza_triggers_de_arista_desconocidos() {
     );
 }
 
+#[test]
+fn workflow_con_subworkflow_inline_valida() {
+    assert_valid_everywhere(json!({
+        "spec": "1.0",
+        "name": "padre", "version": "0.1.0",
+        "workflows": [{
+            "name": "hijo", "version": "0.1.0",
+            "nodes": [
+                { "id": "start", "kind": "start" },
+                { "id": "t", "kind": "task", "task": "util.noop" },
+                { "id": "end", "kind": "end" }
+            ],
+            "edges": [
+                { "from": "start", "to": "t" },
+                { "from": "t", "to": "end" }
+            ]
+        }],
+        "nodes": [
+            { "id": "start", "kind": "start" },
+            { "id": "proceso", "kind": "subworkflow", "workflow": "hijo",
+              "input": { "pedido": "$.trigger.pedido" } },
+            { "id": "end", "kind": "end" },
+            { "id": "end-error", "kind": "end" }
+        ],
+        "edges": [
+            { "from": "start", "to": "proceso" },
+            { "from": "proceso", "to": "end" },
+            { "from": "proceso", "on": "error", "to": "end-error" }
+        ]
+    }));
+}
+
+#[test]
+fn el_schema_rechaza_subworkflows_invalidos() {
+    // sin nombre de workflow hijo
+    assert_schema_rejects(
+        json!({
+            "name": "x", "version": "1",
+            "nodes": [
+                { "id": "s", "kind": "start" },
+                { "id": "p", "kind": "subworkflow" },
+                { "id": "e", "kind": "end" }
+            ],
+            "edges": [
+                { "from": "s", "to": "p" },
+                { "from": "p", "to": "e" }
+            ]
+        }),
+        "subworkflow sin `workflow`",
+    );
+    // con campos desconocidos (p.ej. retry, que no aplica en v1)
+    assert_schema_rejects(
+        json!({
+            "name": "x", "version": "1",
+            "nodes": [
+                { "id": "s", "kind": "start" },
+                { "id": "p", "kind": "subworkflow", "workflow": "hijo", "retry": { "max": 2 } },
+                { "id": "e", "kind": "end" }
+            ],
+            "edges": [
+                { "from": "s", "to": "p" },
+                { "from": "p", "to": "e" }
+            ]
+        }),
+        "subworkflow con campos no soportados",
+    );
+}
+
 fn profile_validator() -> jsonschema::Validator {
     let schema: Value =
         serde_json::from_str(include_str!("../../../schemas/1.0/profile.schema.json"))

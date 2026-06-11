@@ -21,6 +21,12 @@
       "items": { "$ref": "#/$defs/taskProfile" },
       "default": []
     },
+    "workflows": {
+      "description": "Sub-workflows locales al documento, referenciables por nombre desde nodos kind subworkflow. Tienen precedencia sobre el registro compartido del host y son visibles solo para esta definición",
+      "type": "array",
+      "items": { "$ref": "#" },
+      "default": []
+    },
     "nodes": {
       "type": "array",
       "items": { "$ref": "#/$defs/node" },
@@ -193,13 +199,22 @@
       "else": { "not": { "required": ["branches"] } }
     },
     "subworkflowNode": {
-      "description": "Reservado por la spec 1.0; el validador del engine lo rechaza como no soportado aún",
+      "description": "Ejecuta otro workflow como si fuera una tarea: el input resuelto (o el token del predecesor) es el trigger del hijo y el output final del hijo es el output del nodo. Un fallo del hijo rutea por `on: error` del nodo; un panic dentro del hijo por `on: panic`",
       "type": "object",
       "properties": {
         "id": true,
-        "kind": { "const": "subworkflow" }
+        "kind": { "const": "subworkflow" },
+        "workflow": {
+          "description": "Nombre del workflow hijo: sección `workflows` del documento (precedencia) o registro compartido del host",
+          "type": "string",
+          "minLength": 1
+        },
+        "input": {
+          "description": "Mapping del trigger del hijo (reglas `$.` de los inputs); sin input, el hijo recibe el output del predecesor"
+        }
       },
-      "required": ["kind"]
+      "required": ["kind", "workflow"],
+      "additionalProperties": false
     },
     "branch": {
       "type": "object",

@@ -427,3 +427,100 @@ async fn descargar_reporte_y_subirlo_multipart() {
     assert_eq!(result.0["status"], 202);
     assert_eq!(result.0["body"], json!({ "ingest_id": "ing-9" }));
 }
+
+/// El patrón de reuso entre clientes: un sub-workflow compartido
+/// ("normalizar y enviar") registrado una vez en el `WorkflowRegistry`,
+/// invocado desde el workflow de cada cliente con su propio mapping.
+/// Ejercita `kind: subworkflow` + `data.cast` + http, de punta a punta.
+#[tokio::test]
+async fn subworkflow_compartido_normaliza_con_cast_y_envia() {
+    use httpmock::prelude::*;
+    use std::sync::Arc;
+
+    let server = MockServer::start_async().await;
+    let crear_orden = server
+        .mock_async(|when, then| {
+            when.method(POST).path("/orders").json_body(json!({
+                "fecha": "2026-06-10",
+                "total": 1234.56,
+                "sku": "ABC-1"
+            }));
+            then.status(201)
+                .header("content-type", "application/json")
+                .json_body(json!({ "order_id": "ord-5" }));
+        })
+        .await;
+
+    // El bloque reusable: normaliza los campos sucios y hace el POST
+    let comun: WorkflowDefinition = serde_json::from_value(json!({
+        "name": "normalizar-y-enviar", "version": "1.0.0",
+        "nodes": [
+            { "id": "start", "kind": "start" },
+            { "id": "normaliza", "kind": "task", "task": "data.cast",
+              "input": {
+                  "source": "$.trigger",
+                  "fields": {
+                      "fecha": [{ "op": "date", "from": "%d/%m/%Y" }],
+                      "total": [{ "op": "number", "decimal": ",", "thousands": "." }],
+                      "sku": [{ "op": "trim" }, { "op": "upper" }]
+                  }
+              } },
+            { "id": "envia", "kind": "task", "task": "http.request",
+              "input": {
+                  "url": format!("{}/orders", server.base_url()),
+                  "method": "POST",
+                  "body": "$.nodes.normaliza.output",
+                  "fail_on_error_status": true
+              } },
+            { "id": "end", "kind": "end",
+              "output": "$.nodes.envia.output.body" }
+        ],
+        "edges": [
+            { "from": "start", "to": "normaliza" },
+            { "from": "normaliza", "to": "envia" },
+            { "from": "envia", "to": "end" }
+        ]
+    }))
+    .unwrap();
+    let workflows = Arc::new(WorkflowRegistry::new());
+    workflows.register(comun).unwrap();
+
+    // El workflow del cliente: solo adapta su formato y delega
+    let cliente: WorkflowDefinition = serde_json::from_value(json!({
+        "name": "cliente-acme", "version": "0.1.0",
+        "nodes": [
+            { "id": "start", "kind": "start" },
+            { "id": "procesa", "kind": "subworkflow", "workflow": "normalizar-y-enviar",
+              "input": {
+                  "fecha": "$.trigger.fecha_pedido",
+                  "total": "$.trigger.importe",
+                  "sku": "$.trigger.articulo"
+              } },
+            { "id": "end", "kind": "end" }
+        ],
+        "edges": [
+            { "from": "start", "to": "procesa" },
+            { "from": "procesa", "to": "end" }
+        ]
+    }))
+    .unwrap();
+
+    let executor = WorkflowExecutor::builder(cliente, workflow_forge::default_registry())
+        .workflows(workflows)
+        .build()
+        .map_err(|errors| format!("{errors:?}"))
+        .unwrap();
+
+    // El payload del cliente, en su formato sucio
+    let result = executor
+        .run(WorkflowData(json!({
+            "fecha_pedido": "10/06/2026",
+            "importe": "1.234,56",
+            "articulo": "  abc-1 "
+        })))
+        .await
+        .unwrap();
+
+    crear_orden.assert_async().await;
+    assert_eq!(result.0, json!({ "order_id": "ord-5" }));
+}

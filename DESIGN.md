@@ -46,6 +46,8 @@ embebiendo el core en su aplicación Rust. El core publica dos contratos:
 | 23 | Observabilidad | Trait `ExecutionObserver` + eventos tipados serializables (`ExecutionEvent`) emitidos por el executor; `InMemoryHistory` → `ExecutionReport` integrado. Los eventos son la semilla del journal durable (post-v1) | Solo tracing; reporte sin streaming; diferir todo a la fase durable |
 | 24 | Panics | Tercera salida por nodo: `on: "panic"`. Un panic en una extensión se captura (`catch_unwind`), no tumba la ejecución, **no reintenta** (es bug, no fallo transitorio) y **no cae en `on: error`** (pudo dejar efectos a medias); sin arista panic el workflow falla. En foreach un panic de un elemento siempre aborta el nodo (aun con `collect`) | Que el panic tumbe el proceso; tratarlo como error normal; fallback a `on: error` |
 | 25 | HTTP completo | `http.request` cubre todos los cuerpos — `body` (JSON), `form` (urlencoded), `text` (raw), `body_blob` (binario streamed) y `multipart` (form-data con partes texto/json/blob) — mutuamente excluyentes; y `response_body: auto\|text\|blob` para descargar binarios al BlobStore. Blobs siempre por streaming | Solo JSON; cargar binarios a memoria/base64; extensión aparte para multipart |
+| 26 | Conversiones por campo | Tarea `data.cast`: conversiones declarativas por campo (fechas con formato, números con separadores, int/bool/string, trim/upper/lower/replace, defaults) sobre un objeto o array de filas; `on_invalid: fail\|null\|collect` decide qué pasa con valores inconvertibles | Helpers de conversión en mappings (rompe #14); pipes estilo template; dejar la conversión al host |
+| 27 | Sub-workflows | `kind: "subworkflow"` (deja de estar reservado): el `input` resuelto es el trigger del hijo y el output final del hijo es el output del nodo. Registro dual como los perfiles: `WorkflowRegistry` compartido + sección `workflows` inline (precedencia). Las 3 salidas aplican (error/panic del hijo rutean). BlobStore compartido, eventos con `parent_execution_id`, ciclos y profundidad >8 rechazados al construir | Solo inline; solo registry; retry/timeout en el nodo subworkflow (diferido); ejecución aislada sin compartir blobs |
 
 ## Modelo conceptual
 
@@ -71,6 +73,7 @@ Un documento JSON con grafo dirigido:
 | `end` | Terminación; puede mapear el output final del workflow |
 | `task` | Invoca una tarea registrada (`"task": "http.request"`) con un `input` mapeado por JSONPath |
 | `gateway` | Control de flujo: `exclusive` (if/else), `parallel` (fan-out), `join` (fan-in) |
+| `subworkflow` | Ejecuta otro workflow como si fuera una tarea (ver "Sub-workflows") |
 
 Ejemplo de task con política de errores:
 
@@ -102,9 +105,49 @@ Ejemplo de gateway exclusivo:
 }
 ```
 
-`kind: "subworkflow"` queda **reservado** en la spec 1.0 (no implementado en
-v1): el validador lo rechaza con "no soportado aún", pero ninguna extensión
-puede ocupar ese kind.
+### Sub-workflows
+
+Un nodo `kind: "subworkflow"` ejecuta otro workflow como si fuera una tarea —
+el bloque de reuso por encima de los perfiles: "parsear → validar → enviar"
+se define una vez y cada integración lo invoca con su propio mapping.
+
+```json
+{
+  "id": "procesa",
+  "kind": "subworkflow",
+  "workflow": "normalizar-y-enviar",
+  "input": { "fecha": "$.trigger.fecha_pedido", "total": "$.trigger.importe" }
+}
+```
+
+Semántica:
+
+- El `input` resuelto (o el token del predecesor, si no hay `input`) se
+  convierte en el **trigger** del hijo; el output final del hijo es el output
+  del nodo. El schema del start del hijo valida ese trigger.
+- **Resolución por nombre, registro dual** (espejo de los perfiles): la
+  sección `workflows` inline del documento tiene precedencia; después se
+  busca en el `WorkflowRegistry` compartido
+  (`WorkflowExecutor::builder(...).workflows(registry)`).
+- Todo se resuelve y valida **al construir el executor**, nunca en runtime:
+  nombre inexistente (`SUBWORKFLOW_NOT_FOUND`), hijo inválido (errores con
+  contexto), ciclos A→B→A (`SUBWORKFLOW_CYCLE`) y anidamiento más allá de 8
+  niveles (`SUBWORKFLOW_DEPTH_EXCEEDED`).
+- **Las tres salidas aplican**: un fallo del hijo rutea por `on: error` del
+  nodo; un `TASK_PANIC` dentro del hijo rutea por `on: panic` (mismas reglas:
+  sin retry, sin fallback). El nodo subworkflow no acepta `retry`/`timeout_ms`
+  en v1 — las políticas viven en los nodos del hijo.
+- La ejecución hija tiene su propio `execution_id` (UUID v7) y su propio
+  documento de estado, pero **comparte el BlobStore** de la ejecución raíz
+  (las referencias `$blob` cruzan la frontera; la raíz limpia al final) y el
+  contador `seq` de eventos (orden total del árbol completo).
+- Observabilidad: los eventos del hijo llevan `parent_execution_id`;
+  `InMemoryHistory::report()` resume solo la ejecución raíz (el nodo
+  subworkflow aparece como un nodo más) y `report_for(execution_id)` /
+  `executions()` dan el detalle por hijo.
+- Los perfiles inline (`tasks`) de un documento son locales a ese documento:
+  el hijo se construye con el registry original del host, no con el scoped
+  del padre.
 
 ### Condiciones (mini-DSL)
 
@@ -215,7 +258,7 @@ Un nodo task sin `input` recibe el output de su predecesor.
 | Namespace | Tareas | Notas |
 |-----------|--------|-------|
 | `http` | `http.request` | Métodos estándar, headers, auth basic/bearer, body JSON |
-| `data` | `data.transform`, `data.merge`, `data.template` | Reshape con JSONPath, plantillas de strings |
+| `data` | `data.transform`, `data.map`, `data.merge`, `data.template`, `data.cast` | Reshape con JSONPath, plantillas de strings, conversiones por campo |
 | `util` | `util.delay`, `util.log`, `util.noop` | Debug, pruebas y ejemplos |
 | `sftp` | `sftp.get`, `sftp.put`, `sftp.list` | Integraciones empresariales; usa `$blob` |
 | `tabular` | `tabular.parse`, `tabular.write` | CSV y XLSX ↔ JSON; usa `$blob` |
@@ -428,6 +471,17 @@ Docs, ejemplos, CI, licencias, publicación en crates.io, anuncio.
   al caso "reestructurar filas de un CSV/array" sin nodo de iteración genérico.
 - **`data.merge`**: `{ objects: [...] }`, merge profundo en orden, llaves
   posteriores ganan; arrays/escalares se reemplazan completos.
+- **`data.cast`**: `{ source, fields, on_invalid? }`. `source` es un objeto o
+  un array de filas; `fields` mapea paths con puntos (relativos a cada fila) a
+  una lista de operaciones encadenables: `date` (`from`/`to` strftime, default
+  ISO), `number` (`decimal`/`thousands`), `int`, `bool`
+  (true/false/1/0/yes/no/si/sí), `string`, `trim`, `upper`, `lower`,
+  `replace` (`from`/`to` literal) y `default` (`value`). Null/ausente
+  **atraviesa** las ops sin error (solo `default` lo sustituye; un campo
+  ausente que sigue null no se inserta). `on_invalid`: `fail` (default —
+  `CAST_FIELD_INVALID` con fila y campo), `null` (el campo queda null) o
+  `collect` (output `{ ok: [...], failed: [{ index, item, errors }] }`, espejo
+  del foreach). Config malformada es `CAST_INPUT_INVALID`.
 - **`data.template`**: `{ template, values }`, placeholders `{path.con.puntos}`,
   `{{`/`}}` escapan; placeholder ausente es error; output string.
 - **`util.log` / `util.delay`**: devuelven su `value` (o null) como output,

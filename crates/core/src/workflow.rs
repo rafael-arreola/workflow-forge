@@ -20,6 +20,11 @@ pub struct WorkflowDefinition {
     /// tareas registradas, visibles solo para esta definición
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tasks: Vec<TaskProfile>,
+    /// Sub-workflows locales al documento, referenciables por nombre desde
+    /// nodos `kind: "subworkflow"`. Tienen precedencia sobre el
+    /// `WorkflowRegistry` compartido y son visibles solo para esta definición
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub workflows: Vec<WorkflowDefinition>,
     /// Nodos que componen el grafo
     pub nodes: Vec<Node>,
     /// Aristas dirigidas que definen el flujo de control

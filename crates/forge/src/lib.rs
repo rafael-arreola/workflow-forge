@@ -45,7 +45,7 @@ pub mod prelude {
         EventKind, ExecutionEvent, ExecutionObserver, ExecutionReport, InMemoryHistory,
     };
     pub use workflow_forge_core::profile::TaskProfile;
-    pub use workflow_forge_core::registry::TaskRegistry;
+    pub use workflow_forge_core::registry::{TaskRegistry, WorkflowRegistry};
     pub use workflow_forge_core::secret::{EnvSecrets, SecretProvider};
     pub use workflow_forge_core::task::{Task, TaskId, TaskManifest};
     pub use workflow_forge_core::task::{WorkflowData, WorkflowResult};

@@ -241,29 +241,36 @@ pub fn validate(workflow: &WorkflowDefinition) -> Result<(), Vec<WorkflowError>>
                     }
                 }
             },
-            NodeKind::Subworkflow(_) => {
-                errors.push(
-                    WorkflowError::new(
-                        "SUBWORKFLOW_NOT_SUPPORTED",
-                        format!(
-                            "El nodo '{}' usa el kind reservado 'subworkflow', aún no soportado",
-                            node.id
-                        ),
-                    )
-                    .with_source_task(node.id.to_string()),
-                );
+            NodeKind::Subworkflow(sub) => {
+                if sub.workflow.is_empty() {
+                    errors.push(
+                        WorkflowError::new(
+                            "SUBWORKFLOW_MISSING_NAME",
+                            format!(
+                                "El nodo subworkflow '{}' no declara el nombre del workflow hijo",
+                                node.id
+                            ),
+                        )
+                        .with_source_task(node.id.to_string()),
+                    );
+                }
             }
         }
 
         // aristas con trigger (on: error/panic) solo salen de nodos que
-        // ejecutan tareas
+        // ejecutan tareas (task, foreach o subworkflow)
         for edge in out {
-            if edge.on.is_some() && !matches!(node.kind, NodeKind::Task(_) | NodeKind::Foreach(_)) {
+            if edge.on.is_some()
+                && !matches!(
+                    node.kind,
+                    NodeKind::Task(_) | NodeKind::Foreach(_) | NodeKind::Subworkflow(_)
+                )
+            {
                 errors.push(
                     WorkflowError::new(
                         "ERROR_EDGE_INVALID_SOURCE",
                         format!(
-                            "La arista {}→{} con `on: {}` debe originarse en un nodo task o foreach",
+                            "La arista {}→{} con `on: {}` debe originarse en un nodo task, foreach o subworkflow",
                             edge.from,
                             edge.to,
                             trigger_name(edge.on)
@@ -296,6 +303,26 @@ pub fn validate(workflow: &WorkflowDefinition) -> Result<(), Vec<WorkflowError>>
                     .with_source_task(node.id.to_string()),
                 );
             }
+        }
+    }
+
+    // --- sub-workflows inline: nombres únicos + validación recursiva ---
+    let mut inline_names: HashSet<&str> = HashSet::new();
+    for child in &workflow.workflows {
+        if !inline_names.insert(child.name.as_str()) {
+            errors.push(WorkflowError::new(
+                "SUBWORKFLOW_DUPLICATE_NAME",
+                format!(
+                    "La sección `workflows` declara más de un workflow llamado '{}'",
+                    child.name
+                ),
+            ));
+        }
+        if let Err(child_errors) = validate(child) {
+            errors.extend(child_errors.into_iter().map(|mut e| {
+                e.message = format!("en el sub-workflow inline '{}': {}", child.name, e.message);
+                e
+            }));
         }
     }
 
@@ -523,7 +550,7 @@ mod tests {
     }
 
     #[test]
-    fn subworkflow_es_rechazado() {
+    fn subworkflow_estructuralmente_valido() {
         let workflow = wf(json!({
             "name": "sub", "version": "0.1.0",
             "nodes": [
@@ -536,7 +563,42 @@ mod tests {
                 { "from": "child", "to": "end" }
             ]
         }));
-        assert!(codes(&workflow).contains(&"SUBWORKFLOW_NOT_SUPPORTED".to_string()));
+        // El nombre se resuelve al construir el executor, no aquí
+        assert_eq!(codes(&workflow), Vec::<String>::new());
+    }
+
+    #[test]
+    fn subworkflows_inline_con_nombre_duplicado_o_invalidos() {
+        let inner_ok = json!({
+            "name": "hijo", "version": "0.1.0",
+            "nodes": [
+                { "id": "start", "kind": "start" },
+                { "id": "end", "kind": "end" }
+            ],
+            "edges": [ { "from": "start", "to": "end" } ]
+        });
+        let inner_bad = json!({
+            "name": "hijo", "version": "0.1.0",
+            "nodes": [ { "id": "start", "kind": "start" } ],
+            "edges": []
+        });
+        let workflow = wf(json!({
+            "name": "padre", "version": "0.1.0",
+            "workflows": [inner_ok, inner_bad],
+            "nodes": [
+                { "id": "start", "kind": "start" },
+                { "id": "child", "kind": "subworkflow", "workflow": "hijo" },
+                { "id": "end", "kind": "end" }
+            ],
+            "edges": [
+                { "from": "start", "to": "child" },
+                { "from": "child", "to": "end" }
+            ]
+        }));
+        let found = codes(&workflow);
+        assert!(found.contains(&"SUBWORKFLOW_DUPLICATE_NAME".to_string()));
+        // El segundo inline no tiene end: el error sube con contexto
+        assert!(found.contains(&"NO_END_NODE".to_string()));
     }
 
     #[test]

@@ -21,14 +21,18 @@ use crate::workflow::WorkflowDefinition;
 pub struct WorkflowContext {
     /// Identificador único de la ejecución actual (UUID v7)
     execution_id: String,
+    /// Id de la ejecución padre, si esta ejecución es un sub-workflow
+    parent_execution_id: Option<String>,
     /// Instante en que inició la ejecución
     started_at: Instant,
     /// Documento de estado de la ejecución
     state: RwLock<Value>,
     /// Almacenamiento de blobs (`$blob`) con ciclo de vida de la ejecución
+    /// (los sub-workflows comparten el store de la ejecución raíz)
     blobs: Arc<dyn BlobStore>,
-    /// Contador de eventos de observabilidad (orden total por ejecución)
-    event_seq: std::sync::atomic::AtomicU64,
+    /// Contador de eventos de observabilidad. Compartido entre una ejecución
+    /// y sus sub-workflows: el orden total cubre el árbol completo
+    event_seq: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl WorkflowContext {
@@ -48,11 +52,44 @@ impl WorkflowContext {
         let blobs = Arc::new(TempDirBlobStore::new(&execution_id));
         Self {
             execution_id,
+            parent_execution_id: None,
             started_at: Instant::now(),
             state: RwLock::new(state),
             blobs,
-            event_seq: std::sync::atomic::AtomicU64::new(0),
+            event_seq: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
+    }
+
+    /// Contexto de una ejecución hija (sub-workflow): execution_id propio
+    /// (UUID v7) y documento de estado propio, pero comparte el BlobStore y
+    /// el contador de eventos del padre. Las referencias `$blob` cruzan la
+    /// frontera; el padre limpia los blobs al terminar la ejecución raíz.
+    pub fn child_of(workflow: &WorkflowDefinition, trigger: Value, parent: &Self) -> Self {
+        let execution_id = Uuid::now_v7().to_string();
+        let state = json!({
+            "trigger": trigger,
+            "nodes": {},
+            "workflow": {
+                "id": workflow.id,
+                "name": workflow.name,
+                "version": workflow.version,
+                "execution_id": execution_id,
+                "parent_execution_id": parent.execution_id,
+            }
+        });
+        Self {
+            execution_id,
+            parent_execution_id: Some(parent.execution_id.clone()),
+            started_at: Instant::now(),
+            state: RwLock::new(state),
+            blobs: Arc::clone(&parent.blobs),
+            event_seq: Arc::clone(&parent.event_seq),
+        }
+    }
+
+    /// Id de la ejecución padre, si esta ejecución es un sub-workflow
+    pub fn parent_execution_id(&self) -> Option<&str> {
+        self.parent_execution_id.as_deref()
     }
 
     /// Siguiente número de secuencia de evento (orden total por ejecución)

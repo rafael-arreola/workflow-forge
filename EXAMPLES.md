@@ -30,6 +30,8 @@ let result = executor.run(WorkflowData(trigger_json)).await?;
 | Execution observability (`InMemoryHistory` report) | #9 |
 | Three routable exits per node (`on: "error"` / `on: "panic"`) | #10 |
 | Full HTTP bodies (multipart, form, raw, blob) + binary downloads | #11 |
+| Per-field conversions (`data.cast`: dates, numbers, defaults) | #12 |
+| Sub-workflows (shared registry + inline section) | #13 |
 | HTTP, SFTP, tabular, data, util tasks | everywhere |
 
 ---
@@ -1070,6 +1072,187 @@ Notes:
 
 ---
 
+## 12. Normalizing a messy client batch with `data.cast`
+
+Real client files never arrive clean: dates as `dd/mm/yyyy`, prices with
+decimal commas, padded SKUs, optional columns. `data.cast` converts fields
+*in place*, declaratively, before the batch hits your API. With
+`on_invalid: "collect"` bad rows are separated instead of failing the run —
+the mirror of `foreach`'s collect mode.
+
+```json
+{
+  "spec": "1.0",
+  "name": "normalize-client-batch",
+  "version": "1.0.0",
+  "nodes": [
+    { "id": "start", "kind": "start" },
+
+    { "id": "normalize", "kind": "task", "task": "data.cast",
+      "input": {
+        "source": "$.trigger.rows",
+        "fields": {
+          "order_date": [{ "op": "date", "from": "%d/%m/%Y" }],
+          "total": [{ "op": "number", "decimal": ",", "thousands": "." }],
+          "qty": [{ "op": "int" }],
+          "sku": [{ "op": "trim" }, { "op": "upper" }],
+          "express": [{ "op": "default", "value": "no" }, { "op": "bool" }],
+          "notes": [{ "op": "default", "value": "" }]
+        },
+        "on_invalid": "collect"
+      } },
+
+    { "id": "check", "kind": "gateway", "gateway": "exclusive",
+      "branches": [
+        { "when": { "path": "$.nodes.normalize.output.failed[0]", "exists": true }, "edge": "dirty" },
+        { "else": true, "edge": "clean" }
+      ] },
+
+    { "id": "report_bad_rows", "kind": "task", "task": "http.request",
+      "input": {
+        "url": "https://ops.internal/data-quality",
+        "method": "POST",
+        "body": { "failed": "$.nodes.normalize.output.failed" }
+      } },
+
+    { "id": "end", "kind": "end",
+      "output": { "rows": "$.nodes.normalize.output.ok" } },
+    { "id": "end_dirty", "kind": "end",
+      "output": {
+        "rows": "$.nodes.normalize.output.ok",
+        "rejected": "$.nodes.normalize.output.failed"
+      } }
+  ],
+  "edges": [
+    { "from": "start", "to": "normalize" },
+    { "from": "normalize", "to": "check" },
+    { "from": "check", "label": "clean", "to": "end" },
+    { "from": "check", "label": "dirty", "to": "report_bad_rows" },
+    { "from": "report_bad_rows", "to": "end_dirty" }
+  ]
+}
+```
+
+The operations, per field (chained left to right):
+
+| Op | What it does |
+|----|--------------|
+| `date` | parses with `from` (strftime), reformats with `to` (default `%Y-%m-%d`) |
+| `number` | `"1.234,56"` → `1234.56` (configurable `decimal` / `thousands`) |
+| `int`, `bool`, `string` | strict scalar casts (`"Sí"`/`"yes"`/`"1"` → `true`) |
+| `trim`, `upper`, `lower`, `replace` | string cleanup |
+| `default` | substitutes **null/missing** values only |
+
+Null or missing fields pass through untouched (only `default` replaces
+them) — an optional column never fails a conversion. `on_invalid` decides
+what an *unconvertible* value does: `"fail"` (default) stops the task with
+`CAST_FIELD_INVALID` naming the row and field, `"null"` nulls it out, and
+`"collect"` returns `{ "ok": [...], "failed": [{ "index", "item", "errors" }] }`.
+
+---
+
+## 13. Sub-workflows: define "normalize and send" once, reuse it per client
+
+A `kind: "subworkflow"` node runs another workflow as if it were a task: the
+node's `input` becomes the child's **trigger**, and the child's final output
+becomes the node's output. It's the reuse block above task profiles — define
+the pipeline once, let every client integration call it with its own mapping.
+
+Register shared sub-workflows once in a `WorkflowRegistry`:
+
+```rust
+use workflow_forge::prelude::*;
+use std::sync::Arc;
+
+let workflows = Arc::new(WorkflowRegistry::new());
+workflows.register(serde_json::from_str(NORMALIZE_AND_SEND_JSON)?)?;
+
+let executor = WorkflowExecutor::builder(client_workflow, workflow_forge::default_registry())
+    .workflows(workflows)
+    .build()
+    .map_err(|errors| format!("{errors:?}"))?;
+```
+
+Each client's workflow stays tiny — adapt the format, delegate:
+
+```json
+{
+  "spec": "1.0",
+  "name": "client-acme",
+  "version": "0.1.0",
+  "nodes": [
+    { "id": "start", "kind": "start" },
+
+    { "id": "process", "kind": "subworkflow", "workflow": "normalize-and-send",
+      "input": {
+        "order_date": "$.trigger.fecha_pedido",
+        "total": "$.trigger.importe",
+        "sku": "$.trigger.articulo"
+      } },
+
+    { "id": "end", "kind": "end" },
+    { "id": "end_failed", "kind": "end" }
+  ],
+  "edges": [
+    { "from": "start", "to": "process" },
+    { "from": "process", "to": "end" },
+    { "from": "process", "on": "error", "to": "end_failed" }
+  ]
+}
+```
+
+For self-contained documents, embed children in a `workflows` section
+(it takes precedence over the shared registry):
+
+```json
+{
+  "spec": "1.0",
+  "name": "standalone-parent",
+  "version": "0.1.0",
+  "workflows": [
+    {
+      "name": "double-check",
+      "version": "0.1.0",
+      "nodes": [
+        { "id": "start", "kind": "start" },
+        { "id": "verify", "kind": "task", "task": "util.noop" },
+        { "id": "end", "kind": "end" }
+      ],
+      "edges": [
+        { "from": "start", "to": "verify" },
+        { "from": "verify", "to": "end" }
+      ]
+    }
+  ],
+  "nodes": [
+    { "id": "start", "kind": "start" },
+    { "id": "check", "kind": "subworkflow", "workflow": "double-check" },
+    { "id": "end", "kind": "end" }
+  ],
+  "edges": [
+    { "from": "start", "to": "check" },
+    { "from": "check", "to": "end" }
+  ]
+}
+```
+
+Semantics worth knowing:
+
+- **All three exits apply**: a child failure routes through the node's
+  `on: "error"`; a panic *inside* the child routes through `on: "panic"`
+  (same rules as #10 — no retry, no fallback).
+- **Resolved at build time, never at runtime**: unknown names
+  (`SUBWORKFLOW_NOT_FOUND`), cycles (`SUBWORKFLOW_CYCLE`), nesting beyond 8
+  levels (`SUBWORKFLOW_DEPTH_EXCEEDED`) and invalid children all fail when
+  the executor is constructed.
+- **Blobs cross the boundary**: the child shares the root run's blob store,
+  so a file produced inside a sub-workflow is readable by the parent.
+- **Observability**: child events carry `parent_execution_id`;
+  `InMemoryHistory::report()` summarizes the root run (the subworkflow node
+  shows up as one node), `report_for(id)` gives per-child detail.
+
+---
+
 ## Patterns & gotchas worth knowing
 
 - **Implicit token vs explicit mapping**: a task *without* `input` receives
@@ -1090,8 +1273,6 @@ Notes:
 
 ## Not there yet (so you don't design around it)
 
-- **No sub-workflows**: `kind: "subworkflow"` is reserved in the spec but
-  rejected by the validator.
 - **No loops/pagination**: the graph is acyclic; "fetch pages until `next`
   is null" can't be expressed yet.
 - **Ephemeral execution**: run-to-completion, in memory. No resume after a

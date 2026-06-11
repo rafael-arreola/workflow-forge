@@ -32,8 +32,13 @@ pub trait ExecutionObserver: Send + Sync {
 pub struct ExecutionEvent {
     /// Id de la ejecución que emitió el evento
     pub execution_id: String,
+    /// Id de la ejecución padre si el evento viene de un sub-workflow
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_execution_id: Option<String>,
     /// Orden total de emisión dentro de la ejecución (las ramas paralelas
-    /// emiten concurrentemente; `seq` las ordena de forma estable)
+    /// emiten concurrentemente; `seq` las ordena de forma estable). Los
+    /// sub-workflows comparten el contador del padre: `seq` ordena el árbol
+    /// completo de ejecuciones
     pub seq: u64,
     /// Milisegundos transcurridos desde el inicio de la ejecución
     pub elapsed_ms: u64,
@@ -151,9 +156,44 @@ impl InMemoryHistory {
         events
     }
 
-    /// Resumen de la ejecución por nodo, construido de los eventos
+    /// Resumen de la ejecución raíz por nodo, construido de los eventos.
+    /// Los eventos de sub-workflows no se pliegan aquí: el nodo subworkflow
+    /// del padre los resume; usa [`InMemoryHistory::report_for`] para el
+    /// detalle de una ejecución hija.
     pub fn report(&self) -> ExecutionReport {
-        ExecutionReport::from_events(&self.events())
+        let events = self.events();
+        match events.first().map(|e| e.execution_id.clone()) {
+            Some(root) => ExecutionReport::from_events(
+                &events
+                    .into_iter()
+                    .filter(|e| e.execution_id == root)
+                    .collect::<Vec<_>>(),
+            ),
+            None => ExecutionReport::from_events(&events),
+        }
+    }
+
+    /// Resumen de una ejecución específica (raíz o sub-workflow)
+    pub fn report_for(&self, execution_id: &str) -> ExecutionReport {
+        ExecutionReport::from_events(
+            &self
+                .events()
+                .into_iter()
+                .filter(|e| e.execution_id == execution_id)
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// Ids de las ejecuciones presentes en la historia, en orden de aparición
+    /// (la raíz primero, luego cada sub-workflow conforme arrancó)
+    pub fn executions(&self) -> Vec<String> {
+        let mut seen = Vec::new();
+        for event in self.events() {
+            if !seen.contains(&event.execution_id) {
+                seen.push(event.execution_id.clone());
+            }
+        }
+        seen
     }
 }
 

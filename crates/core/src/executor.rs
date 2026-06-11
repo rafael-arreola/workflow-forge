@@ -18,9 +18,10 @@ use crate::mapping;
 use crate::node::foreach::{ForeachNode, OnItemError};
 use crate::node::gateway::{GatewayKind, GatewayNode};
 use crate::node::task::{Backoff, RetryPolicy, TaskNode};
-use crate::node::{Node, NodeId, NodeKind};
+use crate::node::{Node, NodeId, NodeKind, SubworkflowNode};
 use crate::observe::{EventKind, ExecutionEvent, ExecutionObserver};
-use crate::registry::TaskRegistry;
+use crate::registry::{TaskRegistry, WorkflowRegistry};
+use crate::secret::SecretProvider;
 use crate::task::{Task, WorkflowData, WorkflowResult};
 use crate::workflow::{FlowEdge, WorkflowDefinition};
 use graph::GraphIndex;
@@ -32,6 +33,9 @@ type JoinArrivals = Vec<(NodeId, Arc<Value>)>;
 /// Código de error de una tarea que panickeó (bug en la extensión).
 /// No reintenta y solo rutea por aristas `on: panic`.
 const TASK_PANIC: &str = "TASK_PANIC";
+
+/// Niveles máximos de anidamiento de sub-workflows (la raíz es el nivel 1)
+const MAX_SUBWORKFLOW_DEPTH: usize = 8;
 
 /// Convierte el payload de un panic capturado en un `WorkflowError`.
 fn panic_error(
@@ -65,6 +69,52 @@ pub struct WorkflowExecutor {
     index: GraphIndex,
     schemas: CompiledSchemas,
     observer: Option<Arc<dyn ExecutionObserver>>,
+    /// Executors hijos, uno por nodo `kind: "subworkflow"`, resueltos y
+    /// validados al construir (la construcción falla si un nombre no existe,
+    /// hay un ciclo o se supera la profundidad máxima)
+    subworkflows: HashMap<NodeId, WorkflowExecutor>,
+}
+
+/// Construcción de un [`WorkflowExecutor`] con dependencias opcionales:
+/// secretos para perfiles inline y un [`WorkflowRegistry`] para resolver
+/// nodos `kind: "subworkflow"` compartidos entre documentos.
+pub struct WorkflowExecutorBuilder<'s> {
+    workflow: WorkflowDefinition,
+    registry: Arc<TaskRegistry>,
+    secrets: &'s dyn SecretProvider,
+    workflows: Option<Arc<WorkflowRegistry>>,
+}
+
+impl<'s> WorkflowExecutorBuilder<'s> {
+    /// Provider de secretos para los `{"$secret": "X"}` de perfiles inline
+    /// (default: variables de entorno)
+    pub fn secrets<'n>(self, secrets: &'n dyn SecretProvider) -> WorkflowExecutorBuilder<'n> {
+        WorkflowExecutorBuilder {
+            workflow: self.workflow,
+            registry: self.registry,
+            secrets,
+            workflows: self.workflows,
+        }
+    }
+
+    /// Registro compartido de sub-workflows. La sección `workflows` inline
+    /// del documento tiene precedencia sobre este registro.
+    pub fn workflows(mut self, workflows: Arc<WorkflowRegistry>) -> Self {
+        self.workflows = Some(workflows);
+        self
+    }
+
+    /// Construye el executor (validación estructural, tareas registradas,
+    /// schemas precompilados y sub-workflows resueltos recursivamente)
+    pub fn build(self) -> Result<WorkflowExecutor, Vec<WorkflowError>> {
+        WorkflowExecutor::build_internal(
+            self.workflow,
+            self.registry,
+            self.secrets,
+            self.workflows.as_deref(),
+            &mut Vec::new(),
+        )
+    }
 }
 
 /// Política de ejecución de una invocación de tarea (nodo task o elemento
@@ -93,8 +143,36 @@ impl WorkflowExecutor {
     pub fn new_with_secrets(
         workflow: WorkflowDefinition,
         registry: Arc<TaskRegistry>,
-        secrets: &dyn crate::secret::SecretProvider,
+        secrets: &dyn SecretProvider,
     ) -> Result<Self, Vec<WorkflowError>> {
+        Self::build_internal(workflow, registry, secrets, None, &mut Vec::new())
+    }
+
+    /// Constructor con dependencias opcionales (secretos, registro de
+    /// sub-workflows). Ver [`WorkflowExecutorBuilder`].
+    pub fn builder(
+        workflow: WorkflowDefinition,
+        registry: Arc<TaskRegistry>,
+    ) -> WorkflowExecutorBuilder<'static> {
+        WorkflowExecutorBuilder {
+            workflow,
+            registry,
+            secrets: &crate::secret::EnvSecrets,
+            workflows: None,
+        }
+    }
+
+    fn build_internal(
+        workflow: WorkflowDefinition,
+        registry: Arc<TaskRegistry>,
+        secrets: &dyn SecretProvider,
+        shared: Option<&WorkflowRegistry>,
+        ancestry: &mut Vec<String>,
+    ) -> Result<Self, Vec<WorkflowError>> {
+        // Los hijos se construyen con el registry original: los perfiles
+        // inline de un documento son locales a ese documento
+        let original_registry = Arc::clone(&registry);
+
         // Los perfiles inline viven en una copia scoped: el registry
         // compartido no se contamina con definiciones locales del workflow
         let registry = if workflow.tasks.is_empty() {
@@ -116,20 +194,122 @@ impl WorkflowExecutor {
         crate::validation::validate_tasks(&workflow, &registry)?;
         let schemas = CompiledSchemas::build(&workflow, &registry)?;
         let index = GraphIndex::build(&workflow);
+
+        // Resolver los nodos subworkflow: inline primero, registro después.
+        // Cada hijo se construye (y valida) recursivamente aquí, de modo que
+        // un nombre inexistente, un ciclo o un hijo inválido fallan en la
+        // construcción del padre, nunca en runtime.
+        let mut subworkflows = HashMap::new();
+        let mut errors: Vec<WorkflowError> = Vec::new();
+        let sub_nodes: Vec<(&NodeId, &SubworkflowNode)> = workflow
+            .nodes
+            .iter()
+            .filter_map(|node| match &node.kind {
+                NodeKind::Subworkflow(sub) => Some((&node.id, sub)),
+                _ => None,
+            })
+            .collect();
+        if !sub_nodes.is_empty() {
+            if ancestry.len() + 1 >= MAX_SUBWORKFLOW_DEPTH {
+                errors.push(WorkflowError::new(
+                    "SUBWORKFLOW_DEPTH_EXCEEDED",
+                    format!(
+                        "El workflow '{}' anida sub-workflows más allá de la \
+                         profundidad máxima ({MAX_SUBWORKFLOW_DEPTH} niveles)",
+                        workflow.name
+                    ),
+                ));
+            } else {
+                ancestry.push(workflow.name.clone());
+                for (node_id, sub) in sub_nodes {
+                    if ancestry.contains(&sub.workflow) {
+                        errors.push(
+                            WorkflowError::new(
+                                "SUBWORKFLOW_CYCLE",
+                                format!(
+                                    "El nodo '{}' referencia el workflow '{}', que ya está \
+                                     en la cadena de ejecución ({})",
+                                    node_id,
+                                    sub.workflow,
+                                    ancestry.join(" → ")
+                                ),
+                            )
+                            .with_source_task(node_id.to_string()),
+                        );
+                        continue;
+                    }
+                    let definition = workflow
+                        .workflows
+                        .iter()
+                        .find(|w| w.name == sub.workflow)
+                        .cloned()
+                        .or_else(|| {
+                            shared
+                                .and_then(|s| s.get(&sub.workflow))
+                                .map(|w| (*w).clone())
+                        });
+                    let Some(definition) = definition else {
+                        errors.push(
+                            WorkflowError::new(
+                                "SUBWORKFLOW_NOT_FOUND",
+                                format!(
+                                    "El nodo '{}' referencia el workflow '{}', que no está en \
+                                     la sección `workflows` del documento ni en el registro",
+                                    node_id, sub.workflow
+                                ),
+                            )
+                            .with_source_task(node_id.to_string()),
+                        );
+                        continue;
+                    };
+                    match Self::build_internal(
+                        definition,
+                        Arc::clone(&original_registry),
+                        secrets,
+                        shared,
+                        ancestry,
+                    ) {
+                        Ok(child) => {
+                            subworkflows.insert(node_id.clone(), child);
+                        }
+                        Err(child_errors) => {
+                            errors.extend(child_errors.into_iter().map(|mut e| {
+                                e.message =
+                                    format!("en el sub-workflow '{}': {}", sub.workflow, e.message);
+                                e
+                            }));
+                        }
+                    }
+                }
+                ancestry.pop();
+            }
+        }
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
         Ok(Self {
             workflow,
             registry,
             index,
             schemas,
             observer: None,
+            subworkflows,
         })
     }
 
     /// Registra un observer que recibirá los eventos de cada ejecución
-    /// ([`crate::observe::ExecutionEvent`]).
+    /// ([`crate::observe::ExecutionEvent`]), incluidas las de sub-workflows.
     pub fn with_observer(mut self, observer: Arc<dyn ExecutionObserver>) -> Self {
-        self.observer = Some(observer);
+        self.set_observer(observer);
         self
+    }
+
+    fn set_observer(&mut self, observer: Arc<dyn ExecutionObserver>) {
+        for child in self.subworkflows.values_mut() {
+            child.set_observer(Arc::clone(&observer));
+        }
+        self.observer = Some(observer);
     }
 
     /// Emite un evento al observer, si hay uno registrado
@@ -137,6 +317,7 @@ impl WorkflowExecutor {
         if let Some(observer) = &self.observer {
             observer.on_event(&ExecutionEvent {
                 execution_id: ctx.execution_id().to_string(),
+                parent_execution_id: ctx.parent_execution_id().map(str::to_string),
                 seq: ctx.next_event_seq(),
                 elapsed_ms: ctx.elapsed().as_millis() as u64,
                 kind,
@@ -147,13 +328,25 @@ impl WorkflowExecutor {
     /// Ejecuta el workflow hasta terminar o fallar (run-to-completion).
     pub async fn run(&self, trigger: WorkflowData) -> WorkflowResult {
         let ctx = WorkflowContext::new(&self.workflow, trigger.0.clone());
+        let result = self.run_with_ctx(trigger, &ctx).await;
+        // Solo la ejecución raíz limpia los blobs: los sub-workflows
+        // comparten este store y sus referencias pueden cruzar la frontera
+        if let Err(e) = ctx.blobs().cleanup().await {
+            warn!(code = %e.code, message = %e.message, "No se pudieron limpiar los blobs");
+        }
+        result
+    }
+
+    /// Cuerpo común de una ejecución (raíz o sub-workflow): eventos de
+    /// inicio/fin alrededor de `run_inner`, sin limpieza de blobs.
+    async fn run_with_ctx(&self, trigger: WorkflowData, ctx: &WorkflowContext) -> WorkflowResult {
         info!(
             execution_id = %ctx.execution_id(),
             name = %self.workflow.name,
             "Iniciando ejecución de workflow"
         );
         self.emit(
-            &ctx,
+            ctx,
             EventKind::WorkflowStarted {
                 workflow: json!({
                     "id": self.workflow.id,
@@ -164,21 +357,18 @@ impl WorkflowExecutor {
             },
         );
 
-        let result = self.run_inner(trigger, &ctx).await;
-        if let Err(e) = ctx.blobs().cleanup().await {
-            warn!(code = %e.code, message = %e.message, "No se pudieron limpiar los blobs");
-        }
+        let result = self.run_inner(trigger, ctx).await;
         let duration_ms = ctx.elapsed().as_millis() as u64;
         match &result {
             Ok(output) => self.emit(
-                &ctx,
+                ctx,
                 EventKind::WorkflowCompleted {
                     output: output.0.clone(),
                     duration_ms,
                 },
             ),
             Err(error) => self.emit(
-                &ctx,
+                ctx,
                 EventKind::WorkflowFailed {
                     error: error.clone(),
                     duration_ms,
@@ -372,7 +562,11 @@ impl WorkflowExecutor {
                         .await
                 }
 
-                NodeKind::Subworkflow(_) => unreachable!("la validación rechaza subworkflow"),
+                NodeKind::Subworkflow(sub) => {
+                    let result = self.run_subworkflow(node, sub, carried, ctx).await;
+                    self.after_task_result(node_id, result, node_started, ctx, state)
+                        .await
+                }
             }
         })
     }
@@ -497,6 +691,48 @@ impl WorkflowExecutor {
             ctx,
         )
         .await
+    }
+
+    /// Ejecuta un nodo subworkflow: resuelve su input, lo entrega como
+    /// trigger del hijo y devuelve el output final del hijo. El error del
+    /// hijo (incluido `TASK_PANIC`) sube tal cual: `after_task_result` lo
+    /// rutea por las aristas `on: error` / `on: panic` del nodo.
+    async fn run_subworkflow(
+        &self,
+        node: &Node,
+        sub: &SubworkflowNode,
+        carried: Arc<Value>,
+        ctx: &WorkflowContext,
+    ) -> Result<Value, WorkflowError> {
+        let child = self
+            .subworkflows
+            .get(&node.id)
+            .expect("resuelto al construir el executor");
+
+        let input = match &sub.input {
+            Some(mapping_def) => ctx
+                .with_state(|s| mapping::resolve(mapping_def, s))
+                .map_err(|e| e.with_source_task(node.id.to_string()))?,
+            None => Arc::unwrap_or_clone(carried),
+        };
+
+        let child_ctx = WorkflowContext::child_of(&child.workflow, input.clone(), ctx);
+        debug!(
+            node_id = %node.id,
+            child = %child.workflow.name,
+            child_execution_id = %child_ctx.execution_id(),
+            "Ejecutando sub-workflow"
+        );
+        child
+            .run_with_ctx(WorkflowData(input), &child_ctx)
+            .await
+            .map(|data| data.0)
+            .map_err(|mut err| {
+                if err.source_task.is_none() {
+                    err.source_task = Some(node.id.to_string());
+                }
+                err
+            })
     }
 
     /// Invoca una tarea con validación de schemas, timeout y reintentos.

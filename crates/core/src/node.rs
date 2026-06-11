@@ -58,14 +58,22 @@ pub enum NodeKind {
     Foreach(foreach::ForeachNode),
     /// Nodo de control de flujo (exclusive/parallel/join)
     Gateway(gateway::GatewayNode),
-    /// Reservado por la spec 1.0; la validación lo rechaza como "no soportado aún"
+    /// Nodo que ejecuta otro workflow como si fuera una tarea
     Subworkflow(SubworkflowNode),
 }
 
-/// Placeholder del kind reservado `subworkflow`. Acepta cualquier contenido
-/// para que la deserialización no falle, pero la validación del grafo lo rechaza.
+/// Nodo que ejecuta otro workflow: el `input` resuelto (o el token del
+/// predecesor) se convierte en el trigger del hijo y el output final del
+/// hijo es el output del nodo. Las tres salidas ruteables aplican: un fallo
+/// del hijo rutea por `on: error` y un panic dentro del hijo por `on: panic`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubworkflowNode {
-    #[serde(flatten)]
-    pub reserved: serde_json::Map<String, serde_json::Value>,
+    /// Nombre del workflow hijo. Se resuelve primero contra la sección
+    /// `workflows` del documento y después contra el `WorkflowRegistry`
+    /// compartido del executor.
+    pub workflow: String,
+    /// Mapping del trigger del hijo (reglas `$.` de los inputs);
+    /// sin `input`, el hijo recibe el output del predecesor
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input: Option<serde_json::Value>,
 }

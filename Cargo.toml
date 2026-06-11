@@ -17,6 +17,7 @@ workflow-forge-ext-tabular = { path = "crates/extensions/tabular", version = "0.
 workflow-forge-ext-sftp = { path = "crates/extensions/sftp", version = "0.1.0" }
 
 async-trait = "0.1"
+chrono = { version = "0.4", default-features = false, features = ["std", "alloc"] }
 futures = "0.3"
 jsonpath-rust = "1.0.4"
 jsonschema = "0.46 "
