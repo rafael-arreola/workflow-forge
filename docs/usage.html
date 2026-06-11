@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Forge — Manual de Referencia y Guía de Uso</title>
+    <!-- Tailwind CSS v4 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- PrismJS Dark Theme & JS CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <!-- Mermaid.js for diagrams -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            flowchart: { useWidth: true, htmlLabels: true, curve: 'basis' },
+            securityLevel: 'loose'
+        });
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased selection:bg-indigo-500 selection:text-white">
+
+    <!-- Header / Navbar -->
+    <header class="sticky top-0 z-50 flex items-center justify-between border-b border-slate-800 bg-slate-950/80 px-6 py-4 backdrop-blur-md">
+        <div class="flex items-center space-x-3">
+            <a href="index.html" class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 font-black text-white shadow-lg shadow-indigo-500/20 hover:scale-105 transition-transform">
+                WF
+            </a>
+            <div>
+                <span class="text-lg font-bold tracking-tight text-white">Workflow Forge</span>
+                <span class="ml-2 rounded-full bg-indigo-500/10 px-2 py-0.5 text-xs font-semibold text-indigo-400 border border-indigo-500/20">Manual de Desarrollo</span>
+            </div>
+        </div>
+        <div class="flex items-center space-x-4">
+            <a href="index.html" class="text-sm font-medium text-slate-400 hover:text-white transition-colors">
+                Portal Principal
+            </a>
+            <span class="text-slate-700">|</span>
+            <a href="architecture.html" class="text-sm font-medium text-slate-400 hover:text-white transition-colors">
+                Guía de Arquitectura
+            </a>
+            <span class="text-slate-700">|</span>
+            <a href="infrastructure.html" class="text-sm font-medium text-slate-400 hover:text-white transition-colors">
+                Manual de Infraestructura
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Container Grid -->
+    <div class="flex min-h-[calc(100vh-73px)]">
+
+        <!-- Left Sidebar Navigation -->
+        <aside class="fixed top-[73px] bottom-0 left-0 hidden w-64 overflow-y-auto border-r border-slate-800 bg-slate-950 p-6 lg:block">
+            <nav class="space-y-6">
+                <div>
+                    <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Introducción</h3>
+                    <ul class="mt-3 space-y-2 text-sm">
+                        <li><a href="#conceptos-fond" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Arquitectura y Filosofía</a></li>
+                        <li><a href="#contexto" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Contexto y JSONPath</a></li>
+                        <li><a href="#anatomy" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Anatomía del JSON</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Especificación DSL</h3>
+                    <ul class="mt-3 space-y-2 text-sm">
+                        <li><a href="#nodos-start-end" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Nodos Start y End</a></li>
+                        <li><a href="#nodos-task" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Nodos Task (Resiliencia)</a></li>
+                        <li><a href="#nodos-foreach" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Iterador Foreach</a></li>
+                        <li><a href="#nodos-gateway" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Gateways y Sincronía</a></li>
+                        <li><a href="#nodos-subworkflows" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Subworkflows</a></li>
+                        <li><a href="#aristas" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Aristas y Desastres</a></li>
+                        <li><a href="#condiciones" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Motor de Condiciones</a></li>
+                        <li><a href="#perfiles" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Perfiles y Secretos</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Extensiones e Integración</h3>
+                    <ul class="mt-3 space-y-2 text-sm">
+                        <li><a href="#ext-data" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">data — Datos y Transformaciones</a></li>
+                        <li><a href="#ext-http" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">http — Conectividad de Red</a></li>
+                        <li><a href="#integracion-rust" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Guía de Integración (Rust)</a></li>
+                        <li><a href="#resolucion-problemas" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Resolución de Problemas</a></li>
+                    </ul>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 px-6 py-10 lg:ml-64 lg:px-12 max-w-5xl overflow-hidden">
+
+            <div class="mb-12 border-b border-slate-850 pb-8">
+                <h1 class="bg-gradient-to-r from-white via-slate-200 to-indigo-400 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent sm:text-5xl leading-tight">
+                    Manual de Referencia Absoluta (DSL v1.0)
+                </h1>
+                <p class="mt-4 text-lg text-slate-400 leading-relaxed">
+                    Guía de ingeniería exhaustiva para diseñar, estructurar, implementar y ejecutar workflows declarativos e híbridos de alta disponibilidad en Workflow Forge.
+                </p>
+            </div>
+
+            <!-- 1. ARQUITECTURA Y FILOSOFÍA -->
+            <section id="conceptos-fond" class="scroll-mt-24 space-y-6">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">1. Arquitectura y Filosofía del Sistema</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    <code>workflow-forge</code> es un motor de orquestación de workflows declarativos e híbridos basado en un Grafo Dirigido Acíclico (DAG) y ejecutado de manera asíncrona sobre el runtime de Tokio en Rust. Su diseño se rige por tres principios inquebrantables:
+                </p>
+
+                <div class="space-y-4">
+                    <div class="flex items-start space-x-3">
+                        <div class="mt-1 flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-500/10 font-bold text-indigo-400 border border-indigo-500/20 text-xs">1</div>
+                        <p class="text-slate-300 text-sm leading-relaxed"><strong class="text-white">Aislamiento Estricto de Datos:</strong> El flujo de datos no se manipula mediante código imperativo arbitrario; en su lugar, se gestiona a través de mappings JSONPath inmutables aplicados sobre un documento de estado compartido de forma concurrente.</p>
+                    </div>
+                    <div class="flex items-start space-x-3">
+                        <div class="mt-1 flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-500/10 font-bold text-indigo-400 border border-indigo-500/20 text-xs">2</div>
+                        <p class="text-slate-300 text-sm leading-relaxed"><strong class="text-white">Desacoplamiento de Carga Útil (Mecánica de Blobs):</strong> Los payloads binarios pesados (archivos CSV, audios, imágenes) nunca viajan "inline" en el JSON de contexto. En su lugar, viajan por referencia mediante identificadores hash estables basados en la especificación <code>$blob</code>. El ciclo de vida de estos archivos está atado a la ejecución y se recolecta automáticamente al terminar el flujo.</p>
+                    </div>
+                    <div class="flex items-start space-x-3">
+                        <div class="mt-1 flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-500/10 font-bold text-indigo-400 border border-indigo-500/20 text-xs">3</div>
+                        <p class="text-slate-300 text-sm leading-relaxed"><strong class="text-white">Resiliencia Defensiva Multi-Frontera:</strong> El motor encapsula fallas de red mediante políticas de reintento con exponencial backoff y jitter, y aísla pánicos de software de extensiones mediante mecanismos <code>catch_unwind</code>, reconduciendo la ejecución por aristas alternativas de error sin colapsar la infraestructura principal.</p>
+                    </div>
+                </div>
+
+                <div class="flex justify-center my-6 bg-slate-900 p-6 rounded-xl border border-slate-800">
+                    <div class="mermaid">
+graph TD
+    subgraph WorkflowContext (Estado Compartido Concurrentemente)
+        Trigger[$.trigger]
+        Nodes[$.nodes.*.output]
+        Errors[$.nodes.*.error]
+        Metadata[$.workflow]
+    end
+
+    subgraph WorkflowExecutor (Motor de Ejecución)
+        Start[Start Node] -->|BFS Reachability / Kahn's Cycle Check| Run{run_inner}
+        Run -->|execute_from| Task[Task Node]
+        Run -->|run_foreach| Foreach[Foreach Node]
+        Run -->|run_gateway| Gateway[Gateway Node]
+
+        Task -->|mapping::resolve| Input[Input Payload]
+        Task -->|execute_with_policy| Invocation[Task Execution]
+        Invocation -->|Success| Complete[NodeCompleted Event]
+        Invocation -->|Fail / Timeout| ErrorBoundary{on: error / panic}
+    end
+
+    subgraph BlobStore (Almacenamiento Temporal File-Backed)
+        TempDir[Temp Directory]
+        BlobRef[Blob Reference: $blob]
+    end
+
+    WorkflowContext -->|Lectura JSONPath| Input
+    BlobStore -->|Streaming por Referencia| Invocation
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. CONTEXTO Y JSONPATH -->
+            <section id="contexto" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">2. El Documento de Estado y JSONPath</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    El <code>WorkflowContext</code> mantiene en memoria el estado completo del workflow mediante un cerrojo de lectura/escritura (<code>RwLock&lt;serde_json::Value&gt;</code>). Esto permite que múltiples ramas paralelas se ejecuten de forma concurrente sin condiciones de carrera.
+                </p>
+
+                <h3 class="text-xl font-semibold text-indigo-400">Anatomía del Contexto</h3>
+                <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-sm">
+                    <pre><code class="language-json">{
+  "trigger": {
+    "origen": "carga_manual",
+    "archivo_id": "01J0A1B2C3...UUIDv7"
+  },
+  "workflow": {
+    "id": "wf_procesar_ventas",
+    "name": "Pipeline de Ventas Diarias",
+    "version": "1.0.0",
+    "execution_id": "01H9Y2K3...UUIDv7",
+    "parent_execution_id": null
+  },
+  "nodes": {}
+}</code></pre>
+                </div>
+
+                <h3 class="text-xl font-semibold text-slate-200">El DSL de Enrutamiento de Datos</h3>
+                <p class="text-slate-300 text-sm leading-relaxed">
+                    Para mapear variables dinámicas, se utiliza el motor de JSONPath con las siguientes reglas sintácticas estrictas:
+                </p>
+                <ul class="list-disc list-inside text-slate-400 text-sm space-y-2 leading-relaxed">
+                    <li><code class="text-indigo-300">$.trigger</code>: Accede a los datos proporcionados durante el arranque del workflow.</li>
+                    <li><code class="text-indigo-300">$.nodes.&lt;node_id&gt;.output</code>: Accede al resultado exitoso producido por un nodo específico que ya ha finalizado. Ejemplo: <code class="text-indigo-400">$.nodes.obtener_tasas.output.body.rates.MXN</code>.</li>
+                    <li><code class="text-indigo-300">$.nodes.&lt;node_id&gt;.error</code>: Accede al objeto de error estructurado generado por un nodo fallido, si y solo si la ejecución continuó a través de una arista <code class="text-indigo-400">on: error</code>.</li>
+                    <li><code class="text-indigo-300">$$.</code> (Escape): Permite introducir cadenas literales que inician con <code class="text-indigo-400">$.</code>. Por ejemplo, <code class="text-indigo-400">"$$.propiedad"</code> se resolverá exactamente como el string <code class="text-indigo-400">"$.propiedad"</code> sin ser interpretado.</li>
+                </ul>
+            </section>
+
+            <!-- 3. JSON ANATOMY -->
+            <section id="anatomy" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">3. Anatomía del JSON del Workflow</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    Un documento de workflow es un archivo JSON/YAML autónomo. La raíz del documento permite empaquetar no solo el grafo, sino dependencias locales que garantizan la portabilidad del workflow entre entornos:
+                </p>
+
+                <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-sm">
+                    <pre><code class="language-json">{
+  "spec": "1.0",
+  "id": "mi_id_unico_opcional",
+  "name": "Nombre de la Orquestación",
+  "version": "1.0.0",
+  "tasks": [],
+  "workflows": [],
+  "nodes": [],
+  "edges": []
+}</code></pre>
+                </div>
+
+                <div class="overflow-x-auto rounded-lg border border-slate-800 mt-4">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-slate-900 text-slate-300">
+                                <th class="p-4 font-semibold border-b border-slate-800">Clave Raíz</th>
+                                <th class="p-4 font-semibold border-b border-slate-800">Tipo</th>
+                                <th class="p-4 font-semibold border-b border-slate-800">Obligatorio</th>
+                                <th class="p-4 font-semibold border-b border-slate-800">Descripción Técnica</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-850">
+                            <tr>
+                                <td class="p-4 font-mono text-indigo-400">spec</td>
+                                <td class="p-4 text-slate-400">string</td>
+                                <td class="p-4 text-emerald-500 font-semibold">Sí</td>
+                                <td class="p-4 text-slate-300">La versión de la especificación del esquema. Debe establecerse en <code class="text-indigo-400">"1.0"</code>.</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-mono text-indigo-400">name</td>
+                                <td class="p-4 text-slate-400">string</td>
+                                <td class="p-4 text-emerald-500 font-semibold">Sí</td>
+                                <td class="p-4 text-slate-300">Identificador único del workflow. Utilizado para registros y llamadas como subworkflow.</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-mono text-indigo-400">version</td>
+                                <td class="p-4 text-slate-400">string</td>
+                                <td class="p-4 text-emerald-500 font-semibold">Sí</td>
+                                <td class="p-4 text-slate-300">Versión semántica del workflow.</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-mono text-indigo-400">tasks</td>
+                                <td class="p-4 text-slate-400">array</td>
+                                <td class="p-4 text-slate-500">No</td>
+                                <td class="p-4 text-slate-300">Colección de perfiles de tarea locales (inline), aislando sus definiciones del registry global.</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-mono text-indigo-400">workflows</td>
+                                <td class="p-4 text-slate-400">array</td>
+                                <td class="p-4 text-slate-500">No</td>
+                                <td class="p-4 text-slate-300">Colección de sub-workflows inline, estructurando componentes autónomos.</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-mono text-indigo-400">nodes</td>
+                                <td class="p-4 text-slate-400">array</td>
+                                <td class="p-4 text-emerald-500 font-semibold">Sí</td>
+                                <td class="p-4 text-slate-300">Grafo de nodos de procesamiento. Cada uno exige un ID y un <code class="text-indigo-300">kind</code> único.</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-mono text-indigo-400">edges</td>
+                                <td class="p-4 text-slate-400">array</td>
+                                <td class="p-4 text-emerald-500 font-semibold">Sí</td>
+                                <td class="p-4 text-slate-300">Grafo de conexiones dirigidas. Permite configurar control de errores y pánicos.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 4. NODES START END -->
+            <section id="nodos-start-end" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">4. Nodos de Inicio y Fin (`start` / `end`)</h2>
+
+                <h3 class="text-2xl font-semibold text-white">4.1 Nodo `start`</h3>
+                <p class="text-slate-300 leading-relaxed text-sm">
+                    Establece el punto de arranque del flujo y precompila validadores del trigger:
+                </p>
+                <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-sm">
+                    <pre><code class="language-json">{
+  "id": "start",
+  "kind": "start",
+  "schema": {
+    "type": "object",
+    "required": ["ruta_csv"],
+    "properties": { "ruta_csv": { "type": "string" } }
+  },
+  "defaults": { "ambiente": "produccion" }
+}</code></pre>
+                </div>
+
+                <h3 class="text-2xl font-semibold text-white">4.2 Nodo `end`</h3>
+                <p class="text-slate-300 leading-relaxed text-sm">
+                    Representa la terminación del flujo. Permite mapear y estructurar el output retornado al cliente:
+                </p>
+                <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-sm">
+                    <pre><code class="language-json">{
+  "id": "fin_exitoso",
+  "kind": "end",
+  "status": "success",
+  "output": {
+    "registros_procesados": "$.nodes.procesar_lote.output.ok",
+    "duracion_total_ms": "$.workflow.execution_id"
+  },
+  "schema": {
+    "type": "object",
+    "required": ["registros_procesados"]
+  }
+}</code></pre>
+                </div>
+            </section>
+
+            <!-- 5. NODES TASK -->
+            <section id="nodos-task" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">5. Nodos de Tarea (`task`)</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    Invocan extensiones físicas registradas o perfiles de configuración locales, proporcionando políticas de resiliencia ante errores de red o timeouts:
+                </p>
+
+                <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-sm">
+                    <pre><code class="language-json">{
+  "id": "descargar_archivo",
+  "kind": "task",
+  "task": "http.request",
+  "input": {
+    "url": "$.trigger.ruta_csv",
+    "method": "GET"
+  },
+  "timeout_ms": 30000,
+  "retry": {
+    "max": 3,
+    "backoff": "exponential",
+    "initial_ms": 1000
+  }
+}</code></pre>
+                </div>
+            </section>
+
+            <!-- 6. FOREACH -->
+            <section id="nodos-foreach" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">6. Iterador Foreach</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    Dado que el grafo es acíclico y prohíbe bucles estáticos, para procesar colecciones masivas de datos se emplea un nodo <code>foreach</code>. Este utiliza procesamiento asíncrono optimizado por streams que gestiona concurrencia y rate-limits sin saturar el runtime:
+                </p>
+
+                <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-sm">
+                    <pre><code class="language-json">{
+  "id": "procesar_lote",
+  "kind": "foreach",
+  "task": "http.request",
+  "items": "$.nodes.obtener_usuarios.output.usuarios",
+  "concurrency": 5,
+  "throttle_ms": 200,
+  "on_item_error": "collect"
+}</code></pre>
+                </div>
+
+                <div class="flex justify-center my-6 bg-slate-900 p-6 rounded-xl border border-slate-800">
+                    <div class="mermaid">
+graph TD
+    StartForeach[Start Foreach Node] --> FetchArray[Resolve $.items Array]
+    FetchArray --> LoopInit[Initialize Active Task Pool]
+    LoopInit --> CheckItems{More items to start?}
+
+    CheckItems -- Yes --> Throttle{throttle_ms > 0?}
+    Throttle -- Yes --> Wait[Sleep throttle_ms]
+    Wait --> Spawn[Spawn Async Task in tokio]
+    Throttle -- No --> Spawn
+
+    Spawn --> ActivePool[Pool: Concurrency Limit N]
+    ActivePool --> RunSingle[Execute Task on Item]
+
+    RunSingle --> Success{Task Succeeded?}
+    Success -- Yes --> RegisterSuccess[Record output in success array]
+    Success -- No --> ErrorMode{on_item_error?}
+
+    ErrorMode -- fail --> Abort[Cancel active tasks & trigger Node Error Route]
+    ErrorMode -- collect --> RegisterFailure[Record error details in failed array]
+
+    RegisterSuccess --> CheckCompletion
+    RegisterFailure --> CheckCompletion
+
+    CheckCompletion{Are all spawned tasks complete?}
+    CheckCompletion -- No --> CheckCompletion
+    CheckCompletion -- Yes --> CheckItems
+
+    CheckItems -- No --> Yield[Yield combined JSON: {ok, failed}]
+    Yield --> EndForeach[End Foreach Node]
+
+    style StartForeach fill:#1e293b,stroke:#334155,color:#fff
+    style ActivePool fill:#1e1b4b,stroke:#4f46e5,color:#fff
+    style Abort fill:#7f1d1d,stroke:#f87171,color:#fff
+    style Yield fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#fff
+                    </div>
+                </div>
+            </section>
+
+            <!-- 7. GATEWAYS -->
+            <section id="nodos-gateway" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">7. Gateways y Sincronía</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    Permiten ramificar el control del flujo o unificar múltiples ramas paralelas de manera coordinada.
+                </p>
+
+                <h3 class="text-xl font-semibold text-indigo-400">Gateway Exclusive (Condicional - Or-Split)</h3>
+                <p class="text-slate-300 text-sm leading-relaxed">
+                    Evalúa condiciones de arriba a abajo. Dirige la ejecución únicamente por la arista ganadora:
+                </p>
+                <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-sm">
+                    <pre><code class="language-json">{
+  "id": "evaluar_monto",
+  "kind": "gateway",
+  "gateway": "exclusive",
+  "branches": [
+    {
+      "when": { "path": "$.nodes.obtener_datos.output.monto", "gte": 10000 },
+      "edge": "ruta_alto_valor"
+    },
+    { "else": true, "edge": "ruta_estandar" }
+  ]
+}</code></pre>
+                </div>
+
+                <div class="flex justify-center my-6 bg-slate-900 p-6 rounded-xl border border-slate-800">
+                    <div class="mermaid">
+graph LR
+    PreNode[Predecessor Node] --> Gateway{exclusive-gate}
+    Gateway -- "gte: 10000" --> VipBranch[Ruta Alto Valor]
+    Gateway -- Else --> StandardBranch[Ruta Estándar]
+
+    style Gateway fill:#1e1b4b,stroke:#4f46e5,stroke-width:2px,color:#fff
+    style VipBranch fill:#064e3b,stroke:#34d399,color:#fff
+    style StandardBranch fill:#1e293b,stroke:#475569,color:#fff
+                    </div>
+                </div>
+
+                <h3 class="text-xl font-semibold text-indigo-400">Gateway Join (Barrera de Sincronización - And-Join)</h3>
+                <p class="text-slate-300 text-sm leading-relaxed">
+                    Bloquea el progreso asíncrono y acumula en memoria las llegadas de cada rama. Se desbloquea cuando se completan todas las aristas entrantes declaradas estáticamente. Su salida consolidada contiene las salidas de cada predecesor:
+                </p>
+                <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-sm">
+                    <pre><code class="language-json">{
+  "id": "unir_ramas",
+  "kind": "gateway",
+  "gateway": "join"
+}</code></pre>
+                </div>
+            </section>
+
+            <!-- 8. SUBWORKFLOWS -->
+            <section id="nodos-subworkflows" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">8. Subworkflows</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    Permite la jerarquía y modularidad al invocar otros workflows de forma encapsulada. Comparte dinámicamente el <code>BlobStore</code> de la ejecución raíz para transmitir archivos masivos eficientemente y emite telemetría vinculada mediante el campo <code>parent_execution_id</code>:
+                </p>
+
+                <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-sm">
+                    <pre><code class="language-json">{
+  "id": "ejecutar_limpieza",
+  "kind": "subworkflow",
+  "workflow": "limpieza_temporales_s3",
+  "input": { "directorio_raiz": "$.trigger.ambiente" }
+}</code></pre>
+                </div>
+            </section>
+
+            <!-- 9. ARISTAS -->
+            <section id="aristas" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">9. Aristas y Manejo de Desastres</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    Las aristas conectan nodos lógicamente, pero también definen flujos alternativos ante incidentes para lograrworkflows auto-recuperables:
+                </p>
+
+                <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-sm">
+                    <pre><code class="language-json">[
+  { "from": "start", "to": "descargar_archivo" },
+  { "from": "descargar_archivo", "to": "procesar_datos" },
+  { "from": "descargar_archivo", "on": "error", "to": "notificador_alerta" },
+  { "from": "procesar_datos", "on": "panic", "to": "fin_catastrofico" }
+]</code></pre>
+                </div>
+
+                <ul class="list-disc list-inside text-slate-400 text-sm space-y-2 leading-relaxed">
+                    <li><strong class="text-white">on: "error" (Circuit Breaker):</strong> Si el nodo de origen falla tras todos los reintentos, el motor no detiene la ejecución; serializa el error en <code class="text-indigo-300">$.nodes.ID.error</code> y desvía el control por esta ruta de escape.</li>
+                    <li><strong class="text-white">on: "panic" (Aislamiento de Código):</strong> Captura pánicos de extensiones de terceros mediante <code class="text-indigo-300">catch_unwind</code>. Los pánicos representan bugs y nunca se reintentan, derivándose forzosamente por esta arista protectora.</li>
+                </ul>
+            </section>
+
+            <!-- 10. CONDICIONES -->
+            <section id="condiciones" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">10. Motor de Condiciones</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    El motor de condiciones de gateways exclusivo evalúa un AST declarativo de condiciones en JSON. Esto garantiza seguridad de aislamiento y compilación preventiva.
+                </p>
+
+                <div class="overflow-x-auto rounded-lg border border-slate-800 mt-4">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-slate-900 text-slate-300">
+                                <th class="p-4 font-semibold border-b border-slate-800">Operador</th>
+                                <th class="p-4 font-semibold border-b border-slate-800">Tipo de Operando</th>
+                                <th class="p-4 font-semibold border-b border-slate-800">Descripción de la Evaluación</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-850">
+                            <tr>
+                                <td class="p-4 font-mono text-indigo-400">eq / ne</td>
+                                <td class="p-4 text-slate-400">Cualquier JSON Value</td>
+                                <td class="p-4 text-slate-300">Comprueba igualdad o desigualdad estricta de tipos y valores.</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-mono text-indigo-400">gt / gte / lt / lte</td>
+                                <td class="p-4 text-slate-400">Número o String</td>
+                                <td class="p-4 text-slate-300">Menor/mayor estricto o igual (numérico de punto flotante o lexicográfico).</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-mono text-indigo-400">in</td>
+                                <td class="p-4 text-slate-400">Array de JSON Values</td>
+                                <td class="p-4 text-slate-300">Comprueba si el valor del <code class="text-indigo-300">path</code> está en la lista.</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-mono text-indigo-400">contains</td>
+                                <td class="p-4 text-slate-400">Cualquier JSON Value</td>
+                                <td class="p-4 text-slate-300">Si el valor es un array, busca pertenencia. Si es un string, busca subcadena.</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-mono text-indigo-400">exists / is_null</td>
+                                <td class="p-4 text-slate-400">Booleano</td>
+                                <td class="p-4 text-slate-300">Comprueba si el path dinámico resuelve o si el valor resuelto es explícitamente nulo.</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-mono text-indigo-400">starts_with / ends_with</td>
+                                <td class="p-4 text-slate-400">String</td>
+                                <td class="p-4 text-slate-300">Comprueba coincidencia en los límites de la cadena de caracteres.</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-mono text-indigo-400">matches</td>
+                                <td class="p-4 text-slate-400">String</td>
+                                <td class="p-4 text-slate-300">Cumplimiento de Expresión Regular (compiladas mediante caché global de procesos).</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 11. PERFILES Y SECRETOS -->
+            <section id="perfiles" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">11. Perfiles de Tarea y Secretos</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    Un perfil (<code>TaskProfile</code>) crea una tarea virtual encapsulando credenciales y bindeos. Al registrarse, se interceptan las llaves <code>{"$secret": "KEY"}</code> y se resuelven en memoria utilizando el <code>SecretProvider</code>. Las credenciales sensibles jamás se guardan en el archivo de flujo ni se exponen en telemetría.
+                </p>
+
+                <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-sm">
+                    <pre><code class="language-json">{
+  "tasks": [
+    {
+      "id": "sendgrid.enviar_correo",
+      "extends": "http.request",
+      "bind": {
+        "url": "https://api.sendgrid.com/v3/mail/send",
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "token": { "$secret": "SENDGRID_API_KEY" }
+        },
+        "body": {
+          "subject": "@.asunto",
+          "content": [{ "type": "text/plain", "value": "@.mensaje" }]
+        }
+      },
+      "output": "@.body"
+    }
+  ]
+}</code></pre>
+                </div>
+            </section>
+
+            <!-- 12. EXTENSIONES -->
+            <section id="extensions-params" class="scroll-mt-24 space-y-12 pt-12 border-t border-slate-800">
+                <div class="border-l-4 border-indigo-500 pl-4">
+                    <h2 class="text-3xl font-bold tracking-tight text-white">Parte III: Catálogo Técnico de Extensiones</h2>
+                    <p class="text-sm text-slate-400 mt-1">Esquemas técnicos, parámetros y variables admitidas por las extensiones de la biblioteca.</p>
+                </div>
+
+                <!-- ext-data -->
+                <div id="ext-data" class="space-y-6 scroll-mt-24">
+                    <div class="flex items-center space-x-2 border-b border-slate-800 pb-2">
+                        <span class="rounded bg-indigo-500/10 px-2 py-0.5 text-xs font-bold text-indigo-400 border border-indigo-500/20 font-mono">namespace</span>
+                        <h3 class="text-2xl font-bold text-white">`data.*` — Manipulación de Datos</h3>
+                    </div>
+
+                    <!-- data.transform -->
+                    <div class="bg-slate-900/40 p-6 rounded-xl border border-slate-850 space-y-3">
+                        <h4 class="text-lg font-mono font-bold text-indigo-300">data.transform</h4>
+                        <p class="text-slate-300 text-sm">Aplica un <code>shape</code> de transformación usando JSONPaths locales (prefijo <code>@</code>) relativos al input para reestructurar objetos de manera flexible.</p>
+                    </div>
+
+                    <!-- data.map -->
+                    <div class="bg-slate-900/40 p-6 rounded-xl border border-slate-850 space-y-3">
+                        <h4 class="text-lg font-mono font-bold text-indigo-300">data.map</h4>
+                        <p class="text-slate-300 text-sm">Transforms a collection of JSON items, applying a custom <code>shape</code> template individually to every element in the array.</p>
+                    </div>
+
+                    <!-- data.merge -->
+                    <div class="bg-slate-900/40 p-6 rounded-xl border border-slate-850 space-y-3">
+                        <h4 class="text-lg font-mono font-bold text-indigo-300">data.merge</h4>
+                        <p class="text-slate-300 text-sm">Realiza un deep-merge de estructuras. Especialmente útil después de un nodo <code>join</code> para unificar ramas paralelas.</p>
+                    </div>
+
+                    <!-- data.template -->
+                    <div class="bg-slate-900/40 p-6 rounded-xl border border-slate-850 space-y-3">
+                        <h4 class="text-lg font-mono font-bold text-indigo-300">data.template</h4>
+                        <p class="text-slate-300 text-sm">Motor de reemplazo de strings (ej. <code>Hola ${$.trigger.nombre}, tu id es ${$.trigger.id}</code>).</p>
+                    </div>
+
+                    <!-- data.cast -->
+                    <div class="bg-slate-900/40 p-6 rounded-xl border border-slate-850 space-y-3">
+                        <h4 class="text-lg font-mono font-bold text-indigo-300">data.cast</h4>
+                        <p class="text-slate-300 text-sm">Sanea, formatea y normaliza tipos de datos (Conversión a Fechas ISO, normalización de decimales/miles, textos trim/upper/lower, y políticas <code>on_invalid</code>).</p>
+                    </div>
+                </div>
+
+                <!-- ext-http -->
+                <div id="ext-http" class="space-y-6 scroll-mt-24">
+                    <div class="flex items-center space-x-2 border-b border-slate-800 pb-2">
+                        <span class="rounded bg-indigo-500/10 px-2 py-0.5 text-xs font-bold text-indigo-400 border border-indigo-500/20 font-mono">namespace</span>
+                        <h3 class="text-2xl font-bold text-white">`http.*` — Conectividad de Red</h3>
+                    </div>
+
+                    <!-- http.request -->
+                    <div class="bg-slate-900/40 p-6 rounded-xl border border-slate-850 space-y-3">
+                        <h4 class="text-lg font-mono font-bold text-indigo-300">http.request</h4>
+                        <p class="text-slate-300 text-sm">Cliente HTTP asíncrono basado en <code>reqwest</code>. Soporta streaming nativo; puede transmitir y recibir archivos binarios gigantes vinculándolos a las referencias dinámicas de tipo <code>{"$blob": "..."}</code> del context, permitiendo transferencias masivas sin sobrecargar la memoria RAM.</p>
+
+                        <div class="overflow-x-auto rounded-lg border border-slate-850">
+                            <table class="w-full text-xs text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-900 text-slate-300">
+                                        <th class="p-3 border-b border-slate-850">Campo del Input</th>
+                                        <th class="p-3 border-b border-slate-850">Tipo</th>
+                                        <th class="p-3 border-b border-slate-850">Obligatorio</th>
+                                        <th class="p-3 border-b border-slate-850">Descripción</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-850">
+                                    <tr>
+                                        <td class="p-3 font-mono text-indigo-300">url</td>
+                                        <td class="p-3 text-slate-400">string</td>
+                                        <td class="p-3 text-emerald-400 font-semibold">Sí</td>
+                                        <td class="p-3">Dirección URI de destino.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="p-3 font-mono text-indigo-300">method</td>
+                                        <td class="p-3 text-slate-400">string</td>
+                                        <td class="p-3 text-slate-500">No</td>
+                                        <td class="p-3">Método HTTP. Opciones: <code class="text-indigo-400">"GET"</code>, <code class="text-indigo-400">"POST"</code>, <code class="text-indigo-400">"PUT"</code>, <code class="text-indigo-400">"PATCH"</code>, <code class="text-indigo-400">"DELETE"</code>. Por defecto: <code class="text-indigo-400">"GET"</code>.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="p-3 font-mono text-indigo-300">headers</td>
+                                        <td class="p-3 text-slate-400">object</td>
+                                        <td class="p-3 text-slate-500">No</td>
+                                        <td class="p-3">Pares clave-valor de cabeceras HTTP personalizadas.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="p-3 font-mono text-indigo-300">auth</td>
+                                        <td class="p-3 text-slate-400">object</td>
+                                        <td class="p-3 text-slate-500">No</td>
+                                        <td class="p-3">Credenciales de autenticación. Admite: Basic o Bearer.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="p-3 font-mono text-indigo-300">fail_on_error_status</td>
+                                        <td class="p-3 text-slate-400">boolean</td>
+                                        <td class="p-3 text-slate-500">No</td>
+                                        <td class="p-3">Si es <code class="text-indigo-400">true</code>, respuestas 4xx o 5xx disparan fallas y reintentos. Por defecto: <code class="text-indigo-400">false</code>.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="p-3 font-mono text-indigo-300">response_body</td>
+                                        <td class="p-3 text-slate-400">string</td>
+                                        <td class="p-3 text-slate-500">No</td>
+                                        <td class="p-3">Formato de respuesta: <code class="text-indigo-400">"auto"</code>, <code class="text-indigo-400">"text"</code> o <code class="text-indigo-400">"blob"</code> (streaming de descarga directa a almacenamiento).</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="p-3 font-mono text-indigo-300">body | form | text | body_blob | multipart</td>
+                                        <td class="p-3 text-slate-400">varios</td>
+                                        <td class="p-3 text-slate-500">No</td>
+                                        <td class="p-3"><strong class="text-rose-400">Mutuamente Excluyentes.</strong> Define el cuerpo: JSON, formulario codificado, texto plano, streaming de archivo pesado (body_blob), o matriz multipart.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 13. GUÍA DE INTEGRACIÓN -->
+            <section id="integracion-rust" class="scroll-mt-24 space-y-6 pt-8 border-t border-slate-800">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">12. Guía de Integración Programática (Rust)</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    Para compilar, validar y ejecutar workflows dentro de tu anfitrión de Rust, utiliza el siguiente patrón de integración:
+                </p>
+
+                <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-sm">
+                    <pre><code class="language-rust">use std::sync::Arc;
+use serde_json::json;
+use workflow_forge_core::workflow::WorkflowDefinition;
+use workflow_forge_core::executor::WorkflowExecutor;
+use workflow_forge_core::registry::TaskRegistry;
+use workflow_forge_core::secret::EnvSecrets;
+use workflow_forge_core::task::WorkflowData;
+use workflow_forge_core::observe::InMemoryHistory;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 1. Cargar definición
+    let workflow_json = json!({
+        "spec": "1.0",
+        "name": "flujo_produccion",
+        "version": "1.0.0",
+        "nodes": [
+            { "id": "start", "kind": "start" },
+            { "id": "end", "kind": "end" }
+        ],
+        "edges": [{ "from": "start", "to": "end" }]
+    });
+    let definition: WorkflowDefinition = serde_json::from_value(workflow_json)?;
+
+    // 2. Preparar el TaskRegistry y secretos
+    let registry = Arc::new(TaskRegistry::new());
+    let secrets = EnvSecrets::default();
+
+    // 3. Construir y validar el Executor (Compila esquemas y busca ciclos)
+    let executor = WorkflowExecutor::builder(definition)
+        .registry(registry)
+        .secrets(&secrets)
+        .build()
+        .map_err(|errors| errors.into_iter().next().unwrap())?;
+
+    // 4. Inyectar telemetría e iniciar ejecución asíncrona
+    let history = Arc::new(InMemoryHistory::new());
+    let executor = executor.with_observer(Arc::clone(&history) as Arc<dyn workflow_forge_core::observe::ExecutionObserver>);
+
+    let result = executor.run(WorkflowData(json!({ "tenant_id": "usr_99" }))).await?;
+    println!("Workflow finalizado con éxito: {}", serde_json::to_string(&result.0)?);
+
+    Ok(())
+}</code></pre>
+                </div>
+            </section>
+
+            <!-- 14. RESOLUCIÓN DE PROBLEMAS -->
+            <section id="resolucion-problemas" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">13. Resolución de Problemas y Códigos de Error</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    El motor implementa validación estructural y aserciones en runtime robustas para levantar códigos de error auto-explicativos:
+                </p>
+
+                <h3 class="text-xl font-semibold text-rose-400">Códigos de Validación (Fase de Construcción)</h3>
+                <ul class="list-none space-y-3 text-sm leading-relaxed">
+                    <li class="border-l-2 border-slate-800 pl-4 py-1">
+                        <strong class="text-white font-mono block">UNSUPPORTED_SPEC / DUPLICATE_NODE_ID</strong>
+                        <span class="text-slate-400">La versión <code class="text-indigo-300">spec</code> es inválida o existen nodos con identificadores duplicados en el JSON.</span>
+                    </li>
+                    <li class="border-l-2 border-slate-800 pl-4 py-1">
+                        <strong class="text-white font-mono block">UNKNOWN_NODE_REF / NO_START_NODE / NO_END_NODE</strong>
+                        <span class="text-slate-400">Una arista referencia un nodo inexistente, o el grafo carece de un nodo de inicio/fin.</span>
+                    </li>
+                    <li class="border-l-2 border-slate-800 pl-4 py-1">
+                        <strong class="text-white font-mono block">GATEWAY_BRANCH_WITHOUT_EDGE / GATEWAY_EDGE_WITHOUT_BRANCH</strong>
+                        <span class="text-slate-400">Desconexión lógica en un gateway exclusive entre sus ramas y las etiquetas de aristas adyacentes.</span>
+                    </li>
+                    <li class="border-l-2 border-slate-800 pl-4 py-1">
+                        <strong class="text-white font-mono block">SUBWORKFLOW_CYCLE / SUBWORKFLOW_DEPTH_EXCEEDED</strong>
+                        <span class="text-slate-400">Llamadas recursivas infinitas entre subworkflows o profundidad de anidación mayor a 5 niveles.</span>
+                    </li>
+                    <li class="border-l-2 border-slate-800 pl-4 py-1">
+                        <strong class="text-white font-mono block">CYCLE_DETECTED / UNREACHABLE_NODE</strong>
+                        <span class="text-slate-400">El grafo contiene ciclos (Kahn check) o existen nodos huérfanos que no se pueden conectar desde el start.</span>
+                    </li>
+                </ul>
+
+                <h3 class="text-xl font-semibold text-rose-400">Códigos de Ejecución (Fase de Runtime)</h3>
+                <ul class="list-none space-y-3 text-sm leading-relaxed">
+                    <li class="border-l-2 border-slate-800 pl-4 py-1">
+                        <strong class="text-white font-mono block">MAPPING_PATH_NOT_FOUND / INVALID_JSONPATH</strong>
+                        <span class="text-slate-400">El JSONPath de mapping no resuelve ningún valor dinámico en el estado o tiene errores de sintaxis.</span>
+                    </li>
+                    <li class="border-l-2 border-slate-800 pl-4 py-1">
+                        <strong class="text-white font-mono block">TASK_INPUT_INVALID / TASK_OUTPUT_INVALID</strong>
+                        <span class="text-slate-400">Los payloads dinámicos violan el JSON Schema de entrada o salida registrado en el manifiesto de la tarea.</span>
+                    </li>
+                    <li class="border-l-2 border-slate-800 pl-4 py-1">
+                        <strong class="text-white font-mono block">TASK_TIMEOUT / TASK_PANIC</strong>
+                        <span class="text-slate-400">La ejecución de la tarea superó el tiempo máximo absoluto, o el código interno Rust sufrió un pánico severo.</span>
+                    </li>
+                    <li class="border-l-2 border-slate-800 pl-4 py-1">
+                        <strong class="text-white font-mono block">JOIN_INCOMPLETE</strong>
+                        <span class="text-slate-400">Falla de diseño: El flujo finalizó pero quedaron gateways de tipo join esperando ramas que nunca llegaron debido a un desvío exclusive.</span>
+                    </li>
+                    <li class="border-l-2 border-slate-800 pl-4 py-1">
+                        <strong class="text-white font-mono block">PROFILE_BIND_INVALID / SECRET_NOT_FOUND</strong>
+                        <span class="text-slate-400">El bindeo pre-configurado produce un JSON que la tarea base de origen de la extensión rechaza, o el secreto no está disponible en la infraestructura.</span>
+                    </li>
+                </ul>
+            </section>
+
+            <!-- Footer -->
+            <footer class="mt-20 border-t border-slate-850 py-8 text-center text-sm text-slate-500">
+                <p>&copy; 2026 Workflow Forge. Licenciado bajo MIT &amp; Apache 2.0.</p>
+                <p class="mt-1">Generado por el agente experto en ingeniería de software asíncrono.</p>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Fullscreen Diagram Modal -->
+    <div id="mermaid-modal" class="fixed inset-0 z-50 hidden flex-col items-center justify-center bg-slate-950/95 p-6 backdrop-blur-lg">
+        <button id="close-modal" class="absolute top-6 right-6 rounded-full bg-slate-800 p-3 text-slate-400 hover:bg-slate-700 hover:text-white transition-all cursor-pointer">
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+        <div id="modal-content" class="w-full max-w-5xl max-h-[85vh] overflow-auto flex items-center justify-center bg-slate-900/40 p-8 rounded-2xl border border-slate-800">
+            <!-- Dynamic SVG target -->
+        </div>
+        <p class="mt-4 text-xs text-slate-500">Presiona ESC, haz clic en el botón de cerrar, o haz clic en el fondo para salir de pantalla completa</p>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const checkInterval = setInterval(() => {
+                const diagrams = document.querySelectorAll(".mermaid[data-processed='true']");
+                if (diagrams.length > 0) {
+                    clearInterval(checkInterval);
+                    setupModal();
+                }
+            }, 100);
+
+            function setupModal() {
+                const modal = document.getElementById("mermaid-modal");
+                const modalContent = document.getElementById("modal-content");
+                const closeBtn = document.getElementById("close-modal");
+                const diagrams = document.querySelectorAll(".mermaid");
+
+                diagrams.forEach(diag => {
+                    diag.classList.add("cursor-zoom-in", "hover:opacity-90", "transition-opacity");
+                    diag.setAttribute("title", "Clic para ver en pantalla completa");
+
+                    diag.addEventListener("click", () => {
+                        const svg = diag.querySelector("svg");
+                        if (svg) {
+                            const clone = svg.cloneNode(true);
+                            clone.setAttribute("width", "100%");
+                            clone.setAttribute("height", "100%");
+                            clone.style.maxWidth = "100%";
+                            clone.style.maxHeight = "100%";
+
+                            modalContent.innerHTML = "";
+                            modalContent.appendChild(clone);
+
+                            modal.classList.remove("hidden");
+                            modal.classList.add("flex");
+                            document.body.classList.add("overflow-hidden");
+                        }
+                    });
+                });
+
+                const closeModalFn = () => {
+                    modal.classList.add("hidden");
+                    modal.classList.remove("flex");
+                    document.body.classList.remove("overflow-hidden");
+                    modalContent.innerHTML = "";
+                };
+
+                closeBtn.addEventListener("click", closeModalFn);
+
+                document.addEventListener("keydown", (e) => {
+                    if (e.key === "Escape") {
+                        closeModalFn();
+                    }
+                });
+
+                modal.addEventListener("click", (e) => {
+                    if (e.target === modal) {
+                        closeModalFn();
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

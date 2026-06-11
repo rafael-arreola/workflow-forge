@@ -3,9 +3,9 @@
 //! core, y los inválidos deben fallar en ambos lados.
 
 use serde_json::{Value, json};
+use workflow_forge_core::spec::WorkflowDefinition;
 use workflow_forge_core::task::TaskManifest;
-use workflow_forge_core::validation;
-use workflow_forge_core::workflow::WorkflowDefinition;
+use workflow_forge_core::validate as validation;
 
 fn workflow_validator() -> jsonschema::Validator {
     let schema: Value =
@@ -409,7 +409,7 @@ fn los_perfiles_validan_contra_el_esquema_de_perfil() {
     assert!(errors.is_empty(), "perfil rechazado: {errors:?}");
 
     // El tipo del core deserializa lo que el schema acepta
-    let _: workflow_forge_core::profile::TaskProfile =
+    let _: workflow_forge_core::spec::TaskProfile =
         serde_json::from_value(perfil).expect("el core debe deserializarlo");
 
     assert!(!validator.is_valid(&json!({ "id": "acme.x" })));

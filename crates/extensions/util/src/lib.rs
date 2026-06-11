@@ -10,8 +10,8 @@
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
-use workflow_forge_core::context::WorkflowContext;
-use workflow_forge_core::registry::TaskRegistry;
+use workflow_forge_core::runtime::WorkflowContext;
+use workflow_forge_core::task::TaskRegistry;
 use workflow_forge_core::task::{Task, TaskManifest};
 use workflow_forge_core::task::{WorkflowData, WorkflowResult};
 

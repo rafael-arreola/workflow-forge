@@ -34,22 +34,19 @@ use std::sync::Arc;
 
 pub use workflow_forge_core as core;
 
-use workflow_forge_core::registry::TaskRegistry;
+use workflow_forge_core::task::TaskRegistry;
 
 /// Tipos de uso cotidiano, listos para importar con un solo `use`
 pub mod prelude {
-    pub use workflow_forge_core::context::WorkflowContext;
     pub use workflow_forge_core::error::WorkflowError;
-    pub use workflow_forge_core::executor::WorkflowExecutor;
+    pub use workflow_forge_core::io::secret::{EnvSecrets, SecretProvider};
     pub use workflow_forge_core::observe::{
         EventKind, ExecutionEvent, ExecutionObserver, ExecutionReport, InMemoryHistory,
     };
-    pub use workflow_forge_core::profile::TaskProfile;
-    pub use workflow_forge_core::registry::{TaskRegistry, WorkflowRegistry};
-    pub use workflow_forge_core::secret::{EnvSecrets, SecretProvider};
-    pub use workflow_forge_core::task::{Task, TaskId, TaskManifest};
+    pub use workflow_forge_core::runtime::{WorkflowContext, WorkflowExecutor, WorkflowRegistry};
+    pub use workflow_forge_core::spec::{TaskProfile, WorkflowDefinition};
+    pub use workflow_forge_core::task::{Task, TaskId, TaskManifest, TaskRegistry};
     pub use workflow_forge_core::task::{WorkflowData, WorkflowResult};
-    pub use workflow_forge_core::workflow::WorkflowDefinition;
 }
 
 /// Registra en el registry todas las extensiones habilitadas por features

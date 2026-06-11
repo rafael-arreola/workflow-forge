@@ -7,14 +7,12 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
-use workflow_forge_core::context::WorkflowContext;
 use workflow_forge_core::error::WorkflowError;
-use workflow_forge_core::executor::WorkflowExecutor;
 use workflow_forge_core::observe::{EventKind, ExecutionStatus, InMemoryHistory, NodeStatus};
-use workflow_forge_core::registry::TaskRegistry;
-use workflow_forge_core::task::{Task, TaskManifest};
+use workflow_forge_core::runtime::{WorkflowContext, WorkflowExecutor};
+use workflow_forge_core::spec::WorkflowDefinition;
+use workflow_forge_core::task::{Task, TaskManifest, TaskRegistry};
 use workflow_forge_core::task::{WorkflowData, WorkflowResult};
-use workflow_forge_core::workflow::WorkflowDefinition;
 
 struct EchoTask {
     manifest: TaskManifest,

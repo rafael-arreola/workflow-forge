@@ -155,7 +155,7 @@ async fn workflow_cruzando_extensiones() {
 async fn integracion_cliente_via_perfil_http_preconfigurado() {
     use httpmock::prelude::*;
     use std::collections::HashMap;
-    use workflow_forge::core::secret::SecretProvider;
+    use workflow_forge::core::io::secret::SecretProvider;
 
     struct MapSecrets(HashMap<String, String>);
     impl SecretProvider for MapSecrets {

@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Forge — Core Architecture & Extensibility Guide</title>
+    <!-- Tailwind CSS v4 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- PrismJS Dark Theme & JS CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <!-- Mermaid.js for diagrams -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            flowchart: { useWidth: true, htmlLabels: true, curve: 'basis' },
+            securityLevel: 'loose'
+        });
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased selection:bg-indigo-500 selection:text-white">
+
+    <!-- Header / Navbar -->
+    <header class="sticky top-0 z-50 flex items-center justify-between border-b border-slate-800 bg-slate-950/80 px-6 py-4 backdrop-blur-md">
+        <div class="flex items-center space-x-3">
+            <a href="index.html" class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 font-black text-white shadow-lg shadow-indigo-500/20 hover:scale-105 transition-transform">
+                WF
+            </a>
+            <div>
+                <span class="text-lg font-bold tracking-tight text-white">Workflow Forge</span>
+                <span class="ml-2 rounded-full bg-purple-500/10 px-2 py-0.5 text-xs font-semibold text-purple-400 border border-purple-500/20">Systems Manual</span>
+            </div>
+        </div>
+        <div class="flex items-center space-x-4">
+            <a href="index.html" class="text-sm font-medium text-slate-400 hover:text-white transition-colors">
+                Portal Home
+            </a>
+            <span class="text-slate-700">|</span>
+            <a href="usage.html" class="text-sm font-medium text-slate-400 hover:text-white transition-colors">
+                Developer Manual
+            </a>
+            <span class="text-slate-700">|</span>
+            <a href="infrastructure.html" class="text-sm font-medium text-slate-400 hover:text-white transition-colors">
+                Infrastructure Manual
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Container Grid -->
+    <div class="flex min-h-[calc(100vh-73px)]">
+
+        <!-- Left Sidebar Navigation -->
+        <aside class="fixed top-[73px] bottom-0 left-0 hidden w-64 overflow-y-auto border-r border-slate-800 bg-slate-950 p-6 lg:block">
+            <nav class="space-y-6">
+                <div>
+                    <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Core Architecture</h3>
+                    <ul class="mt-3 space-y-2 text-sm">
+                        <li><a href="#philosophy" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Layering & Workspace</a></li>
+                        <li><a href="#traits" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Traits & Abstractions</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Static Compilation</h3>
+                    <ul class="mt-3 space-y-2 text-sm">
+                        <li><a href="#validation" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">DAG Analysis Engine</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Execution Loop</h3>
+                    <ul class="mt-3 space-y-2 text-sm">
+                        <li><a href="#scheduler" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Tokio Runtime Pool</a></li>
+                        <li><a href="#isolations" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Errors & Panic Routing</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Extensibility</h3>
+                    <ul class="mt-3 space-y-2 text-sm">
+                        <li><a href="#custom-task" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Writing Custom Tasks</a></li>
+                        <li><a href="#embedding" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Embedding in Rust</a></li>
+                    </ul>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 px-6 py-10 lg:ml-64 lg:px-12 max-w-5xl overflow-hidden">
+
+            <div class="mb-12 border-b border-slate-850 pb-8">
+                <h1 class="bg-gradient-to-r from-white via-slate-200 to-indigo-400 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent sm:text-5xl">
+                    Core Architecture & Extensibility
+                </h1>
+                <p class="mt-4 text-lg text-slate-400 leading-relaxed">
+                    A systems-level guide on the internal mechanics of Workflow Forge. Learn how to write patches, create custom tools, optimize the async core, or register plugins.
+                </p>
+            </div>
+
+            <!-- LAYERING -->
+            <section id="philosophy" class="scroll-mt-24 space-y-6">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">1. Workspace Decoupling & Layering</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    Workflow Forge is designed around strict architectural layering. The workspace partitions responsibilities into clean, isolated crates, keeping dependencies modular and highly testable.
+                </p>
+
+                <div class="flex justify-center my-6 bg-slate-900 p-6 rounded-lg border border-slate-800">
+                    <div class="mermaid">
+graph TD
+    Facade[workflow-forge Facade]
+    ExtUtil[util extension]
+    ExtData[data extension]
+    ExtHttp[http extension]
+    ExtTab[tabular extension]
+    ExtSftp[sftp extension]
+    Core[workflow-forge-core]
+
+    Facade --> ExtUtil
+    Facade --> ExtData
+    Facade --> ExtHttp
+    Facade --> ExtTab
+    Facade --> ExtSftp
+
+    ExtUtil --> Core
+    ExtData --> Core
+    ExtHttp --> Core
+    ExtTab --> Core
+    ExtSftp --> Core
+
+    style Facade fill:#4f46e5,stroke:#818cf8,stroke-width:2px,color:#fff
+    style Core fill:#1e1b4b,stroke:#4f46e5,stroke-width:2px,color:#fff
+                    </div>
+                </div>
+
+                <ul class="list-disc list-inside text-slate-300 space-y-3 leading-relaxed text-sm">
+                    <li>
+                        <strong>`crates/core`</strong>: The heart of the system. Contains all spec types, static DAG validation rules, JSONPath mappings, profile compiling, and `BlobStore` interfaces. It is completely isolated and has zero awareness of downstream extensions.
+                    </li>
+                    <li>
+                        <strong>`crates/extensions/*`</strong>: Independent sibling crates. Each crate implements the `Task` trait for a specific namespace, defining its schemas and isolated unit/integration tests.
+                    </li>
+                    <li>
+                        <strong>`crates/forge`</strong>: Facade crate that exposes feature flags (such as `util`, `data`, `http`, `tabular`, `sftp`). This is the primary dependency embedded by hosting applications.
+                    </li>
+                </ul>
+            </section>
+
+            <!-- TRAITS -->
+            <section id="traits" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">2. Traits & System Abstractions</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    Extensibility is managed by a set of core traits. By implementing these traits, developers can customize binary storage, inject environment credentials, or add new tasks.
+                </p>
+
+                <div class="rounded-lg bg-slate-900/60 p-1 border border-slate-800">
+                    <pre><code class="language-rust">use async_trait::async_trait;
+use serde_json::Value;
+
+// 1. Task interface
+#[async_trait]
+pub trait Task: Send + Sync {
+    /// Returns the static manifest of the task (identity, description, schemas)
+    fn manifest(&self) -> &TaskManifest;
+
+    /// Executes the task logic asynchronously
+    async fn execute(&self, ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult;
+}
+
+// 2. Streamed Binary Storage interface
+#[async_trait]
+pub trait BlobStore: Send + Sync {
+    /// Streams binary data into local storage, returning a unique string reference
+    async fn put(&self, name: &str, reader: BoxBlobReader) -> Result<BlobRef, BlobError>;
+
+    /// Streams binary data out of storage using its UUID
+    async fn get(&self, id: &str) -> Result<BoxBlobReader, BlobError>;
+
+    /// Deletes all files associated with the active execution run
+    async fn cleanup(&self) -> Result<(), BlobError>;
+}
+
+// 3. Secrets provider interface
+pub trait SecretsProvider: Send + Sync {
+    /// Resolves sensitive keys (api tokens, private keys) from secure backends
+    fn get_secret(&self, key: &str) -> Option<String>;
+}</code></pre>
+                </div>
+            </section>
+
+            <!-- VALIDATION -->
+            <section id="validation" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">3. Static DAG Validation Engine</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    When a workflow JSON is loaded, the <code class="text-indigo-400">WorkflowExecutor::new</code> constructor compiles and validates its graph structure before running any tasks.
+                </p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                    <div class="bg-slate-900/40 p-6 rounded-xl border border-slate-850 space-y-2">
+                        <h4 class="text-lg font-bold text-white">Algorithm: Depth-First Cycle Checks</h4>
+                        <p class="text-slate-400 text-sm leading-relaxed">
+                            The compiler constructs an adjacency list representation of the edges. It walks the graph using a Depth-First Search (DFS) algorithm with a recursion stack to identify back-edges. If any back-edge is found, compilation is aborted with a <code class="text-rose-400">GraphCycleDetected</code> diagnostic error, protecting the execution loop from infinite loops.
+                        </p>
+                    </div>
+                    <div class="bg-slate-900/40 p-6 rounded-xl border border-slate-850 space-y-2">
+                        <h4 class="text-lg font-bold text-white">Structural Orphan Scanning</h4>
+                        <p class="text-slate-400 text-sm leading-relaxed">
+                            A verification pass walks forward from the <code class="text-indigo-400">start</code> node and backward from all <code class="text-indigo-400">end</code> nodes. Any node left unvisited is marked as an orphan. This catches disconnected steps during design time, raising <code class="text-rose-400">OrphanNodes</code> errors before deployment.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/40 p-6 rounded-xl border border-slate-850 space-y-3 mt-6">
+                    <h4 class="text-lg font-bold text-white">Edge Integrity & Join Constraints</h4>
+                    <p class="text-slate-400 text-sm leading-relaxed">
+                        The compiler validates that all transition arrows connect to declared node IDs. It also checks that:
+                    </p>
+                    <ul class="list-disc list-inside text-slate-400 text-xs space-y-1">
+                        <li><code class="text-indigo-300">Join</code> gateways have at least two incoming paths.</li>
+                        <li>No incoming path to a <code class="text-indigo-300">Join</code> gateway originates from a conditional branch of an <code class="text-indigo-300">exclusive</code> gateway, preventing starved join deadlocks.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- SCHEDULER -->
+            <section id="scheduler" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">4. Async Tokio Scheduler & Execution Loop</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    Once compiled, the engine traverses the validated graph. It walks down concurrent execution paths in parallel using Tokio's async task pool.
+                </p>
+
+                <div class="flex justify-center my-6 bg-slate-900 p-6 rounded-lg border border-slate-800">
+                    <div class="mermaid">
+graph TD
+    Start([1. Start Node]) --> Resolve[2. Resolve Input Mappings]
+    Resolve --> ValidateInput[3. Validate against Input Schema]
+    ValidateInput --> RunTask[4. Run Task Execute]
+    RunTask --> ValidateOutput[5. Validate Output Schema]
+    ValidateOutput --> Publish[6. Publish Output in Context]
+    Publish --> FindNext[7. Traverse Outgoing Edges]
+    FindNext --> End([8. End Node])
+
+    style Start fill:#1e293b,stroke:#334155,color:#fff
+    style End fill:#1e293b,stroke:#334155,color:#fff
+    style RunTask fill:#1e1b4b,stroke:#4f46e5,stroke-width:2px,color:#fff
+                    </div>
+                </div>
+
+                <h4 class="text-lg font-semibold text-slate-200">Execution Phase Pipeline</h4>
+                <ol class="list-decimal list-inside text-slate-400 text-sm space-y-3 leading-relaxed">
+                    <li>
+                        <strong>Input Mapping Evaluation</strong>: Resolves the node's <code class="text-indigo-300">input</code> selectors against the shared execution context, constructing the task's final input JSON object.
+                    </li>
+                    <li>
+                        <strong>Runtime Schema Validation</strong>: Validates the mapped input object against the task's declared <code class="text-indigo-300">input_schema</code>. If validation fails, execution halts immediately.
+                    </li>
+                    <li>
+                        <strong>Task Execution</strong>: Invokes the task's <code class="text-indigo-300">execute</code> method, passing the thread-safe <code class="text-indigo-300">WorkflowContext</code> (which provides access to the BlobStore and SecretsProvider).
+                    </li>
+                    <li>
+                        <strong>Output Validation & Mutation</strong>: Validates the output returned by the task against its <code class="text-indigo-300">output_schema</code>. It then mutates the global context, publishing the result to <code class="text-indigo-300">$.nodes.&lt;id&gt;.output</code> using thread-safe write locks.
+                    </li>
+                    <li>
+                        <strong>Forking & Concurrency Scheduling</strong>: Determines outgoing edges. If multiple paths diverge, it spawns concurrent Tokio task futures using `tokio::spawn` or concurrent join structures to process paths in parallel.
+                    </li>
+                </ol>
+            </section>
+
+            <!-- ISOLATIONS -->
+            <section id="isolations" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">5. Error Handling & Panic Isolation Boundaries</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    In a production orchestrator, custom task failures or panics must not crash the hosting process. Workflow Forge isolates failures at the node boundary:
+                </p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-slate-900/40 p-6 rounded-xl border border-slate-850 space-y-3">
+                        <div class="flex items-center space-x-2">
+                            <span class="h-2 w-2 rounded-full bg-rose-500"></span>
+                            <h4 class="text-lg font-bold text-white">Standard Task Failures</h4>
+                        </div>
+                        <p class="text-slate-400 text-sm leading-relaxed">
+                            If a task returns an `Err(TaskError)` (e.g. timeout, network issue, or failed validation), the engine stops the standard path. If an <code class="text-indigo-300">on: "error"</code> transition is defined on the edge, the executor writes a structured error to <code class="text-indigo-400">$.nodes.&lt;id&gt;.error</code> and routes execution down that path.
+                        </p>
+                    </div>
+                    <div class="bg-slate-900/40 p-6 rounded-xl border border-slate-850 space-y-3">
+                        <div class="flex items-center space-x-2">
+                            <span class="h-2 w-2 rounded-full bg-amber-500"></span>
+                            <h4 class="text-lg font-bold text-white font-semibold">Caught Rust Panics</h4>
+                        </div>
+                        <p class="text-slate-400 text-sm leading-relaxed">
+                            If a task panics (e.g. due to an index out of bounds), the engine catches the panic using <code class="text-indigo-400">FutureExt::catch_unwind</code>. This keeps the hosting process safe. The node is marked as failed, and execution is routed along a declared <code class="text-indigo-300">on: "panic"</code> edge.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- CUSTOM TASK -->
+            <section id="custom-task" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">6. Writing Custom Tasks (Rust Implementation Guide)</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    Custom tasks are implemented in Rust. We recommend using the <code class="text-indigo-400">schemars</code> crate to automatically generate JSON Schema definitions from your Rust structures, ensuring your task parameters remain in sync with your code:
+                </p>
+
+                <div class="rounded-lg bg-slate-900/60 p-1 border border-slate-800">
+                    <pre><code class="language-rust">use workflow_forge::prelude::*;
+use async_trait::async_trait;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+// 1. Declare expected inputs
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RiskInput {
+    pub value_to_check: f64,
+    pub threshold: f64,
+}
+
+// 2. Declare generated outputs
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RiskOutput {
+    pub risk_rating: String,
+    pub above_limit: bool,
+}
+
+// 3. Create task struct
+pub struct RiskScoreTask {
+    manifest: TaskManifest,
+}
+
+impl RiskScoreTask {
+    pub fn new() -> Self {
+        // Automatically compile JSON Schemas from structs
+        let input_schema = schemars::schema_for!(RiskInput);
+        let output_schema = schemars::schema_for!(RiskOutput);
+
+        let manifest = TaskManifest::new(
+            "risk.score",
+            "Evaluate numbers against a custom threshold"
+        )
+        .with_input_schema(serde_json::to_value(input_schema).unwrap())
+        .with_output_schema(serde_json::to_value(output_schema).unwrap());
+
+        Self { manifest }
+    }
+}
+
+// 4. Implement execute logic
+#[async_trait]
+impl Task for RiskScoreTask {
+    fn manifest(&self) -> &TaskManifest {
+        &self.manifest
+    }
+
+    async fn execute(&self, _ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult {
+        // Safe deserialization (payload is already validated against input_schema)
+        let args: RiskInput = serde_json::from_value(input.0)?;
+
+        let above_limit = args.value_to_check > args.threshold;
+        let risk_rating = if above_limit {
+            "critical".to_string()
+        } else {
+            "standard".to_string()
+        };
+
+        let result = RiskOutput { risk_rating, above_limit };
+        Ok(WorkflowData(serde_json::to_value(result)?))
+    }
+}</code></pre>
+                </div>
+            </section>
+
+            <!-- EMBEDDING -->
+            <section id="embedding" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">7. Embedding & Compiling the Engine</h2>
+                <p class="text-slate-300 leading-relaxed">
+                    Once you've implemented your custom tasks, register them with the <code class="text-indigo-400">TaskRegistry</code>, load your workflow JSON, and compile your executor:
+                </p>
+
+                <div class="rounded-lg bg-slate-900/60 p-1 border border-slate-800">
+                    <pre><code class="language-rust">use workflow_forge::prelude::*;
+use std::sync::Arc;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 1. Initialize empty Registry
+    let mut registry = TaskRegistry::new();
+
+    // Register custom tasks
+    registry.register(Arc::new(RiskScoreTask::new()));
+
+    // Register official core extensions
+    workflow_forge_ext_http::register(&mut registry);
+    workflow_forge_ext_data::register(&mut registry);
+
+    // 2. Parse workflow definition from JSON
+    let workflow_json = r#"{
+        "spec": "1.0",
+        "name": "risk-pipeline",
+        "version": "1.0.0",
+        "nodes": [
+            { "id": "start", "kind": "start" },
+            {
+                "id": "risk",
+                "kind": "task",
+                "task": "risk.score",
+                "input": { "value_to_check": 95.0, "threshold": 80.0 }
+            },
+            { "id": "end", "kind": "end" }
+        ],
+        "edges": [
+            { "from": "start", "to": "risk" },
+            { "from": "risk", "to": "end" }
+        ]
+    }"#;
+
+    let definition = serde_json::from_str(workflow_json)?;
+
+    // 3. Compile and validate DAG
+    let executor = WorkflowExecutor::new(definition, registry)
+        .map_err(|errors| format!("Compilation failed: {:?}", errors))?;
+
+    // 4. Run to completion
+    let result = executor.run(WorkflowData(serde_json::json!({}))).await?;
+    println!("Workflow result: {}", result.0);
+
+    Ok(())
+}</code></pre>
+                </div>
+            </section>
+
+            <!-- Footer -->
+            <footer class="mt-20 border-t border-slate-850 py-8 text-center text-sm text-slate-500">
+                <p>&copy; 2026 Workflow Forge. Dual licensed under MIT &amp; Apache 2.0.</p>
+                <p class="mt-1">Generated by expert engineering agent inside Zed Editor.</p>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Fullscreen Diagram Modal -->
+    <div id="mermaid-modal" class="fixed inset-0 z-50 hidden flex-col items-center justify-center bg-slate-950/95 p-6 backdrop-blur-lg">
+        <button id="close-modal" class="absolute top-6 right-6 rounded-full bg-slate-800 p-3 text-slate-400 hover:bg-slate-700 hover:text-white transition-all cursor-pointer">
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+        <div id="modal-content" class="w-full max-w-5xl max-h-[85vh] overflow-auto flex items-center justify-center bg-slate-900/40 p-8 rounded-2xl border border-slate-800">
+            <!-- Dynamic SVG target -->
+        </div>
+        <p class="mt-4 text-xs text-slate-500">Press ESC, click the close button, or click the background to exit fullscreen</p>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const checkInterval = setInterval(() => {
+                const diagrams = document.querySelectorAll(".mermaid[data-processed='true']");
+                if (diagrams.length > 0) {
+                    clearInterval(checkInterval);
+                    setupModal();
+                }
+            }, 100);
+
+            function setupModal() {
+                const modal = document.getElementById("mermaid-modal");
+                const modalContent = document.getElementById("modal-content");
+                const closeBtn = document.getElementById("close-modal");
+                const diagrams = document.querySelectorAll(".mermaid");
+
+                diagrams.forEach(diag => {
+                    diag.classList.add("cursor-zoom-in", "hover:opacity-90", "transition-opacity");
+                    diag.setAttribute("title", "Click to view fullscreen");
+
+                    diag.addEventListener("click", () => {
+                        const svg = diag.querySelector("svg");
+                        if (svg) {
+                            const clone = svg.cloneNode(true);
+                            clone.setAttribute("width", "100%");
+                            clone.setAttribute("height", "100%");
+                            clone.style.maxWidth = "100%";
+                            clone.style.maxHeight = "100%";
+
+                            modalContent.innerHTML = "";
+                            modalContent.appendChild(clone);
+
+                            modal.classList.remove("hidden");
+                            modal.classList.add("flex");
+                            document.body.classList.add("overflow-hidden");
+                        }
+                    });
+                });
+
+                const closeModalFn = () => {
+                    modal.classList.add("hidden");
+                    modal.classList.remove("flex");
+                    document.body.classList.remove("overflow-hidden");
+                    modalContent.innerHTML = "";
+                };
+
+                closeBtn.addEventListener("click", closeModalFn);
+
+                document.addEventListener("keydown", (e) => {
+                    if (e.key === "Escape") {
+                        closeModalFn();
+                    }
+                });
+
+                modal.addEventListener("click", (e) => {
+                    if (e.target === modal) {
+                        closeModalFn();
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

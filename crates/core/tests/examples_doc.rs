@@ -3,8 +3,8 @@
 //! contra la validación estructural del core.
 
 use serde_json::Value;
-use workflow_forge_core::validation;
-use workflow_forge_core::workflow::WorkflowDefinition;
+use workflow_forge_core::spec::WorkflowDefinition;
+use workflow_forge_core::validate as validation;
 
 fn extract_json_blocks(markdown: &str) -> Vec<String> {
     let mut blocks = Vec::new();

@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use workflow_forge_core::executor::WorkflowExecutor;
-use workflow_forge_core::registry::TaskRegistry;
+use workflow_forge_core::runtime::WorkflowExecutor;
+use workflow_forge_core::spec::WorkflowDefinition;
+use workflow_forge_core::task::TaskRegistry;
 use workflow_forge_core::task::WorkflowData;
-use workflow_forge_core::workflow::WorkflowDefinition;
 
 fn registry() -> Arc<TaskRegistry> {
     let registry = Arc::new(TaskRegistry::new());

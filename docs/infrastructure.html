@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Forge — Core Engine Infrastructure & Guts Manual</title>
+    <!-- Tailwind CSS v4 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- PrismJS Dark Theme & JS CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <!-- Mermaid.js for diagrams -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            flowchart: { useWidth: true, htmlLabels: true, curve: 'basis' },
+            securityLevel: 'loose'
+        });
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased selection:bg-indigo-500 selection:text-white">
+
+    <!-- Header / Navbar -->
+    <header class="sticky top-0 z-50 flex items-center justify-between border-b border-slate-800 bg-slate-950/80 px-6 py-4 backdrop-blur-md">
+        <div class="flex items-center space-x-3">
+            <a href="index.html" class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 font-black text-white shadow-lg shadow-indigo-500/20 hover:scale-105 transition-transform">
+                WF
+            </a>
+            <div>
+                <span class="text-lg font-bold tracking-tight text-white">Workflow Forge</span>
+                <span class="ml-2 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-500 border border-amber-500/20">Systems Manual</span>
+            </div>
+        </div>
+        <div class="flex items-center space-x-4">
+            <a href="index.html" class="text-sm font-medium text-slate-400 hover:text-white transition-colors">Portal Home</a>
+            <span class="text-slate-700">|</span>
+            <a href="usage.html" class="text-sm font-medium text-slate-400 hover:text-white transition-colors">Developer Manual</a>
+            <span class="text-slate-700">|</span>
+            <a href="architecture.html" class="text-sm font-medium text-slate-400 hover:text-white transition-colors">Architecture Guide</a>
+        </div>
+    </header>
+
+    <!-- Main Container Grid -->
+    <div class="flex min-h-[calc(100vh-73px)]">
+
+        <!-- Left Sidebar Navigation -->
+        <aside class="fixed top-[73px] bottom-0 left-0 hidden w-64 overflow-y-auto border-r border-slate-800 bg-slate-950 p-6 lg:block">
+            <nav class="space-y-6">
+                <div>
+                    <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Crates & Modules</h3>
+                    <ul class="mt-3 space-y-2 text-sm">
+                        <li><a href="#physical-layout" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Physical Repository Layout</a></li>
+                        <li><a href="#crates-relations" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Crate Relationships</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Engine Guts (Core)</h3>
+                    <ul class="mt-3 space-y-2 text-sm">
+                        <li><a href="#thread-safety" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">State RwLock Mutex</a></li>
+                        <li><a href="#concurrency-engine" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">try_join_all Concurrency</a></li>
+                        <li><a href="#binary-streams" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Blob Storage Streams</a></li>
+                        <li><a href="#component-sequence" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Execution Sequence</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Official Extensions</h3>
+                    <ul class="mt-3 space-y-2 text-sm">
+                        <li><a href="#ext-http-internals" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">http — Reqwest Pipes</a></li>
+                        <li><a href="#ext-data-internals" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">data — Casting Loops</a></li>
+                        <li><a href="#ext-sftp-internals" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">sftp — Blocking Offload</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Error Boundaries</h3>
+                    <ul class="mt-3 space-y-2 text-sm">
+                        <li><a href="#panic-boundaries" class="block rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-all">Panic Isolation Model</a></li>
+                    </ul>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 px-6 py-10 lg:ml-64 lg:px-12 max-w-5xl overflow-hidden">
+
+            <div class="mb-12 border-b border-slate-850 pb-8">
+                <h1 class="bg-gradient-to-r from-white via-slate-200 to-amber-400 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent sm:text-5xl">
+                    Internal Engine Code & Infrastructure Guide
+                </h1>
+                <p class="mt-4 text-lg text-slate-400 max-w-3xl leading-relaxed">
+                    A systems-level manual dissecting the Rust implementation of Workflow Forge. Learn how the async core manages memory, locks, and task coordination across thread pools.
+                </p>
+            </div>
+
+            <!-- PHYSICAL REPOSITORY LAYOUT -->
+            <section id="physical-layout" class="scroll-mt-24 space-y-6">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">1. Physical Repository Layout</h2>
+                <p class="text-slate-300 leading-relaxed text-sm">
+                    The Cargo workspace isolates core engine logic from standard extension tasks. This keeps the execution core independent of specific network, tabular, or SFTP dependencies:
+                </p>
+
+                <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-xs font-mono text-slate-300">
+                    <pre>workflow-forge/
+├── crates/
+│   ├── core/                  # Crate: workflow-forge-core (The main execution engine)
+│   │   ├── src/
+│   │   │   ├── blob.rs        # TempDirBlobStore & streamed BoxBlobReader definitions
+│   │   │   ├── condition.rs   # In-memory conditional evaluator
+│   │   │   ├── context.rs     # WorkflowContext containing RwLock&lt;Value&gt; global state
+│   │   │   ├── error.rs       # Static WorkflowError & TaskError types
+│   │   │   ├── executor.rs    # Topological execution traversal loop under Tokio
+│   │   │   ├── lib.rs         # Library entrypoints & public exports
+│   │   │   ├── mapping.rs     # JSONPath selector extractor & mapping engine
+│   │   │   ├── node.rs        # Node kind definitions (start, end, task, gateways)
+│   │   │   ├── observe.rs     # Event emissions & tracing hooks
+│   │   │   ├── profile.rs     # Task profile inheritance & extends resolution
+│   │   │   ├── registry.rs    # TaskRegistry catalog containing registered manifests
+│   │   │   ├── secret.rs      # SecretsProvider dynamic replacement filter
+│   │   │   ├── shape.rs       # In-memory relative shapes resolver (@. pathing)
+│   │   │   ├── validation.rs  # Compiler analysis checks (cycles, orphans, edges)
+│   │   │   └── workflow.rs    # Schema definitions & deserialization bindings
+│   │
+│   ├── extensions/            # Official decoupled extensions
+│   │   ├── util/              # ext-util (noop, delay, log)
+│   │   ├── data/              # ext-data (transform, map, cast, merge, template)
+│   │   ├── http/              # ext-http (reqwest integration, body streaming)
+│   │   ├── tabular/           # ext-tabular (csv & calamine xlsx spreadsheet parsing)
+│   │   └── sftp/              # ext-sftp (ssh2 channels, sftp client streams)
+│   │
+│   └── forge/                 # Crate: workflow-forge (Unified facade bundling all modules)
+│       ├── Cargo.toml         # Features definitions (util, http, data, full)
+│       └── src/lib.rs         # Re-exports of core & registered extensions</pre>
+                </div>
+            </section>
+
+            <!-- CRATE RELATIONSHIPS -->
+            <section id="crates-relations" class="scroll-mt-24 space-y-6 pt-8">
+                <h2 class="text-3xl font-bold tracking-tight text-white border-b border-slate-800 pb-2">2. Crate Relationships</h2>
+                <p class="text-slate-300 leading-relaxed text-sm">
+                    In order to support compile-time trees that remain modular, sibling extension crates do not have access to each other. They depend solely on the core, which acts as a common contract layer. The facade crate wraps everything up using feature flags:
+                </p>
+
+                <div class="flex justify-center my-6 bg-slate-900 p-6 rounded-lg border border-slate-800">
+                    <div class="mermaid">
+graph TD
+    Forge[Crate: workflow-forge] -->|features| ExtUtil[Crate: ext-util]
+    Forge --> ExtHttp[Crate: ext-http]
+    Forge --> ExtData[Crate: ext-data]
+    Forge --> ExtTabular[Crate: ext-tabular]
+    Forge --> ExtSftp[Crate: ext-sftp]
+
+    ExtUtil -->|depends on| Core[Crate: workflow-forge-core]
+    ExtHttp -->|depends on| Core
+    ExtData -->|depends on| Core
+    ExtTabular -->|depends on| Core
+    ExtSftp -->|depends on| Core
+
+    style Core fill:#1e1b4b,stroke:#4f46e5,stroke-width:2px,color:#fff
+    style Forge fill:#4f46e5,stroke:#818cf8,stroke-width:2px,color:#fff
+                    </div>
+                </div>
+            </section>
+
+            <!-- ENGINE GUTS (CORE) -->
+            <section id="core-guts" class="scroll-mt-24 space-y-12 pt-8 border-t border-slate-800">
+                <div class="border-l-4 border-indigo-500 pl-4">
+                    <h2 class="text-3xl font-bold tracking-tight text-white">3. Guts of the Engine (Rust Internals)</h2>
+                    <p class="text-sm text-slate-400 mt-1">Under the hood of WorkflowContext, RwLocks, topological schedulers, and binary streams.</p>
+                </div>
+
+                <!-- Thread Safety -->
+                <div id="thread-safety" class="scroll-mt-24 space-y-3">
+                    <h3 class="text-2xl font-bold text-white">3.1 Safe Concurrent State Mutation (`RwLock`)</h3>
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        Since Workflow Forge traverses branching nodes concurrently across multiple system threads, avoiding data races is critical. The global state inside <code class="text-indigo-400">WorkflowContext</code> is backed by a read-write lock:
+                    </p>
+
+                    <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-xs font-mono">
+                        <pre><code class="language-rust">// Inside crates/core/src/context.rs
+pub struct WorkflowContext {
+    execution_id: String,
+    parent_execution_id: Option<String>,
+    started_at: Instant,
+    state: RwLock<Value>, // The global context document
+    blobs: Arc<dyn BlobStore>,
+    event_seq: Arc<std::sync::atomic::AtomicU64>,
+}</code></pre>
+                    </div>
+
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        Wrapping the state in an <code class="text-indigo-400">RwLock&lt;Value&gt;</code> has a major benefit: multiple concurrent threads can read parts of the context simultaneously (e.g. evaluating inputs or gateway branch conditions) by obtaining a read lock via <code class="text-indigo-300">.read()</code>. When a node completes, it obtains an exclusive write lock via <code class="text-indigo-300">.write()</code> to update its results safely, preventing race conditions.
+                    </p>
+                </div>
+
+                <!-- Concurrency Engine -->
+                <div id="concurrency-engine" class="scroll-mt-24 space-y-3 pt-4">
+                    <h3 class="text-2xl font-bold text-white">3.2 Topological Graph Traversal & Forking (`try_join_all`)</h3>
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        The traversal of the graph is handled in `crates/core/src/executor.rs`. When multiple edges diverge from a node, the executor schedules them concurrently using the <code class="text-indigo-400">try_join_all</code> future combinator:
+                    </p>
+                    <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-xs font-mono">
+                        <pre><code class="language-rust">// Inside crates/core/src/executor.rs
+async fn continue_through(
+    &self,
+    edges: &[FlowEdge],
+    carried: Arc<Value>,
+    ctx: &WorkflowContext,
+    state: &RunState,
+) -> Result<(), WorkflowError> {
+    match edges {
+        [] => Ok(()),
+        [edge] => {
+            self.execute_from(&edge.to, carried, Some(edge.from.clone()), ctx, state).await
+        }
+        many => {
+            // Spawn and run all branches concurrently!
+            try_join_all(many.iter().map(|edge| {
+                self.execute_from(
+                    &edge.to,
+                    Arc::clone(&carried),
+                    Some(edge.from.clone()),
+                    ctx,
+                    state,
+                )
+            }))
+            .await
+            .map(|_| ())
+        }
+    }
+}</code></pre>
+                    </div>
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        This model yields extreme concurrency and thread safety:
+                    </p>
+                    <ul class="list-disc list-inside text-slate-400 text-xs space-y-1 pl-4">
+                        <li><strong>Concurrency</strong>: Diverging branches are scheduled concurrently on Tokio's worker pool, maximizing CPU core utilization.</li>
+                        <li><strong>Short-Circuiting Failures</strong>: Under <code class="text-indigo-400">try_join_all</code>, the first branch that returns an error immediately aborts and cancels all other sibling branches, preventing wasted computations on failed runs.</li>
+                    </ul>
+                </div>
+
+                <!-- Binary Storage Streams -->
+                <div id="binary-streams" class="scroll-mt-24 space-y-3 pt-4">
+                    <h3 class="text-2xl font-bold text-white">3.3 Memory-Efficient Binary Streaming (`BlobStore`)</h3>
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        To process heavy files (such as 100MB+ spreadsheets or binary reports) without risking out-of-memory crashes, Workflow Forge avoids loading entire files into RAM.
+                    </p>
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        Instead, the <code class="text-indigo-400">BlobStore</code> trait manages files as pinned reader streams (<code class="text-indigo-400">BoxBlobReader</code>). During operations like an SFTP download or HTTP upload, data is piped chunk-by-chunk through async IO streams. The context document only stores the lightweight UUID reference (<code class="text-indigo-300">{"$blob": "..."}</code>), keeping the execution state highly responsive.
+                    </p>
+                </div>
+
+                <!-- Component Communication Sequence -->
+                <div id="component-sequence" class="scroll-mt-24 space-y-3 pt-4">
+                    <h3 class="text-2xl font-bold text-white">3.4 Step-by-Step Component Communication Sequence</h3>
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        To customize or patch Workflow Forge, it is vital to understand how its core abstractions collaborate. The sequence diagram below maps the precise execution lifecycle from graph compilation to final trigger run-to-completion, illustrating when thread locks are acquired and how binary streams travel:
+                    </p>
+                    <div class="flex justify-center my-6 bg-slate-900 p-6 rounded-lg border border-slate-800">
+                        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Host as Host App
+    participant Exec as WorkflowExecutor
+    participant Ctx as WorkflowContext
+    participant State as RunState
+    participant Registry as TaskRegistry
+    participant Task as Extension Task
+    participant Blobs as Blob Storage
+
+    Host->>Exec: WorkflowExecutor::new(workflow, registry)
+    activate Exec
+    Note over Exec: Static compilation pass:<br/>DFS Cycle Check,<br/>Orphans scan,<br/>Task Profiles compile
+    Exec-->>Host: return Compiled Executor
+    deactivate Exec
+
+    Host->>Exec: run(trigger_payload)
+    activate Exec
+
+    Exec->>Ctx: Instantiate (WorkflowContext::new)
+    Note over Ctx: state: RwLock(Value)<br/>event_seq: AtomicU64<br/>execution_id: UUID v7
+    Ctx->>Blobs: Instantiate TempDirBlobStore
+
+    Exec->>State: Instantiate (RunState::new)
+    Note over State: joins: Mutex(HashMap)<br/>ends: Mutex(Vec)
+
+    Exec->>Exec: execute_from(start_node)
+
+    loop Traversal Loop (execute_from)
+        Exec->>Ctx: Query predecessors outputs
+        Ctx->>Ctx: .read() read lock
+        Ctx-->>Exec: return payload data (Arc(Value))
+
+        Exec->>Exec: mapping::resolve(...) inputs
+
+        Exec->>Exec: Validate resolved input against input_schema
+
+        Exec->>Registry: Resolve task implementation
+        Registry-->>Exec: return Task trait reference
+
+        Exec->>Task: execute(context, input_data)
+        activate Task
+
+        opt Download File
+            Task->>Blobs: put(filename, stream)
+            Blobs-->>Task: return BlobRef
+        end
+        opt Upload File
+            Task->>Blobs: get(UUID)
+            Blobs-->>Task: return BoxBlobReader (bytes stream)
+        end
+
+        Task-->>Exec: return Ok(raw_output)
+        deactivate Task
+
+        Exec->>Exec: Validate & Reshape raw_output
+
+        Exec->>Ctx: set_node_output(node_id, output)
+        Ctx->>Ctx: .write() write lock
+        Note over Ctx: Update nodes[id].output
+        Ctx-->>Exec: Ok()
+
+        opt Downstream Parallel Fork (many edges)
+            Note over Exec: Spawns futures concurrently via try_join_all
+        end
+
+        opt Arrive at Join Gateway
+            Exec->>State: Register Join Arrival (edge origin)
+            State->>State: Lock Mutex
+            State-->>Exec: All branches arrived?
+            alt Starved Join
+                Note over Exec: Halt current branch future and yield control back
+            else All Arrived
+                Note over Exec: Resume traversal downstream
+            end
+        end
+
+        opt Arrive at End Node
+            Exec->>State: Register reached end node output
+            State->>State: Lock Mutex
+            State-->>Exec: Ok()
+        end
+    end
+
+    Exec->>Ctx: cleanup()
+    Ctx->>Blobs: delete all files
+    Blobs-->>Ctx: Ok
+
+    Exec->>State: Get collected ends outputs
+    State-->>Exec: return outputs
+
+    Exec-->>Host: return WorkflowResult (JSON)
+    deactivate Exec
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- EXTENSIONS INTERNALS -->
+            <section id="ext-internals" class="scroll-mt-24 space-y-12 pt-12 border-t border-slate-800">
+                <div class="border-l-4 border-indigo-500 pl-4">
+                    <h2 class="text-3xl font-bold tracking-tight text-white">4. Under the Hood: Official Extensions</h2>
+                    <p class="text-sm text-slate-400 mt-1">A detailed look at the physical implementations of official extension crates.</p>
+                </div>
+
+                <!-- http -->
+                <div id="ext-http-internals" class="space-y-4 scroll-mt-24">
+                    <h3 class="text-2xl font-bold text-white">4.1 `ext-http` — Stream-Piped Network Requests</h3>
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        The `http.request` task is built on the asynchronous <code class="text-indigo-400">reqwest</code> library. When uploading or downloading files, it bridges the <code class="text-indigo-400">BlobStore</code> directly with the network stream:
+                    </p>
+                    <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-xs font-mono">
+                        <pre><code class="language-rust">// Conceptual implementation inside crates/extensions/http/src/lib.rs
+let blob_store = ctx.blobs();
+let stream = blob_store.get(&blob_id).await?;
+
+// reqwest streams data from the BlobStore directly to the server
+let request = client.post(url)
+    .body(reqwest::Body::wrap_stream(stream));</code></pre>
+                    </div>
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        For downloads, if <code class="text-indigo-300">response_body</code> is configured as <code class="text-indigo-400">"blob"</code>, the response byte stream is piped chunk-by-chunk into the `BlobStore` disk, avoiding memory overhead entirely:
+                    </p>
+                    <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-xs font-mono">
+                        <pre><code class="language-rust">let mut response = client.execute(request).await?;
+let stream = response.bytes_stream();
+
+// Pipes network stream directly to the BlobStore
+let blob_ref = blob_store.put("downloaded_file", Box::new(stream)).await?;</code></pre>
+                    </div>
+                </div>
+
+                <!-- data -->
+                <div id="ext-data-internals" class="space-y-4 scroll-mt-24">
+                    <h3 class="text-2xl font-bold text-white">4.2 `ext-data` — In-Memory Transformation Engine</h3>
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        The `data.cast` and `data.transform` tasks are designed for high-performance in-memory processing. The `data.cast` task parses fields sequentially. When parsing tabular data (such as CSVs), it applies a list of cast operations dynamically:
+                    </p>
+                    <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-xs font-mono">
+                        <pre><code class="language-rust">// Inside crates/extensions/data/src/cast.rs
+for row in dataset {
+    for (field_path, operations) in config.fields {
+        let mut value = extract_value_at(row, field_path);
+        for op in operations {
+            value = match op {
+                CastOp::Date { from, to } => cast_date(value, from, to)?,
+                CastOp::Number { dec, thou } => cast_number(value, dec, thou)?,
+                CastOp::Bool => cast_boolean(value)?,
+                CastOp::Default { val } => value.or(val),
+                // ... other ops
+            };
+        }
+        row.insert(field_path, value);
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <!-- sftp -->
+                <div id="ext-sftp-internals" class="space-y-4 scroll-mt-24">
+                    <h3 class="text-2xl font-bold text-white">4.3 `ext-sftp` — Async SSH2 Pipes</h3>
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        SFTP connections run on a multi-threaded async framework. Since raw SSH2 connections rely on blocking calls, `ext-sftp` handles them off Tokio's main threadpool:
+                    </p>
+                    <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-xs font-mono">
+                        <pre><code class="language-rust">// Inside crates/extensions/sftp/src/lib.rs
+// Uses tokio::task::spawn_blocking to offload blocking SSH IO operations
+let sftp_session = tokio::task::spawn_blocking(move || {
+    let tcp = TcpStream::connect(host)?;
+    let mut sess = Session::new()?;
+    sess.handshake(&tcp)?;
+    sess.userauth_password(user, pass)?;
+    sess.sftp()
+}).await??;</code></pre>
+                    </div>
+                    <p class="text-slate-300 leading-relaxed text-sm">
+                        This ensures that heavy, blocking SFTP transfer operations do not block Tokio's main cooperative threadpool, keeping the rest of the application responsive.
+                    </p>
+                </div>
+            </section>
+
+            <!-- PANIC BOUNDARIES -->
+            <section id="panic-boundaries" class="scroll-mt-24 space-y-6 pt-12 border-t border-slate-800">
+                <div class="border-l-4 border-indigo-500 pl-4">
+                    <h2 class="text-3xl font-bold tracking-tight text-white">5. Error Handling & Panic Isolation Boundaries</h2>
+                    <p class="text-sm text-slate-400 mt-1">Analyzing how catch_unwind isolates thread failures at node boundaries.</p>
+                </div>
+
+                <p class="text-slate-300 leading-relaxed text-sm">
+                    In a production workflow orchestrator, a single malformed custom task or indexing bug inside a third-party plugin must never crash the hosting process. Workflow Forge guarantees runtime safety by isolating panics at the node execution level.
+                </p>
+
+                <div class="rounded-lg bg-slate-900/60 p-4 border border-slate-800 text-xs font-mono">
+                    <pre><code class="language-rust">// Inside crates/core/src/executor.rs
+// Wraps the task execution future in a catch_unwind boundary
+let result = AssertUnwindSafe(self.run_task(node, task_node, carried, ctx))
+    .catch_unwind()
+    .await;
+
+match result {
+    Ok(Ok(output)) => {
+        // Task completed successfully
+        self.after_task_success(node_id, output, ctx, state).await
+    }
+    Ok(Err(task_error)) => {
+        // Task returned a standard, expected error (e.g. network timeout)
+        self.route_error_path(node_id, task_error, ctx, state).await
+    }
+    Err(_panic_payload) => {
+        // Task panicked! Catch_unwind intercepted it safely.
+        // The host application survives. We write errors and transition down 'on: panic' edge.
+        self.route_panic_path(node_id, ctx, state).await
+    }
+}</code></pre>
+                </div>
+
+                <p class="text-slate-300 leading-relaxed text-sm">
+                    By leveraging Rust's <code class="text-indigo-400">catch_unwind</code> future wrapper, any unhandled thread panic (like an index out of bounds or an explicit panic call inside an extension) is safely intercepted at the async task boundary. This ensures complete reliability and uptime for high-scale enterprise deployments.
+                </p>
+            </section>
+
+            <!-- Footer -->
+            <footer class="mt-20 border-t border-slate-850 py-8 text-center text-sm text-slate-500">
+                <p>&copy; 2026 Workflow Forge. Dual licensed under MIT &amp; Apache 2.0.</p>
+                <p class="mt-1">Generated by expert engineering agent inside Zed Editor.</p>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Fullscreen Diagram Modal -->
+    <div id="mermaid-modal" class="fixed inset-0 z-50 hidden flex-col items-center justify-center bg-slate-950/95 p-6 backdrop-blur-lg">
+        <button id="close-modal" class="absolute top-6 right-6 rounded-full bg-slate-800 p-3 text-slate-400 hover:bg-slate-700 hover:text-white transition-all cursor-pointer">
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+        <div id="modal-content" class="w-full max-w-5xl max-h-[85vh] overflow-auto flex items-center justify-center bg-slate-900/40 p-8 rounded-2xl border border-slate-800">
+            <!-- Dynamic SVG target -->
+        </div>
+        <p class="mt-4 text-xs text-slate-500">Press ESC, click the close button, or click the background to exit fullscreen</p>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const checkInterval = setInterval(() => {
+                const diagrams = document.querySelectorAll(".mermaid[data-processed='true']");
+                if (diagrams.length > 0) {
+                    clearInterval(checkInterval);
+                    setupModal();
+                }
+            }, 100);
+
+            function setupModal() {
+                const modal = document.getElementById("mermaid-modal");
+                const modalContent = document.getElementById("modal-content");
+                const closeBtn = document.getElementById("close-modal");
+                const diagrams = document.querySelectorAll(".mermaid");
+
+                diagrams.forEach(diag => {
+                    diag.classList.add("cursor-zoom-in", "hover:opacity-90", "transition-opacity");
+                    diag.setAttribute("title", "Click to view fullscreen");
+
+                    diag.addEventListener("click", () => {
+                        const svg = diag.querySelector("svg");
+                        if (svg) {
+                            const clone = svg.cloneNode(true);
+                            clone.setAttribute("width", "100%");
+                            clone.setAttribute("height", "100%");
+                            clone.style.maxWidth = "100%";
+                            clone.style.maxHeight = "100%";
+
+                            modalContent.innerHTML = "";
+                            modalContent.appendChild(clone);
+
+                            modal.classList.remove("hidden");
+                            modal.classList.add("flex");
+                            document.body.classList.add("overflow-hidden");
+                        }
+                    });
+                });
+
+                const closeModalFn = () => {
+                    modal.classList.add("hidden");
+                    modal.classList.remove("flex");
+                    document.body.classList.remove("overflow-hidden");
+                    modalContent.innerHTML = "";
+                };
+
+                closeBtn.addEventListener("click", closeModalFn);
+
+                document.addEventListener("keydown", (e) => {
+                    if (e.key === "Escape") {
+                        closeModalFn();
+                    }
+                });
+
+                modal.addEventListener("click", (e) => {
+                    if (e.target === modal) {
+                        closeModalFn();
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

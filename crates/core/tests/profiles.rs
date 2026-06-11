@@ -8,14 +8,11 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
-use workflow_forge_core::context::WorkflowContext;
-use workflow_forge_core::executor::WorkflowExecutor;
-use workflow_forge_core::profile::TaskProfile;
-use workflow_forge_core::registry::TaskRegistry;
-use workflow_forge_core::secret::SecretProvider;
-use workflow_forge_core::task::{Task, TaskManifest};
+use workflow_forge_core::io::secret::SecretProvider;
+use workflow_forge_core::runtime::{WorkflowContext, WorkflowExecutor};
+use workflow_forge_core::spec::{TaskProfile, WorkflowDefinition};
+use workflow_forge_core::task::{Task, TaskManifest, TaskRegistry};
 use workflow_forge_core::task::{WorkflowData, WorkflowResult};
-use workflow_forge_core::workflow::WorkflowDefinition;
 
 /// Simula una API: exige {endpoint, payload} y devuelve {ok, endpoint, echo}.
 struct FakeApiTask {

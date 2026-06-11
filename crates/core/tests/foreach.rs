@@ -8,11 +8,9 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
-use workflow_forge_core::context::WorkflowContext;
 use workflow_forge_core::error::WorkflowError;
-use workflow_forge_core::executor::WorkflowExecutor;
-use workflow_forge_core::registry::TaskRegistry;
-use workflow_forge_core::task::{Task, TaskManifest};
+use workflow_forge_core::runtime::{WorkflowContext, WorkflowExecutor};
+use workflow_forge_core::task::{Task, TaskManifest, TaskRegistry};
 use workflow_forge_core::task::{WorkflowData, WorkflowResult};
 
 /// Duplica `{n}`; falla con DOUBLE_NEGATIVE si n < 0; duerme `sleep_ms`.
@@ -318,7 +316,7 @@ async fn foreach_puede_iterar_un_perfil() {
                 "bind": { "n": "@.valor" }
             }))
             .unwrap(),
-            &workflow_forge_core::secret::EnvSecrets,
+            &workflow_forge_core::io::secret::EnvSecrets,
         )
         .unwrap();
 

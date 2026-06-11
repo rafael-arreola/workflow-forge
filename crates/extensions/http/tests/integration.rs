@@ -3,12 +3,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use httpmock::prelude::*;
 use serde_json::{Value, json};
-use workflow_forge_core::blob::BlobRef;
-use workflow_forge_core::context::WorkflowContext;
-use workflow_forge_core::executor::WorkflowExecutor;
-use workflow_forge_core::registry::TaskRegistry;
-use workflow_forge_core::task::{Task, TaskManifest, WorkflowData, WorkflowResult};
-use workflow_forge_core::workflow::WorkflowDefinition;
+use workflow_forge_core::io::blob::BlobRef;
+use workflow_forge_core::runtime::{WorkflowContext, WorkflowExecutor};
+use workflow_forge_core::spec::WorkflowDefinition;
+use workflow_forge_core::task::{Task, TaskManifest, TaskRegistry, WorkflowData, WorkflowResult};
 
 /// Crea un blob en el store de la ejecución a partir de bytes JSON
 /// (`{ "content": [u8...] | "string", "name": "..." }` → `{ "file": BlobRef }`)
