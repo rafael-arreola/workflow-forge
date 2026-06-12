@@ -1,10 +1,14 @@
 [package]
 name = "workflow-forge"
-description = "Motor de workflows declarativos definidos con JSON Schema + JSONPath"
+description = "A declarative, JSON-based workflow engine for Rust — defined with JSON Schema, wired with JSONPath, executed by an embeddable async core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [features]
 default = ["util", "data", "http"]
@@ -14,6 +18,11 @@ data = ["dep:workflow-forge-ext-data"]
 http = ["dep:workflow-forge-ext-http"]
 tabular = ["dep:workflow-forge-ext-tabular"]
 sftp = ["dep:workflow-forge-ext-sftp"]
+# Mock tasks + dry-run helpers for testing workflows without live dependencies.
+testing = ["workflow-forge-core/testing"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
 workflow-forge-core = { workspace = true }
@@ -25,5 +34,7 @@ workflow-forge-ext-sftp = { workspace = true, optional = true }
 
 [dev-dependencies]
 httpmock = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

@@ -1,949 +1,515 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>workflow-forge — User Manual</title>
-<style>
-  :root {
-    --bg: #ffffff;
-    --fg: #1c2330;
-    --muted: #5b6675;
-    --accent: #b3541e;
-    --accent-soft: #fdf3ec;
-    --border: #e3e7ee;
-    --code-bg: #14181f;
-    --code-fg: #d8dee9;
-    --inline-bg: #f1f3f7;
-    --sidebar-w: 280px;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-    color: var(--fg);
-    background: var(--bg);
-    line-height: 1.65;
-  }
-  nav {
-    position: fixed; top: 0; left: 0; bottom: 0;
-    width: var(--sidebar-w);
-    overflow-y: auto;
-    border-right: 1px solid var(--border);
-    padding: 1.5rem 1.25rem 3rem;
-    font-size: 0.85rem;
-    background: #fafbfc;
-  }
-  nav h1 { font-size: 1rem; margin: 0 0 0.25rem; }
-  nav .subtitle { color: var(--muted); font-size: 0.75rem; margin-bottom: 1.25rem; }
-  nav a { display: block; color: var(--fg); text-decoration: none; padding: 0.15rem 0; }
-  nav a:hover { color: var(--accent); }
-  nav .l2 { padding-left: 1rem; color: var(--muted); }
-  main {
-    margin-left: var(--sidebar-w);
-    padding: 2.5rem 3rem 6rem;
-    max-width: 60rem;
-  }
-  h1, h2, h3, h4 { line-height: 1.3; scroll-margin-top: 1rem; }
-  h1 { font-size: 2rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
-  h2 { font-size: 1.5rem; margin-top: 3rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
-  h3 { font-size: 1.15rem; margin-top: 2rem; }
-  h4 { font-size: 1rem; margin-top: 1.5rem; }
-  code {
-    font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
-    font-size: 0.85em;
-    background: var(--inline-bg);
-    padding: 0.1em 0.35em;
-    border-radius: 4px;
-  }
-  pre {
-    background: var(--code-bg);
-    color: var(--code-fg);
-    padding: 1rem 1.25rem;
-    border-radius: 8px;
-    overflow-x: auto;
-    font-size: 0.82rem;
-    line-height: 1.55;
-  }
-  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
-  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.88rem; }
-  th, td { border: 1px solid var(--border); padding: 0.45rem 0.7rem; text-align: left; vertical-align: top; }
-  th { background: var(--accent-soft); }
-  .note {
-    background: var(--accent-soft);
-    border-left: 4px solid var(--accent);
-    padding: 0.75rem 1rem;
-    border-radius: 0 6px 6px 0;
-    margin: 1rem 0;
-  }
-  .badge {
-    display: inline-block; font-size: 0.7rem; font-weight: 600;
-    background: var(--accent); color: #fff;
-    padding: 0.05rem 0.5rem; border-radius: 10px; vertical-align: middle;
-  }
-  .muted { color: var(--muted); }
-</style>
-</head>
-<body>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Workflow Forge — Usage & Implementation Guide</title>
+        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+        <style>
+            html { scroll-behavior: smooth; }
+            pre { tab-size: 2; }
+            .prose-body :where(h2) { scroll-margin-top: 6rem; }
+            .prose-body :where(h3) { scroll-margin-top: 6rem; }
+            code:not(pre code) {
+                background: rgb(30 41 59 / 0.7);
+                padding: 0.1rem 0.35rem;
+                border-radius: 0.3rem;
+                font-size: 0.85em;
+                color: rgb(165 180 252);
+            }
+        </style>
+    </head>
+    <body class="bg-slate-950 text-slate-200 font-sans antialiased">
+        <!-- Header -->
+        <header class="border-b border-slate-800 bg-slate-950/80 px-6 py-4 backdrop-blur-md sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto flex items-center justify-between">
+                <a href="index.html" class="flex items-center space-x-3 group">
+                    <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 font-black text-white text-sm shadow-lg shadow-indigo-500/20">WF</div>
+                    <div>
+                        <span class="text-base font-bold tracking-tight text-white group-hover:text-indigo-300 transition-colors">Workflow Forge</span>
+                        <span class="ml-2 rounded-full bg-indigo-500/10 px-2 py-0.5 text-xs font-semibold text-indigo-400 border border-indigo-500/20">Usage Guide</span>
+                    </div>
+                </a>
+                <nav class="flex items-center gap-4 text-sm font-medium text-slate-400">
+                    <a href="infrastructure.html" class="hover:text-white transition-colors">Core &amp; Architecture →</a>
+                    <a href="https://github.com/rafael-arreola/workflow-forge" target="_blank" class="hover:text-white transition-colors">GitHub</a>
+                </nav>
+            </div>
+        </header>
 
-<nav>
-  <h1>workflow-forge</h1>
-  <div class="subtitle">User Manual · spec 1.0</div>
-  <a href="#introduction">1. Introduction</a>
-  <a href="#getting-started">2. Getting Started</a>
-  <a href="#document">3. The Workflow Document</a>
-  <a href="#context">4. Execution Context &amp; Data Flow</a>
-  <a href="#mappings">5. Mappings ($.)</a>
-  <a href="#nodes">6. Node Reference</a>
-  <a class="l2" href="#node-start">start</a>
-  <a class="l2" href="#node-end">end</a>
-  <a class="l2" href="#node-task">task</a>
-  <a class="l2" href="#node-foreach">foreach</a>
-  <a class="l2" href="#node-gateway">gateway</a>
-  <a class="l2" href="#node-subworkflow">subworkflow</a>
-  <a href="#edges">7. Edges</a>
-  <a href="#conditions">8. Conditions</a>
-  <a href="#errors">9. Failure Handling</a>
-  <a href="#profiles">10. Task Profiles</a>
-  <a href="#secrets">11. Secrets ($secret)</a>
-  <a href="#blobs">12. Blobs ($blob)</a>
-  <a href="#subworkflows">13. Subworkflows</a>
-  <a href="#tasks">14. Built-in Task Catalog</a>
-  <a class="l2" href="#tasks-util">util.*</a>
-  <a class="l2" href="#tasks-data">data.*</a>
-  <a class="l2" href="#tasks-http">http.request</a>
-  <a class="l2" href="#tasks-tabular">tabular.*</a>
-  <a class="l2" href="#tasks-sftp">sftp.*</a>
-  <a href="#host-api">15. Embedding the Engine</a>
-  <a href="#observability">16. Observability</a>
-  <a href="#error-codes">17. Error Code Reference</a>
-  <a href="#examples">18. Complete Examples</a>
-</nav>
+        <div class="max-w-7xl mx-auto flex">
+            <!-- Sidebar TOC -->
+            <aside class="hidden lg:block w-64 shrink-0 border-r border-slate-900 py-10 px-6 sticky top-[65px] h-[calc(100vh-65px)] overflow-y-auto">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">On this page</p>
+                <nav class="space-y-1 text-sm">
+                    <a href="#intro" class="block py-1 text-slate-400 hover:text-indigo-300">1. Mental model</a>
+                    <a href="#quickstart" class="block py-1 text-slate-400 hover:text-indigo-300">2. Quickstart</a>
+                    <a href="#anatomy" class="block py-1 text-slate-400 hover:text-indigo-300">3. Document anatomy</a>
+                    <a href="#context" class="block py-1 text-slate-400 hover:text-indigo-300">4. The context document</a>
+                    <a href="#mappings" class="block py-1 text-slate-400 hover:text-indigo-300">5. Mappings ($.)</a>
+                    <a href="#nodes" class="block py-1 text-slate-400 hover:text-indigo-300">6. Node reference</a>
+                    <a href="#conditions" class="block py-1 text-slate-400 hover:text-indigo-300">7. Condition mini-DSL</a>
+                    <a href="#edges" class="block py-1 text-slate-400 hover:text-indigo-300">8. Edges &amp; error routing</a>
+                    <a href="#profiles" class="block py-1 text-slate-400 hover:text-indigo-300">9. Task profiles</a>
+                    <a href="#blobs" class="block py-1 text-slate-400 hover:text-indigo-300">10. Blobs &amp; secrets</a>
+                    <a href="#authoring" class="block py-1 text-slate-400 hover:text-indigo-300">11. Authoring tasks</a>
+                    <a href="#extensions" class="block py-1 text-slate-400 hover:text-indigo-300">12. Official extensions</a>
+                    <a href="#observability" class="block py-1 text-slate-400 hover:text-indigo-300">13. Observability</a>
+                    <a href="#errors" class="block py-1 text-slate-400 hover:text-indigo-300">14. Errors &amp; validation</a>
+                </nav>
+            </aside>
 
-<main>
+            <!-- Content -->
+            <main class="prose-body min-w-0 flex-1 px-6 py-12 lg:px-12 space-y-16">
+                <div>
+                    <h1 class="text-4xl font-black tracking-tight text-white">Usage &amp; Implementation Guide</h1>
+                    <p class="mt-4 text-lg text-slate-400 leading-relaxed max-w-3xl">
+                        How to write declarative workflows as JSON, embed the engine in a Rust
+                        application, and author your own tasks. For the engine's internals and
+                        extension seams, see the
+                        <a href="infrastructure.html" class="text-indigo-400 hover:underline">Core &amp; Architecture</a> manual.
+                    </p>
+                </div>
 
-<h1>workflow-forge — User Manual</h1>
-<p class="muted">The complete guide to designing and running declarative workflows with workflow-forge, from zero to production. This manual targets <strong>workflow authors and integrators</strong>: people who write workflow documents and embed the engine in their applications. If you want to extend or maintain the engine itself, read the <a href="infrastructure.html">Infrastructure Manual</a>.</p>
+                <!-- 1 -->
+                <section id="intro" class="space-y-4">
+                    <h2 class="text-2xl font-bold text-white border-b border-slate-800 pb-2">1. Mental model</h2>
+                    <p class="text-slate-300 leading-relaxed">
+                        A <strong>workflow is a JSON document</strong> describing a directed acyclic
+                        graph of <strong>nodes</strong> wired by <strong>edges</strong>. You store it, diff it,
+                        validate it against the <a href="https://github.com/rafael-arreola/workflow-forge/tree/main/schemas/1.0" class="text-indigo-400 hover:underline">published JSON Schemas</a>
+                        — even without the engine — and execute it by embedding the
+                        async core in your Rust app. There is no DSL and no macros: the workflow is data.
+                    </p>
+                    <p class="text-slate-300 leading-relaxed">
+                        At runtime each execution owns a single <strong>context document</strong>. Every node
+                        reads its input from that document via <strong>JSONPath mappings</strong> and publishes its
+                        output back into it. Control flow is explicit: <strong>gateways</strong> branch, fan out and
+                        join; <strong>tasks</strong> do the work; <strong>foreach</strong> iterates; <strong>subworkflows</strong> compose.
+                    </p>
+                    <div class="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 text-sm text-slate-300">
+                        <strong class="text-indigo-300">v1 execution model.</strong> Execution is ephemeral and
+                        run-to-completion, entirely in memory. There is no persistence, scheduling or
+                        external waiting in v1 — the engine is a library your host drives, not a server.
+                    </div>
+                </section>
 
-<h2 id="introduction">1. Introduction</h2>
-<p><code>workflow-forge</code> is a Rust library for executing <strong>declarative workflows</strong> defined as JSON documents. A workflow is a directed acyclic graph (DAG) of nodes connected by edges; the engine walks the graph asynchronously on Tokio, resolving data between nodes with JSONPath mappings.</p>
-
-<h3>Design principles</h3>
-<ul>
-  <li><strong>Declarative first.</strong> A workflow is data, not code. It can be stored, versioned, validated, and rendered without executing anything.</li>
-  <li><strong>Fail at build time, not at runtime.</strong> The executor validates the entire document when it is constructed: graph structure, cycles, reachability, gateway coherence, task registration, JSON Schemas, subworkflow resolution. If <code>WorkflowExecutor::new</code> succeeds, the document is structurally sound.</li>
-  <li><strong>Strict data isolation.</strong> Nodes never call each other. They read from and write to a shared, concurrency-safe state document via immutable JSONPath mappings.</li>
-  <li><strong>Payloads by reference.</strong> Large binaries (files, spreadsheets, archives) never travel inline in JSON. They travel as <code>$blob</code> references backed by a per-execution store that is cleaned up automatically.</li>
-  <li><strong>Defensive resilience.</strong> Retries with backoff, per-attempt timeouts, error-routing edges, and panic isolation: a buggy task extension cannot bring down the host process.</li>
-</ul>
-
-<h3>What ships in the box</h3>
-<table>
-  <tr><th>Crate</th><th>Purpose</th></tr>
-  <tr><td><code>workflow-forge</code></td><td>The facade: re-exports the engine and registers extension tasks behind feature flags.</td></tr>
-  <tr><td><code>workflow-forge-core</code></td><td>The engine: spec types, validation, executor, expressions, observability.</td></tr>
-  <tr><td><code>workflow-forge-ext-util</code></td><td><code>util.noop</code>, <code>util.log</code>, <code>util.delay</code></td></tr>
-  <tr><td><code>workflow-forge-ext-data</code></td><td><code>data.transform</code>, <code>data.map</code>, <code>data.merge</code>, <code>data.template</code>, <code>data.cast</code></td></tr>
-  <tr><td><code>workflow-forge-ext-http</code></td><td><code>http.request</code> — declarative HTTP client with blob streaming</td></tr>
-  <tr><td><code>workflow-forge-ext-tabular</code></td><td><code>tabular.parse</code>, <code>tabular.write</code> — CSV/XLSX ↔ JSON rows</td></tr>
-  <tr><td><code>workflow-forge-ext-sftp</code></td><td><code>sftp.get</code>, <code>sftp.put</code>, <code>sftp.list</code></td></tr>
-</table>
-
-<h2 id="getting-started">2. Getting Started</h2>
-
-<h3>Installation</h3>
-<pre><code># Cargo.toml
-[dependencies]
-workflow-forge = { version = "0.1", features = ["full"] }
-tokio = { version = "1", features = ["full"] }
-serde_json = "1"</code></pre>
-<p>Feature flags select which extensions are compiled in:</p>
-<table>
-  <tr><th>Feature</th><th>Enables</th></tr>
-  <tr><td><code>default</code></td><td><code>util</code>, <code>data</code>, <code>http</code></td></tr>
-  <tr><td><code>full</code></td><td>everything: <code>util</code>, <code>data</code>, <code>http</code>, <code>tabular</code>, <code>sftp</code></td></tr>
-  <tr><td><code>util</code> / <code>data</code> / <code>http</code> / <code>tabular</code> / <code>sftp</code></td><td>each extension individually</td></tr>
-</table>
-
-<h3>Your first workflow</h3>
-<pre><code>use workflow_forge::prelude::*;
-use serde_json::json;
+                <!-- 2 -->
+                <section id="quickstart" class="space-y-4">
+                    <h2 class="text-2xl font-bold text-white border-b border-slate-800 pb-2">2. Quickstart</h2>
+                    <p class="text-slate-300">Add the facade crate with the feature flags you need:</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>[dependencies]
+workflow-forge = "0.1"   # default features: util, data, http (+ tabular, sftp, or full)
+tokio = { version = "1", features = ["full"] }</code></pre>
+                    <p class="text-slate-300">Parse a workflow, build an executor with the default task registry, and run it:</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>use workflow_forge::prelude::*;
 
 #[tokio::main]
-async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
-    // 1. A registry with every feature-enabled extension task pre-registered
-    let registry = workflow_forge::default_registry();
-
-    // 2. The workflow document (usually loaded from a file or database)
-    let workflow: WorkflowDefinition = serde_json::from_value(json!({
+async fn main() -> Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    let workflow: WorkflowDefinition = serde_json::from_str(r#"{
         "spec": "1.0",
-        "name": "hello",
+        "name": "greet",
         "version": "0.1.0",
         "nodes": [
-            { "id": "start", "kind": "start" },
-            { "id": "greet", "kind": "task", "task": "data.template",
-              "input": {
-                  "template": "Hello, {who}!",
-                  "values": { "who": "$.trigger.name" }
-              }
-            },
-            { "id": "end", "kind": "end" }
+            { "id": "start",  "kind": "start" },
+            { "id": "render", "kind": "task", "task": "data.template",
+              "input": { "template": "Hello {who}!", "values": "$.trigger" } },
+            { "id": "end",    "kind": "end" }
         ],
         "edges": [
-            { "from": "start", "to": "greet" },
-            { "from": "greet", "to": "end" }
+            { "from": "start",  "to": "render" },
+            { "from": "render", "to": "end" }
         ]
-    }))?;
+    }"#)?;
 
-    // 3. Build the executor — this validates everything up front
+    let registry = workflow_forge::default_registry();
     let executor = WorkflowExecutor::new(workflow, registry)
-        .map_err(|errors| format!("{errors:?}"))?;
+        .map_err(|errors| format!("invalid workflow: {errors:?}"))?;
 
-    // 4. Run it with a trigger payload
-    let result = executor.run(WorkflowData(json!({ "name": "Ada" }))).await?;
-    assert_eq!(*result, json!("Hello, Ada!"));
+    let result = executor
+        .run(WorkflowData(serde_json::json!({ "who": "world" })))
+        .await?;
+
+    println!("{}", result.0); // "Hello world!"
     Ok(())
 }</code></pre>
+                    <p class="text-slate-300 text-sm">
+                        <code>WorkflowExecutor::new</code> validates the document and compiles its schemas
+                        eagerly — an invalid workflow fails to <em>build</em>, never mid-run. The returned
+                        <code>Err</code> is a <code>Vec&lt;WorkflowError&gt;</code> accumulating every problem at once.
+                    </p>
 
-<div class="note">
-<strong>The two-phase contract.</strong> Building the executor (<code>WorkflowExecutor::new</code> / <code>builder()</code>) returns <code>Err(Vec&lt;WorkflowError&gt;)</code> with <em>every</em> definition problem found — not just the first one. Running it (<code>executor.run(trigger)</code>) returns a single <code>WorkflowResult</code>. Definition errors belong to build time; data errors belong to runtime.</div>
+                    <h3 class="text-lg font-semibold text-white pt-2">Or from the command line</h3>
+                    <p class="text-slate-300 text-sm">The <code>forge</code> CLI (crate <code>workflow-forge-cli</code>) runs, validates and inspects workflows with all bundled extensions — no Rust required:</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>forge run workflow.json --input '{"who":"world"}'   # trigger inline…
+echo '{"who":"world"}' | forge run workflow.json     # …or piped via stdin
+forge run workflow.json --timeout-ms 30000           # opt-in execution deadline
+forge validate workflow.json                         # structure + schemas, no run
+forge catalog                                        # the task catalog as JSON</code></pre>
+                </section>
 
-<h2 id="document">3. The Workflow Document</h2>
-<p>A workflow definition is a JSON object with the following top-level fields:</p>
-<table>
-  <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-  <tr><td><code>spec</code></td><td>string</td><td>no (default <code>"1.0"</code>)</td><td>Spec version this document conforms to. The engine rejects unsupported versions (<code>UNSUPPORTED_SPEC</code>).</td></tr>
-  <tr><td><code>id</code></td><td>string</td><td>no</td><td>Stable identifier of the workflow. Assigned if absent.</td></tr>
-  <tr><td><code>name</code></td><td>string</td><td><strong>yes</strong></td><td>Human-readable name. Also the lookup key for subworkflow references.</td></tr>
-  <tr><td><code>version</code></td><td>string</td><td><strong>yes</strong></td><td>Semantic version of the document itself.</td></tr>
-  <tr><td><code>tasks</code></td><td>array</td><td>no</td><td>Local <a href="#profiles">task profiles</a>: named, pre-configured instances of registered tasks, visible only to this document.</td></tr>
-  <tr><td><code>workflows</code></td><td>array</td><td>no</td><td>Inline <a href="#subworkflows">subworkflow definitions</a>, referenced by <code>name</code> from <code>subworkflow</code> nodes. Take precedence over the shared registry.</td></tr>
-  <tr><td><code>nodes</code></td><td>array</td><td><strong>yes</strong></td><td>The graph nodes. Each has a unique <code>id</code> and a <code>kind</code> discriminator.</td></tr>
-  <tr><td><code>edges</code></td><td>array</td><td>no</td><td>Directed control-flow edges between nodes.</td></tr>
-</table>
+                <!-- 3 -->
+                <section id="anatomy" class="space-y-4">
+                    <h2 class="text-2xl font-bold text-white border-b border-slate-800 pb-2">3. Workflow document anatomy</h2>
+                    <p class="text-slate-300">The root object:</p>
+                    <div class="overflow-x-auto">
+                    <table class="w-full text-sm border border-slate-800 rounded-lg overflow-hidden">
+                        <thead class="bg-slate-900 text-slate-300"><tr>
+                            <th class="text-left px-4 py-2 font-semibold">Field</th>
+                            <th class="text-left px-4 py-2 font-semibold">Required</th>
+                            <th class="text-left px-4 py-2 font-semibold">Meaning</th>
+                        </tr></thead>
+                        <tbody class="divide-y divide-slate-800">
+                            <tr><td class="px-4 py-2"><code>spec</code></td><td class="px-4 py-2">defaults to <code>"1.0"</code></td><td class="px-4 py-2 text-slate-400">Contract version. Only <code>"1.0"</code> is accepted by this core.</td></tr>
+                            <tr><td class="px-4 py-2"><code>name</code></td><td class="px-4 py-2 text-emerald-400">yes</td><td class="px-4 py-2 text-slate-400">Human-readable name, shown in errors and metadata.</td></tr>
+                            <tr><td class="px-4 py-2"><code>version</code></td><td class="px-4 py-2 text-emerald-400">yes</td><td class="px-4 py-2 text-slate-400">Your workflow's semantic version (free string).</td></tr>
+                            <tr><td class="px-4 py-2"><code>id</code></td><td class="px-4 py-2">optional</td><td class="px-4 py-2 text-slate-400">Stable identifier, if you track workflows by id.</td></tr>
+                            <tr><td class="px-4 py-2"><code>nodes</code></td><td class="px-4 py-2 text-emerald-400">yes</td><td class="px-4 py-2 text-slate-400">The graph's nodes (exactly one <code>start</code>, ≥1 <code>end</code>).</td></tr>
+                            <tr><td class="px-4 py-2"><code>edges</code></td><td class="px-4 py-2 text-emerald-400">yes</td><td class="px-4 py-2 text-slate-400">Directed edges connecting node ids.</td></tr>
+                            <tr><td class="px-4 py-2"><code>tasks</code></td><td class="px-4 py-2">optional</td><td class="px-4 py-2 text-slate-400">Inline <a href="#profiles" class="text-indigo-400 hover:underline">task profiles</a> local to this document.</td></tr>
+                            <tr><td class="px-4 py-2"><code>workflows</code></td><td class="px-4 py-2">optional</td><td class="px-4 py-2 text-slate-400">Inline child workflows for <code>subworkflow</code> nodes (precede the shared registry).</td></tr>
+                        </tbody>
+                    </table>
+                    </div>
+                </section>
 
-<h3>Structural rules (enforced at build time)</h3>
-<ul>
-  <li>Exactly <strong>one</strong> <code>start</code> node, at least <strong>one</strong> <code>end</code> node.</li>
-  <li><code>start</code> has no incoming edges; <code>end</code> has no outgoing edges.</li>
-  <li>Node ids are unique; every edge references existing nodes.</li>
-  <li>The graph is <strong>acyclic</strong> and every node is reachable from <code>start</code>.</li>
-  <li>Gateways are coherent (see <a href="#node-gateway">gateway</a>): every <code>exclusive</code> branch has a matching labeled edge and vice versa; <code>parallel</code> needs ≥ 2 outgoing edges; <code>join</code> needs ≥ 2 normal incoming edges.</li>
-</ul>
+                <!-- 4 -->
+                <section id="context" class="space-y-4">
+                    <h2 class="text-2xl font-bold text-white border-b border-slate-800 pb-2">4. The context document</h2>
+                    <p class="text-slate-300">Every execution carries one state document. Mappings and conditions read from these roots:</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>$.trigger              → the initial input of the execution
+$.nodes.&lt;id&gt;.output    → the output published by each executed node
+$.nodes.&lt;id&gt;.error     → the error of a node, when routed via on: "error"
+$.workflow             → metadata (id, name, version, execution_id)</code></pre>
+                    <p class="text-slate-300 text-sm">
+                        A task node with no <code>input</code> receives the output of its predecessor (the
+                        "carried token") directly. Otherwise its <code>input</code> is a mapping resolved against
+                        the document above.
+                    </p>
+                </section>
 
-<h2 id="context">4. Execution Context &amp; Data Flow</h2>
-<p>Every execution maintains a single shared <strong>state document</strong>. All mappings and conditions are resolved against it:</p>
-<pre><code>{
-  "trigger":  { ... },               // the input payload passed to run()
-  "nodes": {
-    "&lt;node-id&gt;": {
-      "output": { ... },             // published when the node completes
-      "error":  { code, message }    // published when a node fails and is error-routed
-    }
-  },
-  "workflow": {
-    "id": "...", "name": "...", "version": "...",
-    "execution_id": "0197a3f1-..."   // UUID v7, unique per run
-  }
+                <!-- 5 -->
+                <section id="mappings" class="space-y-4">
+                    <h2 class="text-2xl font-bold text-white border-b border-slate-800 pb-2">5. Mappings (<code>$.</code>)</h2>
+                    <p class="text-slate-300">A node's <code>input</code> (and <code>foreach.items</code>, <code>subworkflow.input</code>) is a JSON value where strings are interpreted as follows:</p>
+                    <ul class="space-y-2 text-slate-300 text-sm list-disc pl-6">
+                        <li><code>"$.trigger.url"</code> → resolved as JSONPath against the context document.</li>
+                        <li><code>"hello"</code>, <code>42</code>, <code>true</code>, nested objects/arrays → literals. Strings <em>inside</em> nested objects are resolved too if they start with <code>$.</code></li>
+                        <li><code>"$$.not.a.path"</code> → escape: produces the literal string <code>"$.not.a.path"</code>.</li>
+                        <li>Paths are <strong>singular</strong>: the first match is taken; wildcards are not supported in mappings.</li>
+                        <li>A mapping path that <strong>does not resolve is an error</strong> (<code>MAPPING_PATH_NOT_FOUND</code>) — in an input it is almost always a definition bug. (Contrast with conditions, where a missing path is simply <code>false</code>.)</li>
+                    </ul>
+                    <div class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-slate-300">
+                        <strong class="text-amber-300">No transform helpers in mappings.</strong> Concatenating, formatting or
+                        applying defaults is <em>not</em> done inline. Prepare optional or computed values with a
+                        <code>data.*</code> node first. There is exactly one place where data is reshaped — a deliberate design choice.
+                    </div>
+                </section>
+
+                <!-- 6 -->
+                <section id="nodes" class="space-y-6">
+                    <h2 class="text-2xl font-bold text-white border-b border-slate-800 pb-2">6. Node reference</h2>
+
+                    <h3 class="text-xl font-semibold text-white pt-2">start</h3>
+                    <p class="text-slate-300 text-sm">The single entry point; receives the <code>trigger</code>. Optional fields:</p>
+                    <ul class="text-sm text-slate-300 list-disc pl-6 space-y-1">
+                        <li><code>schema</code> — JSON Schema validating the trigger (fails with <code>SCHEMA_VALIDATION_FAILED</code>).</li>
+                        <li><code>defaults</code> — constants merged into the trigger before execution.</li>
+                    </ul>
+
+                    <h3 class="text-xl font-semibold text-white pt-2">end</h3>
+                    <p class="text-slate-300 text-sm">A terminal node. A workflow may have several. Fields:</p>
+                    <ul class="text-sm text-slate-300 list-disc pl-6 space-y-1">
+                        <li><code>status</code> — <code>success</code> (default), <code>error</code>, <code>cancelled</code>, or a custom string.</li>
+                        <li><code>output</code> — optional shape applied to the predecessor's output; otherwise the predecessor output is final.</li>
+                        <li><code>schema</code> — validates the final result (<code>OUTPUT_SCHEMA_VALIDATION_FAILED</code>).</li>
+                    </ul>
+                    <p class="text-slate-300 text-sm">If several <code>end</code> nodes are reached the workflow output is an object keyed by end-node id; with one, it is that node's value.</p>
+
+                    <h3 class="text-xl font-semibold text-white pt-2">task</h3>
+                    <p class="text-slate-300 text-sm">Invokes a registered task. Fields: <code>task</code> (id, e.g. <code>"http.request"</code>), <code>input</code> (mapping), <code>retry</code>, <code>timeout_ms</code>.</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>{
+  "id": "fetch", "kind": "task", "task": "http.request",
+  "input": { "url": "$.trigger.url", "fail_on_error_status": true },
+  "retry": { "max": 3, "backoff": "exponential", "initial_ms": 500 },
+  "timeout_ms": 10000
 }</code></pre>
-<ul>
-  <li><code>$.trigger</code> — the initial input, validated against the <code>start</code> node's schema if one is declared.</li>
-  <li><code>$.nodes.&lt;id&gt;.output</code> — the result of every node that has already executed. This is how downstream nodes consume upstream results.</li>
-  <li><code>$.nodes.&lt;id&gt;.error</code> — present only when a node failed and the flow continued through an <code>on: error</code> edge.</li>
-  <li><code>$.workflow</code> — metadata, useful for templating ids into requests or logs.</li>
-</ul>
-<p>The state document is thread-safe: parallel gateway branches read and write concurrently without races. Data flows exclusively through the document — there is no other side channel between nodes.</p>
+                    <p class="text-slate-300 text-sm"><code>retry</code> = <code>{ max, backoff, initial_ms }</code>; <code>backoff</code> is <code>exponential</code> (default), <code>linear</code> or <code>fixed</code>. <code>timeout_ms</code> applies per attempt.</p>
 
-<h3>The "token" — implicit data flow</h3>
-<p>Besides the state document, each node receives the <em>output of its predecessor</em> as an implicit token. Some constructs use it as a default: an <code>end</code> node without <code>output</code> returns the predecessor's output; a <code>subworkflow</code> node without <code>input</code> passes the predecessor's output to the child as its trigger.</p>
-
-<h2 id="mappings">5. Mappings (<code>$.</code>)</h2>
-<p>Mappings are how a node's <code>input</code> (and a foreach's <code>items</code>, and an end's <code>output</code>) pull data from the context. The rules of spec 1.0:</p>
-<table>
-  <tr><th>Value</th><th>Behavior</th></tr>
-  <tr><td>String starting with <code>$.</code></td><td>Resolved as JSONPath against the state document. The whole string is the path; partial interpolation is not supported (use <code>data.template</code> for that).</td></tr>
-  <tr><td>String starting with <code>$$.</code></td><td>Escape: produces the literal <code>$.</code> prefix without resolving. <code>"$$.price"</code> → the string <code>"$.price"</code>.</td></tr>
-  <tr><td>Any other string, number, bool, null</td><td>Literal, copied as-is.</td></tr>
-  <tr><td>Objects and arrays</td><td>Walked recursively; every nested string follows the same rules.</td></tr>
-</table>
-<pre><code>"input": {
-  "url": "$.trigger.api_base",                 // resolved from context
-  "method": "POST",                            // literal
-  "body": {
-    "user": "$.nodes.fetch.output.body.name",  // nested resolution
-    "flags": [true, "$.nodes.fetch.output.status"]
-  }
-}</code></pre>
-<div class="note">
-<strong>A path that does not resolve is an error</strong> (<code>MAPPING_PATH_NOT_FOUND</code>), because in an input it is almost always a definition bug. If a value is genuinely optional, prepare it with a <code>data.*</code> node first (e.g. <code>data.cast</code> with a <code>default</code> op). Paths are <strong>singular</strong>: the first match wins; wildcards are not supported in mappings.</div>
-
-<h2 id="nodes">6. Node Reference</h2>
-<p>Every node is <code>{ "id": "...", "kind": "..." , ...kind-specific fields }</code>. The <code>kind</code> vocabulary is fixed by the spec: <code>start</code>, <code>end</code>, <code>task</code>, <code>foreach</code>, <code>gateway</code>, <code>subworkflow</code>.</p>
-
-<h3 id="node-start"><code>start</code> — the entry point</h3>
-<table>
-  <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-  <tr><td><code>schema</code></td><td>JSON Schema</td><td>Optional. Validates the trigger payload; the run fails with <code>SCHEMA_VALIDATION_FAILED</code> before any node executes if it does not conform.</td></tr>
-  <tr><td><code>defaults</code></td><td>object</td><td>Optional. Key/value defaults merged into the trigger (useful for injecting configuration constants).</td></tr>
-</table>
-<pre><code>{ "id": "start", "kind": "start",
-  "schema": { "type": "object", "required": ["order_id"] },
-  "defaults": { "region": "us-east" } }</code></pre>
-
-<h3 id="node-end"><code>end</code> — terminal result</h3>
-<table>
-  <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-  <tr><td><code>status</code></td><td>string</td><td><code>"success"</code> (default), <code>"error"</code>, <code>"cancelled"</code>, or any custom string. Lets callers distinguish which terminal path was taken.</td></tr>
-  <tr><td><code>output</code></td><td>mapping</td><td>Optional. The workflow's final result, resolved against the context. Omitted → the predecessor's output is the result.</td></tr>
-  <tr><td><code>schema</code></td><td>JSON Schema</td><td>Optional. Validates the final result (<code>OUTPUT_SCHEMA_VALIDATION_FAILED</code>).</td></tr>
-</table>
-<pre><code>{ "id": "end", "kind": "end",
-  "output": { "order_id": "$.nodes.create.output.body.id",
-              "status_code": "$.nodes.create.output.status" } }</code></pre>
-<p>A workflow may have several <code>end</code> nodes (one per branch). If execution finishes without reaching any of them, it fails with <code>NO_OUTPUT</code>.</p>
-
-<h3 id="node-task"><code>task</code> — invoke a registered task</h3>
-<table>
-  <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-  <tr><td><code>task</code></td><td>string</td><td><strong>Required.</strong> Namespaced task id, e.g. <code>"http.request"</code> or a profile id. Must be registered (<code>TASK_NOT_FOUND</code> at build otherwise).</td></tr>
-  <tr><td><code>input</code></td><td>mapping</td><td>Optional. Input mapping resolved against the context. The resolved value is validated against the task's <code>input_schema</code> (<code>TASK_INPUT_INVALID</code>).</td></tr>
-  <tr><td><code>retry</code></td><td>object</td><td>Optional retry policy (below).</td></tr>
-  <tr><td><code>timeout_ms</code></td><td>integer</td><td>Optional. Maximum duration <em>per attempt</em> in milliseconds. Exceeding it produces <code>TASK_TIMEOUT</code>, which is retryable.</td></tr>
-</table>
-
-<h4>Retry policy</h4>
-<table>
-  <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-  <tr><td><code>max</code></td><td>integer</td><td><strong>Required.</strong> Maximum retries <em>after</em> the initial attempt (so <code>max: 2</code> means up to 3 attempts).</td></tr>
-  <tr><td><code>backoff</code></td><td>string</td><td><code>"exponential"</code> (default): <code>initial_ms × 2^(attempt−1)</code> · <code>"linear"</code>: <code>initial_ms × attempt</code> · <code>"fixed"</code>: constant <code>initial_ms</code>.</td></tr>
-  <tr><td><code>initial_ms</code></td><td>integer</td><td>Base delay before the first retry. Default <code>500</code>.</td></tr>
-</table>
-<pre><code>{ "id": "create", "kind": "task", "task": "http.request",
-  "input": { "url": "$.trigger.endpoint", "method": "POST",
-             "body": "$.nodes.adapt.output", "fail_on_error_status": true },
-  "retry": { "max": 3, "backoff": "exponential", "initial_ms": 250 },
-  "timeout_ms": 10000 }</code></pre>
-
-<h3 id="node-foreach"><code>foreach</code> — iterate an array with a task</h3>
-<p>Runs one task invocation per array element. Each element is the <em>direct input</em> of the task — reshape elements beforehand with <code>data.map</code> if needed.</p>
-<table>
-  <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-  <tr><td><code>task</code></td><td>string</td><td><strong>Required.</strong> Task (or profile) executed once per element.</td></tr>
-  <tr><td><code>items</code></td><td>mapping</td><td><strong>Required.</strong> Must resolve to an array (<code>FOREACH_ITEMS_NOT_ARRAY</code> otherwise).</td></tr>
-  <tr><td><code>concurrency</code></td><td>integer</td><td>Elements in flight simultaneously. Default <code>1</code> (sequential). Must be ≥ 1 (<code>FOREACH_INVALID_CONCURRENCY</code> at build).</td></tr>
-  <tr><td><code>throttle_ms</code></td><td>integer</td><td>Delay between element <em>starts</em> — a rate limiter to avoid hammering downstream systems. Default <code>0</code>.</td></tr>
-  <tr><td><code>on_item_error</code></td><td>string</td><td><code>"fail"</code> (default): the first element failure cancels the rest and fails the node. <code>"collect"</code>: run everything; the node never fails because of element errors.</td></tr>
-  <tr><td><code>retry</code>, <code>timeout_ms</code></td><td></td><td>Same semantics as <code>task</code>, applied <em>per element</em>.</td></tr>
-</table>
-<p><strong>Output shape</strong> — with <code>on_item_error: "fail"</code> the output is the array of element outputs, in order. With <code>"collect"</code>:</p>
-<pre><code>{
-  "ok":     [ ...outputs of successful elements... ],
-  "failed": [ { "index": 1, "item": { ... }, "error": { "code": "...", "message": "..." } } ]
-}</code></pre>
-<pre><code>{ "id": "batch", "kind": "foreach",
-  "task": "acme.create_shipment",
-  "items": "$.nodes.adapt.output",
-  "concurrency": 4,
-  "throttle_ms": 100,
-  "on_item_error": "collect",
-  "retry": { "max": 2, "initial_ms": 200 } }</code></pre>
-
-<h3 id="node-gateway"><code>gateway</code> — control flow</h3>
-<p>Three BPMN-style gateway kinds, selected with the <code>gateway</code> field:</p>
-
-<h4><code>exclusive</code> — if/else routing</h4>
-<p>Evaluates <code>branches</code> in order; the first branch whose <code>when</code> condition holds wins, and execution follows the outgoing edge whose <code>label</code> equals the branch's <code>edge</code>. A branch with <code>"else": true</code> (at most one) wins when nothing else matched. No match and no else → the run fails with <code>NO_BRANCH_MATCHED</code>.</p>
-<pre><code>{ "id": "verdict", "kind": "gateway", "gateway": "exclusive",
+                    <h3 class="text-xl font-semibold text-white pt-2">gateway</h3>
+                    <p class="text-slate-300 text-sm">Control flow, in three kinds:</p>
+                    <ul class="text-sm text-slate-300 list-disc pl-6 space-y-1">
+                        <li><strong>exclusive</strong> — if/else. Has <code>branches</code>; each branch is <code>{ when: &lt;condition&gt;, edge: "label" }</code> or <code>{ else: true, edge: "label" }</code>. Branches are evaluated in order; the first match wins, otherwise the <code>else</code> branch. No match and no <code>else</code> → <code>NO_BRANCH_MATCHED</code>.</li>
+                        <li><strong>parallel</strong> — fan-out. No branches; all outgoing edges run concurrently. Requires ≥2 outgoing edges.</li>
+                        <li><strong>join</strong> — fan-in (<code>wait_all</code>). Waits for every normal incoming branch; its output is an object <code>{ "&lt;source_node&gt;": output, … }</code>. Requires ≥2 normal incoming edges.</li>
+                    </ul>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>{
+  "id": "check", "kind": "gateway", "gateway": "exclusive",
   "branches": [
-    { "when": { "path": "$.nodes.check.output.status", "eq": 200 }, "edge": "healthy" },
-    { "when": { "path": "$.nodes.check.output.status", "gte": 500 }, "edge": "outage" },
-    { "else": true, "edge": "degraded" }
-  ] }
-// edges: { "from": "verdict", "to": "...", "label": "healthy" }, etc.</code></pre>
-<p>Build-time coherence checks: every branch needs a matching labeled edge (<code>GATEWAY_BRANCH_WITHOUT_EDGE</code>), every labeled edge needs a branch (<code>GATEWAY_EDGE_WITHOUT_BRANCH</code>), at most one else (<code>GATEWAY_MULTIPLE_ELSE</code>), branches need <code>when</code> or <code>else</code> (<code>GATEWAY_BRANCH_WITHOUT_WHEN</code>), and an exclusive gateway must declare branches (<code>GATEWAY_NO_BRANCHES</code>).</p>
+    { "when": { "path": "$.nodes.fetch.output.status", "eq": 200 }, "edge": "ok" },
+    { "else": true, "edge": "fail" }
+  ]
+}</code></pre>
 
-<h4><code>parallel</code> — fan-out</h4>
-<p>All outgoing edges execute <strong>concurrently</strong>. Requires at least 2 outgoing edges (<code>PARALLEL_TOO_FEW_OUTPUTS</code>). Declares no branches (<code>GATEWAY_BRANCHES_IGNORED</code>).</p>
+                    <h3 class="text-xl font-semibold text-white pt-2">foreach</h3>
+                    <p class="text-slate-300 text-sm">Invokes a task once per array element — the complement of <code>data.map</code> (which only reshapes).</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>{
+  "id": "create_orders", "kind": "foreach",
+  "items": "$.nodes.adapt.output",   // must resolve to an array
+  "task": "acme.create_shipment",
+  "concurrency": 5,                   // default 1 (sequential)
+  "throttle_ms": 200,                 // min spacing between item starts
+  "on_item_error": "collect",         // "fail" (default) | "collect"
+  "retry": { "max": 2 }, "timeout_ms": 10000
+}</code></pre>
+                    <ul class="text-sm text-slate-300 list-disc pl-6 space-y-1">
+                        <li>Each element is the <strong>direct input</strong> of the task; reshape per element with <code>data.map</code> first.</li>
+                        <li><code>concurrency</code> limits in-flight items; <code>throttle_ms</code> spaces out item <em>starts</em> (rate limit toward the target).</li>
+                        <li><code>on_item_error: "fail"</code> — first error cancels in-flight items and the node fails (its <code>on: error</code> edges apply). Output: array of outputs in <code>items</code> order.</li>
+                        <li><code>on_item_error: "collect"</code> — all run; output <code>{ "ok": [...], "failed": [{ index, item, error }] }</code> and the node does not fail. (A panic still aborts the whole node.)</li>
+                    </ul>
 
-<h4><code>join</code> — fan-in</h4>
-<p>Waits for <strong>all</strong> incoming normal-flow branches (wait-all, fail-fast: if any branch fails definitively, the join fails). Requires at least 2 incoming edges (<code>JOIN_TOO_FEW_INPUTS</code>). If the run ends while a join is still waiting for branches that can no longer arrive, it fails with <code>JOIN_INCOMPLETE</code>. Error edges may not target a join (<code>ERROR_EDGE_TO_JOIN</code>).</p>
-<pre><code>{ "id": "fan",  "kind": "gateway", "gateway": "parallel" },
-{ "id": "join", "kind": "gateway", "gateway": "join" }</code></pre>
+                    <h3 class="text-xl font-semibold text-white pt-2">subworkflow</h3>
+                    <p class="text-slate-300 text-sm">Runs another workflow as if it were a task — the reuse block above profiles.</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>{
+  "id": "process", "kind": "subworkflow", "workflow": "normalize-and-send",
+  "input": { "date": "$.trigger.order_date", "total": "$.trigger.amount" }
+}</code></pre>
+                    <p class="text-slate-300 text-sm">
+                        The resolved <code>input</code> (or the predecessor token) becomes the child's <code>trigger</code>; the
+                        child's final output is the node's output. The child is resolved by name — inline
+                        <code>workflows</code> first, then the shared registry — and everything (existence, cycles,
+                        depth ≤ 8) is checked at build time. Error and panic in the child route through the
+                        node's <code>on: error</code> / <code>on: panic</code> edges. The child shares the root's blob store.
+                    </p>
+                </section>
 
-<h3 id="node-subworkflow"><code>subworkflow</code> — compose workflows</h3>
-<table>
-  <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-  <tr><td><code>workflow</code></td><td>string</td><td><strong>Required.</strong> Name of the child workflow. Resolved against the document's inline <code>workflows</code> section first, then the shared <code>WorkflowRegistry</code>.</td></tr>
-  <tr><td><code>input</code></td><td>mapping</td><td>Optional. Becomes the child's trigger. Omitted → the predecessor's output is the trigger.</td></tr>
-</table>
-<p>The child's final output becomes the node's output. Failures route like any task: a child failure follows <code>on: error</code> edges, a panic inside the child follows <code>on: panic</code> edges. See <a href="#subworkflows">§13</a> for resolution, nesting, and blob semantics.</p>
-
-<h2 id="edges">7. Edges</h2>
-<table>
-  <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-  <tr><td><code>from</code> / <code>to</code></td><td>string</td><td><strong>Required.</strong> Source and target node ids.</td></tr>
-  <tr><td><code>label</code></td><td>string</td><td>Connects the edge to an exclusive-gateway branch (<code>branches[].edge</code>).</td></tr>
-  <tr><td><code>on</code></td><td>string</td><td>Alternative trigger. Absent → normal flow. <code>"error"</code> → followed when the source node fails definitively (retries exhausted). <code>"panic"</code> → followed when the source's task panics (an extension bug).</td></tr>
-</table>
-<pre><code>{ "from": "create", "to": "next" },                       // normal flow
-{ "from": "create", "to": "compensate", "on": "error" },  // failure route
-{ "from": "create", "to": "quarantine", "on": "panic" }   // bug route</code></pre>
-<p>Build-time rules: <code>on:</code> edges may only leave nodes that execute tasks — <code>task</code>, <code>foreach</code>, <code>subworkflow</code> (<code>ERROR_EDGE_INVALID_SOURCE</code>) — and may not point at a <code>join</code> (<code>ERROR_EDGE_TO_JOIN</code>).</p>
-
-<h2 id="conditions">8. Conditions</h2>
-<p>Conditions are the mini-DSL used by exclusive-gateway branches. A condition is either a <strong>comparison</strong> or a <strong>logical composition</strong>:</p>
-<pre><code>{ "and": [
+                <!-- 7 -->
+                <section id="conditions" class="space-y-4">
+                    <h2 class="text-2xl font-bold text-white border-b border-slate-800 pb-2">7. Condition mini-DSL</h2>
+                    <p class="text-slate-300 text-sm">Conditions (used in exclusive gateway branches) are JSON too — a comparator over a path, or a logical composition:</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>{
+  "and": [
     { "path": "$.nodes.fetch.output.status", "eq": 200 },
     { "or": [
-        { "path": "$.trigger.priority", "in": ["high", "urgent"] },
-        { "not": { "path": "$.trigger.retry_count", "gt": 3 } }
+      { "path": "$.trigger.priority", "in": ["high", "urgent"] },
+      { "path": "$.trigger.retry_count", "gt": 3 }
     ]}
-]}</code></pre>
-<p>A comparison is always <code>{ "path": "&lt;JSONPath&gt;", "&lt;operator&gt;": &lt;operand&gt; }</code> — exactly one operator key next to <code>path</code>.</p>
-
-<h3>The 13 built-in operators</h3>
-<table>
-  <tr><th>Operator</th><th>Operand</th><th>True when…</th></tr>
-  <tr><td><code>eq</code></td><td>any</td><td>resolved value strictly equals the operand</td></tr>
-  <tr><td><code>ne</code></td><td>any</td><td>resolved value differs from the operand (an <em>absent</em> path yields <code>false</code>, not <code>true</code>)</td></tr>
-  <tr><td><code>gt</code> / <code>gte</code> / <code>lt</code> / <code>lte</code></td><td>number or string</td><td>ordered comparison — numbers with numbers, strings with strings</td></tr>
-  <tr><td><code>in</code></td><td>array</td><td>resolved value is one of the listed values</td></tr>
-  <tr><td><code>contains</code></td><td>any</td><td>resolved array contains the operand, or resolved string contains the operand substring</td></tr>
-  <tr><td><code>exists</code></td><td>boolean</td><td>the path resolves (<code>true</code>) / does not resolve (<code>false</code>)</td></tr>
-  <tr><td><code>is_null</code></td><td>boolean</td><td>the resolved value is <code>null</code> (<code>true</code>) / is not (<code>false</code>)</td></tr>
-  <tr><td><code>starts_with</code> / <code>ends_with</code></td><td>string</td><td>resolved string has the prefix / suffix</td></tr>
-  <tr><td><code>matches</code></td><td>string (regex)</td><td>resolved string matches the regular expression (<code>INVALID_REGEX</code> if it does not compile)</td></tr>
-</table>
-<div class="note">
-<strong>Absence semantics.</strong> A path that does not resolve is <em>not</em> an error in a condition: <code>exists</code> answers honestly and every other built-in operator yields <code>false</code>. Conditions only fail on <em>definition</em> errors — invalid JSONPath, invalid regex, or an unregistered custom operator.</div>
-
-<h3>Custom operators</h3>
-<p>Any operator key outside the 13 above is treated as a <strong>custom operator</strong> and resolved against the host's operator registry at evaluation time. If your platform registered <code>between</code>, this just works:</p>
-<pre><code>{ "path": "$.trigger.amount", "between": [100, 500] }</code></pre>
-<p>Using an unregistered operator fails at <em>build time</em> (<code>UNKNOWN_CONDITION_OPERATOR</code>) — typos never reach runtime. Hosts register operators with <code>expr::operators::global().register(...)</code>; see the <a href="infrastructure.html">Infrastructure Manual</a>.</p>
-
-<h2 id="errors">9. Failure Handling</h2>
-<p>Every failure carries a structured <code>WorkflowError</code> — <code>{ "code": "TASK_TIMEOUT", "message": "...", "source_task": "create" }</code>. The full code catalog is in <a href="#error-codes">§17</a>. A task node failure goes through this ladder:</p>
-<ol>
-  <li><strong>Attempt fails</strong> (task error, schema violation, or <code>TASK_TIMEOUT</code>).</li>
-  <li><strong>Retry policy</strong> — if attempts remain, wait per the backoff strategy and retry. Each retry receives the same resolved input.</li>
-  <li><strong>Definitive failure</strong> — retries exhausted. If the node has an <code>on: "error"</code> edge, the error is published to <code>$.nodes.&lt;id&gt;.error</code> and execution continues along that edge (the node's report status is <em>error_routed</em>).</li>
-  <li><strong>No error edge</strong> — the whole run fails with that error.</li>
-</ol>
-
-<h3>Panics are different</h3>
-<p>A panic inside a task is a <strong>bug in the extension</strong>, not a transient condition. The engine isolates it (<code>catch_unwind</code> — your process survives), but it does <strong>not retry</strong> and does <strong>not</strong> follow <code>on: error</code> edges. The only route is an explicit <code>on: "panic"</code> edge; otherwise the run fails with <code>TASK_PANIC</code>.</p>
-
-<h3>Consuming an upstream error</h3>
-<pre><code>{ "id": "alert", "kind": "task", "task": "util.log",
-  "input": { "level": "error",
-             "message": "$.nodes.create.error" } }
-// reached via: { "from": "create", "to": "alert", "on": "error" }</code></pre>
-
-<h2 id="profiles">10. Task Profiles</h2>
-<p>A profile is a <strong>named, reusable instance of a base task</strong> with configuration baked in and its own schemas. Profiles let workflow authors expose a clean domain-specific contract (<code>"acme.create_order"</code> taking <code>{sku, qty}</code>) on top of a generic task (<code>http.request</code>). Once registered, a profile is indistinguishable from any other task — usable in <code>task</code> and <code>foreach</code> nodes alike.</p>
-<p>Declare profiles in the document's <code>tasks</code> section (local to the document), or register them programmatically on the registry (shared):</p>
-<pre><code>"tasks": [
-  {
-    "id": "acme.create_order",
-    "extends": "http.request",
-    "description": "Creates an order in the ACME API",
-    "input_schema": {
-      "type": "object", "required": ["sku", "qty"],
-      "properties": { "sku": { "type": "string" },
-                      "qty": { "type": "integer", "minimum": 1 } }
-    },
-    "output_schema": { "type": "object", "required": ["order_id"] },
-    "bind": {
-      "url": "https://api.acme.com/orders",
-      "method": "POST",
-      "auth": { "type": "bearer", "token": { "$secret": "ACME_TOKEN" } },
-      "fail_on_error_status": true,
-      "body": "@"
-    },
-    "output": "@.body"
-  }
-]</code></pre>
-<table>
-  <tr><th>Field</th><th>Description</th></tr>
-  <tr><td><code>id</code></td><td><strong>Required.</strong> Namespaced id the profile registers under. Conflicts fail the build (<code>PROFILE_ID_CONFLICT</code>).</td></tr>
-  <tr><td><code>extends</code></td><td><strong>Required.</strong> Id of the registered base task (<code>PROFILE_BASE_NOT_FOUND</code> if absent).</td></tr>
-  <tr><td><code>input_schema</code> / <code>output_schema</code></td><td>The profile's <em>own</em> contract, validated around every invocation.</td></tr>
-  <tr><td><code>bind</code></td><td>A <strong>shape</strong> that builds the base task's input from the profile's input: <code>"@"</code> is the entire profile input, <code>"@.path"</code> a sub-path, everything else literal. Omitted → input passes through unchanged. If the bound input violates the base task's schema, the error is <code>PROFILE_BIND_INVALID</code>.</td></tr>
-  <tr><td><code>output</code></td><td>Optional shape applied to the base task's output (e.g. <code>"@.body"</code> to unwrap an HTTP response).</td></tr>
-</table>
-<div class="note"><strong>Shapes (<code>@.</code>) vs mappings (<code>$.</code>).</strong> Mappings resolve against the global execution context. Shapes resolve against a <em>local</em> document: the profile's input (for <code>bind</code>), the base output (for <code>output</code>), or the <code>source</code>/element (for <code>data.transform</code> / <code>data.map</code>). In a shape, a missing path yields <code>null</code> instead of an error.</div>
-<p>Inline profiles are <strong>scoped</strong>: they exist only while their document executes and never leak into the shared registry, so two workflows can define different <code>acme.create_order</code> profiles without conflict.</p>
-
-<h2 id="secrets">11. Secrets (<code>$secret</code>)</h2>
-<p>Credentials never belong in a workflow document — documents get versioned, shared, and logged. Wherever a secret is needed inside a profile's <code>bind</code>, write a reference instead:</p>
-<pre><code>"auth": { "type": "bearer", "token": { "$secret": "ACME_TOKEN" } }</code></pre>
-<p>References are resolved when the profile is registered, through the host's <code>SecretProvider</code>. The default provider reads <strong>environment variables</strong>; hosts can plug a vault or KMS (see <a href="#host-api">§15</a>). An unresolvable secret fails the build with <code>SECRET_NOT_FOUND</code>. The reference must be an object with the single key <code>$secret</code>; objects with additional keys are left untouched.</p>
-
-<h2 id="blobs">12. Blobs (<code>$blob</code>)</h2>
-<p>Large binaries travel <strong>by reference</strong>, never inline in the context JSON:</p>
-<pre><code>{ "$blob": "0197a3f1-7c2e-...", "name": "sales.csv", "size": 52428800 }</code></pre>
-<ul>
-  <li>Tasks that <em>produce</em> files return a blob reference — <code>http.request</code> with <code>response_body: "blob"</code>, <code>tabular.write</code>, <code>sftp.get</code>.</li>
-  <li>Tasks that <em>consume</em> files accept one — <code>http.request</code> (<code>body_blob</code>, multipart parts), <code>tabular.parse</code>, <code>sftp.put</code>.</li>
-  <li>Pass references between nodes through ordinary mappings: <code>"file": "$.nodes.download.output.body"</code>.</li>
-  <li>Transfers are <strong>streamed</strong>: a 2 GB file moves between an HTTP download and an SFTP upload without ever being loaded into memory.</li>
-</ul>
-<p><strong>Lifecycle:</strong> the blob store is created per execution and destroyed when the root execution finishes — success or failure. Subworkflows share the parent's store, so blob references can cross the subworkflow boundary in both directions. Blob ids are engine-generated; forged ids are rejected (<code>INVALID_BLOB_ID</code>), and a reference from another execution yields <code>BLOB_NOT_FOUND</code>.</p>
-
-<h2 id="subworkflows">13. Subworkflows</h2>
-<p>A <code>subworkflow</code> node runs another workflow as if it were a task. Two sources, in precedence order:</p>
-<ol>
-  <li><strong>Inline</strong> — the document's <code>workflows</code> section (names must be unique: <code>SUBWORKFLOW_DUPLICATE_NAME</code>).</li>
-  <li><strong>Shared registry</strong> — a <code>WorkflowRegistry</code> injected at build (<a href="#host-api">§15</a>).</li>
-</ol>
-<p>Everything is resolved and validated <strong>when the parent executor is built</strong>: a missing name (<code>SUBWORKFLOW_NOT_FOUND</code>), a self-referencing chain (<code>SUBWORKFLOW_CYCLE</code>), nesting deeper than 8 levels (<code>SUBWORKFLOW_DEPTH_EXCEEDED</code>), or an invalid child document all fail the parent's build — never the run.</p>
-<p>Semantics at runtime:</p>
-<ul>
-  <li>The node's resolved <code>input</code> (or the predecessor's output) becomes the child's <code>$.trigger</code>.</li>
-  <li>The child has its own execution id and its own state document; it cannot read the parent's context.</li>
-  <li>The child shares the parent's <strong>blob store</strong> and <strong>event sequence</strong> (observability events of the whole tree share one total order; child events carry <code>parent_execution_id</code>).</li>
-  <li>The child's final output is the node's output. Child failure → <code>on: error</code>; child panic → <code>on: panic</code>.</li>
-</ul>
-
-<h2 id="tasks">14. Built-in Task Catalog</h2>
-<p>Twelve tasks ship across five extensions. Every task declares JSON Schemas for input and output; the engine validates both around each invocation.</p>
-
-<h3 id="tasks-util">util — primitives</h3>
-
-<h4><code>util.noop</code></h4>
-<p>Returns its input unchanged. Useful as a placeholder or junction.</p>
-
-<h4><code>util.log</code></h4>
-<table>
-  <tr><th>Input</th><th>Description</th></tr>
-  <tr><td><code>message</code> <span class="badge">required</span></td><td>Any JSON value to log.</td></tr>
-  <tr><td><code>level</code></td><td><code>"debug"</code> | <code>"info"</code> (default) | <code>"warn"</code> | <code>"error"</code></td></tr>
-  <tr><td><code>value</code></td><td>Returned as the node's output (default <code>null</code>).</td></tr>
-</table>
-<p>Logs through the host's <code>tracing</code> subscriber with the execution id attached.</p>
-
-<h4><code>util.delay</code></h4>
-<table>
-  <tr><th>Input</th><th>Description</th></tr>
-  <tr><td><code>ms</code> <span class="badge">required</span></td><td>Milliseconds to wait (non-blocking).</td></tr>
-  <tr><td><code>value</code></td><td>Returned as the node's output (default <code>null</code>).</td></tr>
-</table>
-
-<h3 id="tasks-data">data — pure transformations</h3>
-
-<h4><code>data.transform</code></h4>
-<p>Reshapes one object with a <code>@.</code> shape template.</p>
-<table>
-  <tr><th>Input</th><th>Description</th></tr>
-  <tr><td><code>source</code> <span class="badge">required</span></td><td>Origin document (typically <code>"$.nodes.x.output"</code>).</td></tr>
-  <tr><td><code>shape</code> <span class="badge">required</span></td><td>Output structure. Strings starting with <code>@.</code> resolve relative to <code>source</code>; missing paths yield <code>null</code>; nesting is recursive.</td></tr>
-</table>
-<pre><code>{ "task": "data.transform",
-  "input": { "source": "$.trigger",
-             "shape": { "sku": "@.product.code", "qty": "@.product.units" } } }</code></pre>
-
-<h4><code>data.map</code></h4>
-<p>Applies a shape to <strong>every element</strong> of an array. <code>items</code> (required, array) + <code>shape</code> (required, resolved per element where <code>@</code> = the element). Output is the transformed array. The canonical companion of <code>foreach</code>.</p>
-
-<h4><code>data.merge</code></h4>
-<p><code>objects</code> (required, array of objects, min 1). Deep-merges in order: nested objects merge recursively, arrays and scalars are replaced by later values. Output is the merged object.</p>
-
-<h4><code>data.template</code></h4>
-<table>
-  <tr><th>Input</th><th>Description</th></tr>
-  <tr><td><code>template</code> <span class="badge">required</span></td><td>String with <code>{dotted.path}</code> placeholders. Escapes: <code>{{</code> → <code>{</code>, <code>}}</code> → <code>}</code>.</td></tr>
-  <tr><td><code>values</code> <span class="badge">required</span></td><td>Object the placeholders resolve into (dotted paths supported).</td></tr>
-</table>
-<p>Output is the interpolated string. Errors: <code>TEMPLATE_VALUE_MISSING</code> (placeholder not found in values), <code>TEMPLATE_INVALID</code> (unclosed placeholder).</p>
-
-<h4><code>data.cast</code></h4>
-<p>Declarative per-field type conversions, designed for normalizing messy external data (spreadsheets, CSVs, legacy APIs) before it hits a typed contract.</p>
-<table>
-  <tr><th>Input</th><th>Description</th></tr>
-  <tr><td><code>source</code> <span class="badge">required</span></td><td>Object or array of objects (rows).</td></tr>
-  <tr><td><code>fields</code> <span class="badge">required</span></td><td>Map of dotted field path → array of operations, applied in order.</td></tr>
-  <tr><td><code>on_invalid</code></td><td><code>"fail"</code> (default): first invalid conversion fails the task (<code>CAST_FIELD_INVALID</code>) · <code>"null"</code>: invalid → <code>null</code>, keep going · <code>"collect"</code>: output becomes <code>{ ok: [...], failed: [{index, item, errors}] }</code>.</td></tr>
-</table>
-<table>
-  <tr><th>Operation</th><th>Parameters</th><th>Effect</th></tr>
-  <tr><td><code>date</code></td><td><code>from</code> (required, strftime), <code>to</code> (default <code>%Y-%m-%d</code>)</td><td>Reformat a date string.</td></tr>
-  <tr><td><code>number</code></td><td><code>decimal</code>, <code>thousands</code> (single chars)</td><td>Parse localized numbers: <code>"1.234,56"</code> → <code>1234.56</code>.</td></tr>
-  <tr><td><code>int</code></td><td>—</td><td>Strict integer (errors on decimals / non-numeric).</td></tr>
-  <tr><td><code>bool</code></td><td>—</td><td><code>"true"/"1"/"yes"/"sí"</code> → true; <code>"false"/"0"/"no"</code> → false.</td></tr>
-  <tr><td><code>string</code> / <code>trim</code> / <code>upper</code> / <code>lower</code></td><td>—</td><td>Coerce to string / trim whitespace / case conversion.</td></tr>
-  <tr><td><code>replace</code></td><td><code>from</code>, <code>to</code> (required)</td><td>Substring replacement.</td></tr>
-  <tr><td><code>default</code></td><td><code>value</code> (required)</td><td>Inject a fallback when the field is null/missing (never overrides non-null).</td></tr>
-</table>
-<pre><code>{ "task": "data.cast",
-  "input": {
-    "source": "$.nodes.parse.output.rows",
-    "fields": {
-      "date":  [ { "op": "date", "from": "%d/%m/%Y" } ],
-      "total": [ { "op": "number", "decimal": ",", "thousands": "." } ],
-      "sku":   [ { "op": "trim" }, { "op": "upper" } ]
-    },
-    "on_invalid": "collect"
-  } }</code></pre>
-
-<h3 id="tasks-http">http.request — declarative HTTP client</h3>
-<table>
-  <tr><th>Input</th><th>Description</th></tr>
-  <tr><td><code>url</code> <span class="badge">required</span></td><td>Target URL.</td></tr>
-  <tr><td><code>method</code></td><td><code>GET</code> (default), <code>POST</code>, <code>PUT</code>, <code>PATCH</code>, <code>DELETE</code>, <code>HEAD</code>, <code>OPTIONS</code>.</td></tr>
-  <tr><td><code>headers</code> / <code>query</code></td><td>String→string maps.</td></tr>
-  <tr><td><code>body</code></td><td>JSON body (<code>Content-Type: application/json</code>).</td></tr>
-  <tr><td><code>form</code></td><td>URL-encoded form body.</td></tr>
-  <tr><td><code>text</code></td><td>Raw text body (content type via <code>headers</code>; default <code>text/plain</code>).</td></tr>
-  <tr><td><code>body_blob</code></td><td>A <code>$blob</code> reference streamed as the request body.</td></tr>
-  <tr><td><code>multipart</code></td><td><code>multipart/form-data</code>; each property is a part: plain string, <code>{text, content_type?}</code>, <code>{json}</code>, or <code>{blob, filename?, content_type?}</code> (blob parts are streamed).</td></tr>
-  <tr><td><code>auth</code></td><td><code>{ "type": "basic", "username", "password"? }</code> or <code>{ "type": "bearer", "token" }</code>.</td></tr>
-  <tr><td><code>response_body</code></td><td><code>"auto"</code> (default — JSON if the response says so, else string) · <code>"text"</code> (always string) · <code>"blob"</code> (stream to the blob store, body becomes a <code>$blob</code> reference).</td></tr>
-  <tr><td><code>fail_on_error_status</code></td><td>Default <code>false</code>: any status is data, route on it with a gateway. <code>true</code>: status ≥ 400 fails the task (<code>HTTP_STATUS_ERROR</code>) and triggers retry / <code>on: error</code>.</td></tr>
-</table>
-<div class="note"><code>body</code>, <code>form</code>, <code>text</code>, <code>body_blob</code> and <code>multipart</code> are <strong>mutually exclusive</strong> — declaring more than one is <code>HTTP_INPUT_INVALID</code>.</div>
-<p><strong>Output:</strong> <code>{ "status": int, "headers": {...}, "body": json | string | null | { "$blob": ... } }</code>. Errors: <code>HTTP_INPUT_INVALID</code>, <code>HTTP_REQUEST_FAILED</code> (network/timeout), <code>HTTP_STATUS_ERROR</code>, <code>BLOB_IO_ERROR</code>.</p>
-
-<h3 id="tasks-tabular">tabular — CSV/XLSX ↔ JSON rows</h3>
-
-<h4><code>tabular.parse</code></h4>
-<table>
-  <tr><th>Input</th><th>Description</th></tr>
-  <tr><td><code>file</code> <span class="badge">required</span></td><td><code>$blob</code> reference to parse.</td></tr>
-  <tr><td><code>format</code></td><td><code>"csv"</code> | <code>"xlsx"</code>. Omitted → inferred from the blob's name (<code>.csv</code>/<code>.tsv</code>/<code>.xlsx</code>); no suffix → <code>TABULAR_FORMAT_UNKNOWN</code>.</td></tr>
-  <tr><td><code>headers</code></td><td>Default <code>true</code>: first row are column names → rows become objects. <code>false</code> → rows are cell arrays.</td></tr>
-  <tr><td><code>delimiter</code></td><td>CSV delimiter, single char, default <code>","</code>.</td></tr>
-  <tr><td><code>sheet</code></td><td>XLSX only: sheet name (default: first sheet).</td></tr>
-  <tr><td><code>raw</code></td><td>Default <code>false</code>: CSV cells get type inference (null/bool/int/float/string; <code>"007"</code> stays a string). <code>true</code> → everything stays a string.</td></tr>
-</table>
-<p><strong>Output:</strong> <code>{ "rows": [...], "count": int }</code>. Errors: <code>TABULAR_FORMAT_UNKNOWN</code>, <code>TABULAR_ERROR</code>, <code>TABULAR_INPUT_INVALID</code>.</p>
-
-<h4><code>tabular.write</code></h4>
-<table>
-  <tr><th>Input</th><th>Description</th></tr>
-  <tr><td><code>rows</code> <span class="badge">required</span></td><td>Array of objects (column headers from keys) or arrays (no headers).</td></tr>
-  <tr><td><code>format</code> <span class="badge">required</span></td><td><code>"csv"</code> | <code>"xlsx"</code>.</td></tr>
-  <tr><td><code>name</code></td><td>Blob filename (default <code>out.csv</code> / <code>out.xlsx</code>).</td></tr>
-  <tr><td><code>headers</code></td><td>Explicit column order (default: keys of the first object row).</td></tr>
-  <tr><td><code>delimiter</code> / <code>sheet</code></td><td>As in <code>tabular.parse</code>.</td></tr>
-</table>
-<p><strong>Output:</strong> <code>{ "file": { "$blob": ... } }</code> — chain it into <code>http.request</code> multipart or <code>sftp.put</code>.</p>
-
-<h3 id="tasks-sftp">sftp — remote file transfer</h3>
-<p>All three tasks share the <code>connection</code> object:</p>
-<pre><code>"connection": {
-  "host": "sftp.partner.com", "port": 22, "username": "acme",
-  "auth": { "type": "password", "password": { "$secret": "SFTP_PASS" } },
-  // or:  { "type": "key", "private_key": "/path/to/id_ed25519", "passphrase": "..." }
-  "known_hosts": "/etc/ssh/known_hosts"   // optional but recommended
+  ]
 }</code></pre>
-<p>When <code>known_hosts</code> is provided, the server's host key is verified: unknown host → <code>SFTP_HOST_UNKNOWN</code>; mismatched key (possible MITM) → <code>SFTP_HOST_KEY_MISMATCH</code>.</p>
-<table>
-  <tr><th>Task</th><th>Input (besides <code>connection</code>)</th><th>Output</th></tr>
-  <tr><td><code>sftp.get</code></td><td><code>path</code> (remote file), <code>name</code> (blob name, default: remote filename)</td><td><code>{ "file": { "$blob": ... } }</code> — streamed, never buffered in memory</td></tr>
-  <tr><td><code>sftp.put</code></td><td><code>file</code> (<code>$blob</code> ref), <code>path</code> (remote destination)</td><td><code>{ "path": "...", "size": bytes }</code></td></tr>
-  <tr><td><code>sftp.list</code></td><td><code>path</code> (remote directory)</td><td><code>{ "entries": [ { "name", "kind": "file"|"dir"|"other", "size", "modified" } ] }</code></td></tr>
-</table>
-<p>Common errors: <code>SFTP_ERROR</code>, <code>SFTP_INPUT_INVALID</code>, <code>BLOB_IO_ERROR</code>.</p>
+                    <div class="overflow-x-auto">
+                    <table class="w-full text-sm border border-slate-800 rounded-lg overflow-hidden">
+                        <thead class="bg-slate-900 text-slate-300"><tr><th class="text-left px-4 py-2">Group</th><th class="text-left px-4 py-2">Operators</th></tr></thead>
+                        <tbody class="divide-y divide-slate-800 text-slate-400">
+                            <tr><td class="px-4 py-2">Comparison</td><td class="px-4 py-2"><code>eq</code> <code>ne</code> <code>gt</code> <code>gte</code> <code>lt</code> <code>lte</code></td></tr>
+                            <tr><td class="px-4 py-2">Membership</td><td class="px-4 py-2"><code>in</code> <code>contains</code></td></tr>
+                            <tr><td class="px-4 py-2">Existence / type</td><td class="px-4 py-2"><code>exists</code> <code>is_null</code></td></tr>
+                            <tr><td class="px-4 py-2">Strings</td><td class="px-4 py-2"><code>starts_with</code> <code>ends_with</code> <code>matches</code> (regex)</td></tr>
+                            <tr><td class="px-4 py-2">Logical</td><td class="px-4 py-2"><code>and</code> <code>or</code> <code>not</code></td></tr>
+                        </tbody>
+                    </table>
+                    </div>
+                    <p class="text-slate-300 text-sm">A path that does not resolve is <strong>not</strong> an error in a condition: <code>exists</code> yields <code>false</code> and comparators yield <code>false</code> — a workflow never crashes because a condition path is absent. Hosts can register extra operators (see the architecture manual).</p>
+                </section>
 
-<h2 id="host-api">15. Embedding the Engine</h2>
+                <!-- 8 -->
+                <section id="edges" class="space-y-4">
+                    <h2 class="text-2xl font-bold text-white border-b border-slate-800 pb-2">8. Edges &amp; error routing</h2>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>{ "from": "check", "label": "ok", "to": "notify" }   // gateway branch
+{ "from": "fetch", "on": "error", "to": "alert" }    // operational failure
+{ "from": "fetch", "on": "panic", "to": "cleanup" }  // bug in the task</code></pre>
+                    <p class="text-slate-300 text-sm">Every task-running node has <strong>three routable outputs</strong>:</p>
+                    <ul class="text-sm text-slate-300 list-disc pl-6 space-y-1">
+                        <li><strong>success</strong> (default edge, or labelled for gateways).</li>
+                        <li><code>on: "error"</code> — taken when the node exhausts its retries.</li>
+                        <li><code>on: "panic"</code> — taken when the task panics. A panic <strong>never retries</strong> (a bug is not transient) and <strong>never falls back to <code>on: error</code></strong> (it may have left half-finished effects). Without a panic edge, the workflow fails.</li>
+                    </ul>
+                    <p class="text-slate-300 text-sm">Trigger edges (<code>on: error</code>/<code>on: panic</code>) may only leave <code>task</code>/<code>foreach</code>/<code>subworkflow</code> nodes and may not enter a <code>join</code> gateway.</p>
+                </section>
 
-<h3>Registry setup</h3>
-<pre><code>// All feature-enabled extensions, pre-registered:
-let registry = workflow_forge::default_registry();
+                <!-- 9 -->
+                <section id="profiles" class="space-y-4">
+                    <h2 class="text-2xl font-bold text-white border-b border-slate-800 pb-2">9. Task profiles</h2>
+                    <p class="text-slate-300 text-sm">A <strong>profile</strong> is a named, reusable instance of a registered task with configuration baked in — a concrete client endpoint promoted to a first-class task.</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>{
+  "id": "acme.create_order",
+  "extends": "http.request",
+  "description": "Create an order in Acme",
+  "input_schema":  { "type": "object", "required": ["sku", "qty"] },
+  "output_schema": { "type": "object", "required": ["order_id"] },
+  "bind": {
+    "url": "https://api.acme.com/orders",
+    "method": "POST",
+    "auth": { "type": "bearer", "token": { "$secret": "ACME_TOKEN" } },
+    "fail_on_error_status": true,
+    "body": "@"
+  },
+  "output": "@.body"
+}</code></pre>
+                    <ul class="text-sm text-slate-300 list-disc pl-6 space-y-1">
+                        <li><code>extends</code> — an already-registered task (or another profile; chains are allowed, cycles impossible).</li>
+                        <li><code>bind</code> — a <strong>shape</strong> that builds the base task's input from the profile's input. <code>@</code> is the whole input, <code>@.path</code> a subpath (missing → null), <code>@@.</code> escapes, the rest are literals. Without <code>bind</code>, the input passes through.</li>
+                        <li><code>output</code> — optional shape over the base output (e.g. <code>"@.body"</code>), validated against <code>output_schema</code>.</li>
+                        <li>Secrets — <code>{"$secret":"NAME"}</code> in <code>bind</code> are resolved <strong>when the profile is registered</strong>, so versioned definitions carry no credentials.</li>
+                    </ul>
+                    <p class="text-slate-300 text-sm">Register profiles either via <code>TaskRegistry::register_profile()</code> (shared) or the <code>tasks</code> section of the document (local to that workflow). A registered profile is just another task: it appears in the catalog and the engine validates its input/output like any other.</p>
+                    <p class="text-slate-300 text-sm">The resulting integration pattern: <code>trigger</code> (client JSON) → a <code>data.transform</code> node that reshapes it field by field → a preconfigured profile that performs the call. Every piece is declarative, validatable and reusable.</p>
+                </section>
 
-// Or build your own and add custom tasks:
+                <!-- 10 -->
+                <section id="blobs" class="space-y-4">
+                    <h2 class="text-2xl font-bold text-white border-b border-slate-800 pb-2">10. Blobs &amp; secrets</h2>
+                    <p class="text-slate-300 text-sm">The context is JSON; large files never travel inline. A task that produces a file returns a <strong>blob reference</strong>:</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>{ "file": { "$blob": "01J…", "name": "sales.csv.gz", "size": 52428800 } }</code></pre>
+                    <p class="text-slate-300 text-sm">Blobs are backed by a per-execution store (v1: a temp directory cleaned up when the run ends) and streamed, never base64-inlined. Tasks like <code>tabular.*</code>, <code>sftp.*</code> and <code>http.request</code> (with <code>response_body: "blob"</code> or <code>body_blob</code>) exchange these references.</p>
+                    <p class="text-slate-300 text-sm">Secrets use the <code>{"$secret":"NAME"}</code> convention inside a profile's <code>bind</code>, resolved at registration through a <code>SecretProvider</code> (default: environment variables).</p>
+                </section>
+
+                <!-- 11 -->
+                <section id="authoring" class="space-y-4">
+                    <h2 class="text-2xl font-bold text-white border-b border-slate-800 pb-2">11. Authoring your own tasks</h2>
+                    <p class="text-slate-300 text-sm">A task is the unit of extension. There are three levels of effort — pick the lowest that fits.</p>
+
+                    <h3 class="text-lg font-semibold text-white pt-2">Level 1 — typed closure (recommended)</h3>
+                    <p class="text-slate-300 text-sm">Write two Rust types; the engine <strong>derives</strong> their JSON Schemas via <code>schemars</code>. Input/output validation and the catalog entry come for free.</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>use serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
+
+#[derive(Deserialize, JsonSchema)]
+struct CreateShipmentIn { sku: String, qty: u32 }
+
+#[derive(Serialize, JsonSchema)]
+struct CreateShipmentOut { tracking: String }
+
+registry.register_typed("acme.create_shipment", |ctx, input: CreateShipmentIn| async move {
+    // ctx exposes per-execution resources: ctx.blobs(), ctx.execution_id()
+    Ok(CreateShipmentOut { tracking: format!("{}-{}", input.sku, input.qty) })
+});</code></pre>
+
+                    <h3 class="text-lg font-semibold text-white pt-2">Level 2 — raw closure</h3>
+                    <p class="text-slate-300 text-sm">For trivial JSON-in/JSON-out tasks, skip the types entirely (no schema):</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>registry.register_fn("util.echo", |_ctx, input| async move { Ok(input) });</code></pre>
+
+                    <h3 class="text-lg font-semibold text-white pt-2">Level 3 — the <code>Task</code> trait</h3>
+                    <p class="text-slate-300 text-sm">When a task needs to hold state or dependencies (a DB pool, a configured HTTP client) or read the full execution state, implement the trait directly — the struct you register can carry whatever it needs.</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>use workflow_forge::prelude::*;
+use async_trait::async_trait;
+
+struct MyTask { manifest: TaskManifest /* + pools, clients, config… */ }
+
+#[async_trait]
+impl Task for MyTask {
+    fn manifest(&self) -> &TaskManifest { &self.manifest }
+    async fn execute(&self, ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult {
+        Ok(input) // your logic here
+    }
+}</code></pre>
+
+                    <div class="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-slate-300 space-y-2">
+                        <p><strong class="text-emerald-300">Validation: tolerant by default, strict on request.</strong> For typed tasks the engine validates input against the derived schema before the closure runs and output after; nested types and enums are fully enforced. By default extra/undeclared input fields are <em>accepted</em> (forward-compatible). To reject unknown fields, add <code>#[serde(deny_unknown_fields)]</code> — <code>schemars</code> honors it (emits <code>additionalProperties: false</code>), keeping schema and deserialization aligned.</p>
+                    </div>
+                </section>
+
+                <!-- 12 -->
+                <section id="extensions" class="space-y-6">
+                    <h2 class="text-2xl font-bold text-white border-b border-slate-800 pb-2">12. Official extensions</h2>
+                    <p class="text-slate-300 text-sm">Enable via feature flags on the <code>workflow-forge</code> facade (<code>util</code>, <code>data</code>, <code>http</code> on by default; add <code>tabular</code>, <code>sftp</code>, or <code>full</code>).</p>
+
+                    <h3 class="text-lg font-semibold text-white"><code>util</code></h3>
+                    <div class="overflow-x-auto"><table class="w-full text-sm border border-slate-800 rounded-lg overflow-hidden"><thead class="bg-slate-900 text-slate-300"><tr><th class="text-left px-4 py-2">Task</th><th class="text-left px-4 py-2">Contract</th></tr></thead><tbody class="divide-y divide-slate-800 text-slate-400">
+                        <tr><td class="px-4 py-2"><code>util.noop</code></td><td class="px-4 py-2">Returns its input unchanged.</td></tr>
+                        <tr><td class="px-4 py-2"><code>util.log</code></td><td class="px-4 py-2"><code>{ message, level?, value? }</code> → logs and returns <code>value</code> (or null).</td></tr>
+                        <tr><td class="px-4 py-2"><code>util.delay</code></td><td class="px-4 py-2"><code>{ ms, value? }</code> → sleeps, then returns <code>value</code> (or null).</td></tr>
+                    </tbody></table></div>
+
+                    <h3 class="text-lg font-semibold text-white"><code>data</code> — all reshaping lives here</h3>
+                    <div class="overflow-x-auto"><table class="w-full text-sm border border-slate-800 rounded-lg overflow-hidden"><thead class="bg-slate-900 text-slate-300"><tr><th class="text-left px-4 py-2">Task</th><th class="text-left px-4 py-2">Contract</th></tr></thead><tbody class="divide-y divide-slate-800 text-slate-400">
+                        <tr><td class="px-4 py-2"><code>data.transform</code></td><td class="px-4 py-2"><code>{ source, shape }</code> — apply a shape (<code>@.path</code> relative to source; missing → null) to one object.</td></tr>
+                        <tr><td class="px-4 py-2"><code>data.map</code></td><td class="px-4 py-2"><code>{ items, shape }</code> — apply the shape to each array element.</td></tr>
+                        <tr><td class="px-4 py-2"><code>data.merge</code></td><td class="px-4 py-2"><code>{ objects: [...] }</code> — deep merge in order; later keys win; arrays/scalars replaced whole.</td></tr>
+                        <tr><td class="px-4 py-2"><code>data.template</code></td><td class="px-4 py-2"><code>{ template, values }</code> — interpolate <code>{path.with.dots}</code>; <code>{{</code>/<code>}}</code> escape; output string.</td></tr>
+                        <tr><td class="px-4 py-2"><code>data.cast</code></td><td class="px-4 py-2"><code>{ source, fields, on_invalid? }</code> — per-field conversions: <code>date/number/int/bool/string/trim/upper/lower/replace/default</code>; <code>on_invalid: fail/null/collect</code>.</td></tr>
+                    </tbody></table></div>
+
+                    <h3 class="text-lg font-semibold text-white"><code>http</code></h3>
+                    <p class="text-slate-300 text-sm"><code>http.request</code> — methods, headers, query, basic/bearer auth. A 4xx/5xx is <strong>not</strong> an error by default (status is data; route it with a gateway); set <code>fail_on_error_status: true</code> to make it fail and trigger <code>retry</code>/<code>on: error</code>.</p>
+                    <ul class="text-sm text-slate-300 list-disc pl-6 space-y-1">
+                        <li><strong>Request body</strong> (mutually exclusive): <code>body</code> (JSON), <code>form</code> (urlencoded), <code>text</code> (raw), <code>body_blob</code> (binary, streamed from a <code>$blob</code>), <code>multipart</code> (form-data; parts may be text/json/blob).</li>
+                        <li><strong>Response</strong>: <code>response_body</code> = <code>auto</code> (JSON if content-type is json, else string), <code>text</code>, or <code>blob</code> (streamed to the BlobStore; body is a <code>$blob</code> reference).</li>
+                        <li>Output: <code>{ status, headers, body }</code>.</li>
+                    </ul>
+
+                    <h3 class="text-lg font-semibold text-white"><code>tabular</code> &amp; <code>sftp</code> — via <code>$blob</code></h3>
+                    <div class="overflow-x-auto"><table class="w-full text-sm border border-slate-800 rounded-lg overflow-hidden"><thead class="bg-slate-900 text-slate-300"><tr><th class="text-left px-4 py-2">Task</th><th class="text-left px-4 py-2">Contract</th></tr></thead><tbody class="divide-y divide-slate-800 text-slate-400">
+                        <tr><td class="px-4 py-2"><code>tabular.parse</code></td><td class="px-4 py-2"><code>{ file: $blob, format?, headers?, delimiter?, sheet? }</code> → <code>{ rows, count }</code> (CSV / XLSX).</td></tr>
+                        <tr><td class="px-4 py-2"><code>tabular.write</code></td><td class="px-4 py-2"><code>{ rows, format, name?, … }</code> → <code>{ file: $blob }</code>.</td></tr>
+                        <tr><td class="px-4 py-2"><code>sftp.get</code></td><td class="px-4 py-2"><code>{ connection, path, name? }</code> → <code>{ file: $blob }</code> (streamed download).</td></tr>
+                        <tr><td class="px-4 py-2"><code>sftp.put</code></td><td class="px-4 py-2"><code>{ connection, file: $blob, path }</code> → <code>{ path, size }</code> (streamed upload).</td></tr>
+                        <tr><td class="px-4 py-2"><code>sftp.list</code></td><td class="px-4 py-2"><code>{ connection, path }</code> → <code>{ entries: [{ name, kind, size, modified }] }</code>.</td></tr>
+                    </tbody></table></div>
+                    <div class="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 text-sm text-slate-300">
+                        <strong class="text-indigo-300">Connection reuse at volume.</strong> The default <code>http.request</code> already pools connections (one shared <code>reqwest::Client</code>); inject a tuned client with <code>workflow_forge_ext_http::register_with_client</code>. For SFTP, <code>workflow_forge_ext_sftp::register_pooled(&amp;registry, max_idle)</code> reuses authenticated SSH sessions across calls (keyed by connection, liveness-checked) — register it instead of the default when a <code>foreach</code> hammers the same host.
+                    </div>
+                </section>
+
+                <!-- 13 -->
+                <section id="observability" class="space-y-4">
+                    <h2 class="text-2xl font-bold text-white border-b border-slate-800 pb-2">13. Observability</h2>
+                    <p class="text-slate-300 text-sm">Register an observer to receive typed events (zero cost when absent). The built-in <code>InMemoryHistory</code> accumulates events and produces a serializable report:</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>use std::sync::Arc;
+use workflow_forge::prelude::*;
+
+let history = Arc::new(InMemoryHistory::new());
+let executor = WorkflowExecutor::builder(workflow, registry)
+    .observer(history.clone())
+    .build()
+    .map_err(|e| format!("{e:?}"))?;
+
+executor.run(WorkflowData(trigger)).await?;
+
+let report = history.report();          // root execution: status + per-node timeline
+println!("{}", serde_json::to_string_pretty(&report)?);</code></pre>
+                    <p class="text-slate-300 text-sm">Events include <code>workflow_started/completed/failed</code>, <code>node_started/completed/failed</code>, <code>task_attempt_started/failed</code> and <code>foreach_item_completed/failed</code>, each carrying <code>execution_id</code>, a total-order <code>seq</code> and <code>elapsed_ms</code>. See the architecture manual for the full event contract.</p>
+
+                    <h3 class="text-lg font-semibold text-white pt-2">Dry-run testing with mock tasks</h3>
+                    <p class="text-slate-300 text-sm">Enable the <code>testing</code> feature to swap a real task (an HTTP call, an SFTP transfer, a client profile) for a <code>MockTask</code>, run the workflow with the real executor, and assert both the output and <em>what it would have called</em> — no network, filesystem or secrets.</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>use std::sync::Arc;
+use workflow_forge::prelude::*;
+use workflow_forge::testing::MockTask;   // feature = "testing"
+
 let registry = Arc::new(TaskRegistry::new());
-workflow_forge::register_extensions(&amp;registry);
-registry.register(MyCustomTask::new());   // your own Task implementation</code></pre>
+let mock = MockTask::returning("acme.create_order", serde_json::json!({ "order_id": "o-1" }));
+let calls = mock.call_log();              // grab the handle BEFORE registering
+registry.register(mock);
 
-<h3>The builder — full dependency injection</h3>
-<p><code>WorkflowExecutor::new(workflow, registry)</code> covers the simple case (env-var secrets, temp-dir blobs, no observer). For everything else, use the builder:</p>
-<pre><code>let executor = WorkflowExecutor::builder(workflow, registry)
-    .secrets(&amp;my_vault)                 // SecretProvider for {"$secret": "X"} (default: env vars)
-    .workflows(shared_workflows)        // WorkflowRegistry of shared subworkflows
-    .blobs(Arc::new(MyBlobFactory))     // BlobStoreFactory (default: temp dir per execution)
-    .observer(history.clone())          // ExecutionObserver for events
-    .rule(NoProductionUrlsRule)         // extra ValidationRule(s), run after the built-ins
-    .build()?;                          // Err(Vec&lt;WorkflowError&gt;) with every problem found
+let executor = WorkflowExecutor::new(workflow, registry).map_err(|e| format!("{e:?}"))?;
+let out = executor.run(WorkflowData(trigger)).await?;
 
-let result = executor.run(WorkflowData(json!({ ... }))).await;</code></pre>
-<table>
-  <tr><th>Builder method</th><th>Injects</th><th>Default</th></tr>
-  <tr><td><code>.secrets(&amp;dyn SecretProvider)</code></td><td>Resolution of <code>$secret</code> references in inline profiles</td><td>Environment variables</td></tr>
-  <tr><td><code>.workflows(Arc&lt;WorkflowRegistry&gt;)</code></td><td>Shared subworkflows, resolvable by name</td><td>none</td></tr>
-  <tr><td><code>.blobs(Arc&lt;dyn BlobStoreFactory&gt;)</code></td><td>Blob storage backend, one store per execution</td><td>Temp directory</td></tr>
-  <tr><td><code>.observer(Arc&lt;dyn ExecutionObserver&gt;)</code></td><td>Receiver of execution events (incl. subworkflows)</td><td>none</td></tr>
-  <tr><td><code>.rule(impl ValidationRule)</code></td><td>Host validation rules, also applied to every subworkflow</td><td>built-ins only</td></tr>
-</table>
-<p>An executor is reusable and thread-safe: build once, call <code>run()</code> many times concurrently. Each <code>run()</code> creates a fresh execution (id, state document, blob store) and runs to completion. Execution is <strong>ephemeral</strong> in v1 — there is no persistence or resumption; observability events are designed to become a durable journal in future versions.</p>
+assert_eq!(calls.count(), 1);
+assert_eq!(calls.nth(0), Some(expected_request));</code></pre>
+                    <p class="text-slate-300 text-sm"><code>MockTask::failing(id, err)</code> drives <code>on: "error"</code> routes and retries; <code>MockTask::with_fn(id, |input| …)</code> computes a response from the input.</p>
+                </section>
 
-<h2 id="observability">16. Observability</h2>
-<p>Register an observer to receive every execution event, in emission order:</p>
-<pre><code>let history = Arc::new(InMemoryHistory::new());
-let executor = executor.with_observer(history.clone());
+                <!-- 14 -->
+                <section id="errors" class="space-y-4">
+                    <h2 class="text-2xl font-bold text-white border-b border-slate-800 pb-2">14. Errors &amp; validation</h2>
+                    <p class="text-slate-300 text-sm">Every failure is a structured <code>WorkflowError</code> with a stable <code>code</code>, a <code>message</code> and a <code>source_task</code>. Two distinct phases:</p>
+                    <ul class="text-sm text-slate-300 list-disc pl-6 space-y-1">
+                        <li><strong>Build time</strong> — graph structure, node/edge references, gateway coherence, reachability, acyclicity, task existence, schema validity, subworkflow cycles/depth, profile/secret resolution. <code>WorkflowExecutor::new</code> returns <em>all</em> of these at once as a <code>Vec&lt;WorkflowError&gt;</code>.</li>
+                        <li><strong>Run time</strong> — trigger/input/output schema validation, task timeouts and panics, foreach item failures, unmatched exclusive branches, incomplete joins.</li>
+                    </ul>
+                    <p class="text-slate-300 text-sm">The complete catalog of error codes and the rules that emit them is documented in the <a href="infrastructure.html#errors" class="text-indigo-400 hover:underline">Core &amp; Architecture manual</a>.</p>
+                </section>
 
-executor.run(trigger).await?;
+                <div class="border-t border-slate-800 pt-8 flex justify-between text-sm">
+                    <a href="index.html" class="text-slate-400 hover:text-white">← Documentation home</a>
+                    <a href="infrastructure.html" class="text-indigo-400 hover:text-indigo-300 font-medium">Core &amp; Architecture manual →</a>
+                </div>
+            </main>
+        </div>
 
-let report = history.report();         // ExecutionReport: status + per-node timeline
-let events = history.events();         // raw events, ordered by seq
-let executions = history.executions(); // root + subworkflow execution ids</code></pre>
-<p>Every event carries <code>execution_id</code>, <code>parent_execution_id</code> (for subworkflows), <code>seq</code> (a total order across the whole execution tree, including parallel branches), <code>elapsed_ms</code>, and a <code>type</code>-discriminated payload:</p>
-<table>
-  <tr><th><code>type</code></th><th>Emitted when</th></tr>
-  <tr><td><code>workflow_started</code></td><td>An execution (root or subworkflow) begins; carries the workflow metadata and trigger.</td></tr>
-  <tr><td><code>node_started</code></td><td>A node begins (joins emit it on completion of all branches).</td></tr>
-  <tr><td><code>task_attempt_started</code></td><td>A task attempt begins; the resolved input rides along on the first attempt.</td></tr>
-  <tr><td><code>task_attempt_failed</code></td><td>An attempt failed; includes <code>will_retry</code> and <code>next_delay_ms</code>.</td></tr>
-  <tr><td><code>node_completed</code></td><td>A node finished and published its output (with <code>duration_ms</code>).</td></tr>
-  <tr><td><code>node_failed</code></td><td>A node failed definitively; <code>error_routed</code> tells whether an <code>on: error</code> edge continued the flow.</td></tr>
-  <tr><td><code>foreach_item_completed</code> / <code>foreach_item_failed</code></td><td>Per-element outcomes of a foreach.</td></tr>
-  <tr><td><code>workflow_completed</code> / <code>workflow_failed</code></td><td>Terminal events with the final output / error and total duration.</td></tr>
-</table>
-<p>Events serialize to stable JSON — safe to persist. <code>InMemoryHistory</code> is the built-in observer; production hosts typically implement <code>ExecutionObserver</code> to forward events to a database or OTLP pipeline. <strong>Observers must not block</strong>: <code>on_event</code> is called synchronously from the executor — buffer through a channel if persistence is slow.</p>
-<p><code>ExecutionReport</code> (from <code>history.report()</code>) summarizes a single execution: overall status (<code>running</code> / <code>completed</code> / <code>failed</code>), and per node: status (<code>running</code> / <code>completed</code> / <code>failed</code> / <code>error_routed</code>), attempts, duration, output or error. Use <code>report_for(execution_id)</code> for subworkflow detail.</p>
-
-<h2 id="error-codes">17. Error Code Reference</h2>
-<p>Error codes are part of the public contract: they never change value, they only get added. Grouped by when they can occur:</p>
-
-<h3>Build time — document structure</h3>
-<table>
-  <tr><th>Code</th><th>Meaning</th></tr>
-  <tr><td><code>UNSUPPORTED_SPEC</code></td><td>The document's <code>spec</code> version is not supported by this engine.</td></tr>
-  <tr><td><code>DUPLICATE_NODE_ID</code></td><td>Two or more nodes declare the same id.</td></tr>
-  <tr><td><code>UNKNOWN_NODE_REF</code></td><td>An edge references a node that does not exist.</td></tr>
-  <tr><td><code>NO_START_NODE</code> / <code>MULTIPLE_START_NODES</code></td><td>The workflow must declare exactly one <code>start</code>.</td></tr>
-  <tr><td><code>NO_END_NODE</code></td><td>The workflow declares no <code>end</code> node.</td></tr>
-  <tr><td><code>START_HAS_INCOMING</code> / <code>END_HAS_OUTGOING</code></td><td>Invalid edges on the boundary nodes.</td></tr>
-  <tr><td><code>UNREACHABLE_NODE</code></td><td>A node cannot be reached from <code>start</code>.</td></tr>
-  <tr><td><code>CYCLE_DETECTED</code></td><td>The graph contains a cycle; spec 1.0 requires a DAG.</td></tr>
-</table>
-
-<h3>Build time — gateways, edges, special nodes</h3>
-<table>
-  <tr><th>Code</th><th>Meaning</th></tr>
-  <tr><td><code>GATEWAY_NO_BRANCHES</code></td><td>An exclusive gateway declares no branches.</td></tr>
-  <tr><td><code>GATEWAY_MULTIPLE_ELSE</code></td><td>More than one <code>else</code> branch.</td></tr>
-  <tr><td><code>GATEWAY_BRANCH_WITHOUT_WHEN</code></td><td>A branch has neither <code>when</code> nor <code>else</code>.</td></tr>
-  <tr><td><code>GATEWAY_BRANCH_WITHOUT_EDGE</code> / <code>GATEWAY_EDGE_WITHOUT_BRANCH</code></td><td>Branch labels and edge labels out of sync.</td></tr>
-  <tr><td><code>GATEWAY_BRANCHES_IGNORED</code></td><td><code>parallel</code>/<code>join</code> gateways do not accept branches.</td></tr>
-  <tr><td><code>PARALLEL_TOO_FEW_OUTPUTS</code> / <code>JOIN_TOO_FEW_INPUTS</code></td><td>Fan-out/fan-in degree below 2.</td></tr>
-  <tr><td><code>ERROR_EDGE_INVALID_SOURCE</code></td><td><code>on:</code> edges may only leave task-executing nodes.</td></tr>
-  <tr><td><code>ERROR_EDGE_TO_JOIN</code></td><td><code>on:</code> edges may not target a join.</td></tr>
-  <tr><td><code>FOREACH_INVALID_CONCURRENCY</code></td><td><code>concurrency</code> must be ≥ 1.</td></tr>
-  <tr><td><code>SUBWORKFLOW_MISSING_NAME</code> / <code>SUBWORKFLOW_DUPLICATE_NAME</code></td><td>Subworkflow naming problems.</td></tr>
-  <tr><td><code>TASK_NOT_FOUND</code></td><td>A node references an unregistered task.</td></tr>
-  <tr><td><code>INVALID_SCHEMA</code></td><td>A declared schema does not compile as JSON Schema.</td></tr>
-  <tr><td><code>UNKNOWN_CONDITION_OPERATOR</code></td><td>A condition uses an operator that is neither built-in nor registered.</td></tr>
-</table>
-
-<h3>Build time — registries and subworkflow resolution</h3>
-<table>
-  <tr><th>Code</th><th>Meaning</th></tr>
-  <tr><td><code>SUBWORKFLOW_NOT_FOUND</code></td><td>The referenced child workflow exists neither inline nor in the registry.</td></tr>
-  <tr><td><code>SUBWORKFLOW_CYCLE</code></td><td>A subworkflow chain references itself.</td></tr>
-  <tr><td><code>SUBWORKFLOW_DEPTH_EXCEEDED</code></td><td>Nesting deeper than 8 levels.</td></tr>
-  <tr><td><code>PROFILE_ID_CONFLICT</code> / <code>PROFILE_BASE_NOT_FOUND</code></td><td>Profile registration problems.</td></tr>
-  <tr><td><code>WORKFLOW_NAME_CONFLICT</code></td><td>Registering a workflow under a taken name.</td></tr>
-  <tr><td><code>SECRET_NOT_FOUND</code></td><td>A <code>{"$secret": "X"}</code> reference does not resolve in the configured provider.</td></tr>
-</table>
-
-<h3>Runtime — expressions and execution</h3>
-<table>
-  <tr><th>Code</th><th>Meaning</th></tr>
-  <tr><td><code>INVALID_JSONPATH</code> / <code>INVALID_REGEX</code></td><td>A path or regex in the definition does not parse/compile.</td></tr>
-  <tr><td><code>MAPPING_PATH_NOT_FOUND</code></td><td>A <code>$.</code> mapping path resolved nothing.</td></tr>
-  <tr><td><code>SCHEMA_VALIDATION_FAILED</code> / <code>OUTPUT_SCHEMA_VALIDATION_FAILED</code></td><td>Trigger / final result violates the declared schema.</td></tr>
-  <tr><td><code>TASK_INPUT_INVALID</code> / <code>TASK_OUTPUT_INVALID</code></td><td>Resolved input / produced output violates the task's schema.</td></tr>
-  <tr><td><code>TASK_TIMEOUT</code></td><td>An attempt exceeded <code>timeout_ms</code> (retryable).</td></tr>
-  <tr><td><code>TASK_PANIC</code></td><td>The task panicked — extension bug; not retried, only <code>on: panic</code> routes.</td></tr>
-  <tr><td><code>FOREACH_ITEMS_NOT_ARRAY</code></td><td>The foreach <code>items</code> mapping did not resolve to an array.</td></tr>
-  <tr><td><code>NO_BRANCH_MATCHED</code></td><td>No exclusive-gateway branch matched and there is no <code>else</code>.</td></tr>
-  <tr><td><code>JOIN_INCOMPLETE</code></td><td>The run ended with a join still waiting for branches.</td></tr>
-  <tr><td><code>NO_OUTPUT</code></td><td>Execution finished without reaching an <code>end</code> node.</td></tr>
-  <tr><td><code>PROFILE_BIND_INVALID</code></td><td>A profile's <code>bind</code> produced an input the base task rejects.</td></tr>
-  <tr><td><code>INVALID_BLOB_ID</code> / <code>BLOB_NOT_FOUND</code> / <code>BLOB_IO_ERROR</code></td><td>Blob reference / storage problems.</td></tr>
-</table>
-<p class="muted">Extension tasks add their own codes documented per task in <a href="#tasks">§14</a> (e.g. <code>HTTP_STATUS_ERROR</code>, <code>CAST_FIELD_INVALID</code>, <code>TABULAR_FORMAT_UNKNOWN</code>, <code>SFTP_HOST_KEY_MISMATCH</code>).</p>
-
-<h2 id="examples">18. Complete Examples</h2>
-
-<h3>18.1 Multi-service health monitor — parallel, join, exclusive routing</h3>
-<pre><code>{
-  "spec": "1.0", "name": "health-monitor", "version": "1.0.0",
-  "nodes": [
-    { "id": "start", "kind": "start" },
-    { "id": "fan", "kind": "gateway", "gateway": "parallel" },
-    { "id": "check_api",  "kind": "task", "task": "http.request",
-      "input": { "url": "$.trigger.api_url" },  "timeout_ms": 5000 },
-    { "id": "check_cdn",  "kind": "task", "task": "http.request",
-      "input": { "url": "$.trigger.cdn_url" },  "timeout_ms": 5000 },
-    { "id": "check_auth", "kind": "task", "task": "http.request",
-      "input": { "url": "$.trigger.auth_url" }, "timeout_ms": 5000 },
-    { "id": "join", "kind": "gateway", "gateway": "join" },
-    { "id": "verdict", "kind": "gateway", "gateway": "exclusive",
-      "branches": [
-        { "when": { "and": [
-            { "path": "$.nodes.check_api.output.status",  "eq": 200 },
-            { "path": "$.nodes.check_cdn.output.status",  "eq": 200 },
-            { "path": "$.nodes.check_auth.output.status", "eq": 200 }
-          ]}, "edge": "healthy" },
-        { "else": true, "edge": "degraded" }
-      ] },
-    { "id": "report", "kind": "task", "task": "data.template",
-      "input": { "template": "All systems operational (api={api}, cdn={cdn}, auth={auth})",
-                 "values": { "api": "$.nodes.check_api.output.status",
-                             "cdn": "$.nodes.check_cdn.output.status",
-                             "auth": "$.nodes.check_auth.output.status" } } },
-    { "id": "alert", "kind": "task", "task": "data.template",
-      "input": { "template": "DEGRADED: api={api}, cdn={cdn}, auth={auth}",
-                 "values": { "api": "$.nodes.check_api.output.status",
-                             "cdn": "$.nodes.check_cdn.output.status",
-                             "auth": "$.nodes.check_auth.output.status" } } },
-    { "id": "end", "kind": "end" }
-  ],
-  "edges": [
-    { "from": "start", "to": "fan" },
-    { "from": "fan", "to": "check_api" },
-    { "from": "fan", "to": "check_cdn" },
-    { "from": "fan", "to": "check_auth" },
-    { "from": "check_api",  "to": "join" },
-    { "from": "check_cdn",  "to": "join" },
-    { "from": "check_auth", "to": "join" },
-    { "from": "join", "to": "verdict" },
-    { "from": "verdict", "label": "healthy",  "to": "report" },
-    { "from": "verdict", "label": "degraded", "to": "alert" },
-    { "from": "report", "to": "end" },
-    { "from": "alert",  "to": "end" }
-  ]
-}</code></pre>
-
-<h3>18.2 Batch creation — profile, data.map, foreach with collect</h3>
-<pre><code>{
-  "name": "shipment-batch", "version": "0.1.0",
-  "tasks": [
-    { "id": "acme.create_shipment", "extends": "http.request",
-      "input_schema": { "type": "object", "required": ["sku", "qty"],
-        "properties": { "sku": { "type": "string" },
-                        "qty": { "type": "integer", "minimum": 1 } } },
-      "bind": { "url": "https://api.example.com/shipments", "method": "POST",
-                "fail_on_error_status": true, "body": "@" },
-      "output": "@.body" }
-  ],
-  "nodes": [
-    { "id": "start", "kind": "start" },
-    { "id": "adapt", "kind": "task", "task": "data.map",
-      "input": { "items": "$.trigger.rows",
-                 "shape": { "sku": "@.code", "qty": "@.units" } } },
-    { "id": "batch", "kind": "foreach", "task": "acme.create_shipment",
-      "items": "$.nodes.adapt.output",
-      "concurrency": 2, "on_item_error": "collect" },
-    { "id": "end", "kind": "end" }
-  ],
-  "edges": [
-    { "from": "start", "to": "adapt" },
-    { "from": "adapt", "to": "batch" },
-    { "from": "batch", "to": "end" }
-  ]
-}</code></pre>
-<p>With one invalid row, the result is partial instead of all-or-nothing:</p>
-<pre><code>{ "ok": [ { "tracking_id": "trk-001" }, { "tracking_id": "trk-002" } ],
-  "failed": [ { "index": 1, "item": { "code": "B-2", "units": 0 },
-                "error": { "code": "TASK_INPUT_INVALID", "message": "..." } } ] }</code></pre>
-
-<h3>18.3 Binary pipeline — download a file, re-upload as multipart, zero buffering</h3>
-<pre><code>{
-  "name": "daily-report-sync", "version": "0.1.0",
-  "nodes": [
-    { "id": "start", "kind": "start" },
-    { "id": "download", "kind": "task", "task": "http.request",
-      "input": { "url": "https://api.source.com/reports/daily",
-                 "auth": { "type": "bearer", "token": { "$secret": "SOURCE_TOKEN" } },
-                 "response_body": "blob", "fail_on_error_status": true } },
-    { "id": "upload", "kind": "task", "task": "http.request",
-      "input": { "url": "https://api.dest.com/ingest", "method": "POST",
-                 "multipart": {
-                   "origin": "client-acme",
-                   "file": { "blob": "$.nodes.download.output.body",
-                             "content_type": "text/csv" } },
-                 "fail_on_error_status": true } },
-    { "id": "end", "kind": "end" }
-  ],
-  "edges": [
-    { "from": "start", "to": "download" },
-    { "from": "download", "to": "upload" },
-    { "from": "upload", "to": "end" }
-  ]
-}</code></pre>
-
-<h3>18.4 Normalize-and-send as a reusable subworkflow</h3>
-<pre><code>{
-  "name": "client-acme", "version": "0.1.0",
-  "nodes": [
-    { "id": "start", "kind": "start" },
-    { "id": "process", "kind": "subworkflow", "workflow": "normalize-and-send",
-      "input": { "date": "$.trigger.order_date",
-                 "total": "$.trigger.amount",
-                 "sku": "$.trigger.item" } },
-    { "id": "end", "kind": "end" }
-  ],
-  "edges": [
-    { "from": "start", "to": "process" },
-    { "from": "process", "to": "end" }
-  ]
-}</code></pre>
-<p>…where <code>normalize-and-send</code> lives in the shared <code>WorkflowRegistry</code> and uses <code>data.cast</code> to clean localized dates and numbers before posting:</p>
-<pre><code>{
-  "name": "normalize-and-send", "version": "1.0.0",
-  "nodes": [
-    { "id": "start", "kind": "start" },
-    { "id": "normalize", "kind": "task", "task": "data.cast",
-      "input": { "source": "$.trigger",
-                 "fields": {
-                   "date":  [ { "op": "date", "from": "%d/%m/%Y" } ],
-                   "total": [ { "op": "number", "decimal": ",", "thousands": "." } ],
-                   "sku":   [ { "op": "trim" }, { "op": "upper" } ] } } },
-    { "id": "send", "kind": "task", "task": "http.request",
-      "input": { "url": "https://api.example.com/orders", "method": "POST",
-                 "body": "$.nodes.normalize.output", "fail_on_error_status": true } },
-    { "id": "end", "kind": "end", "output": "$.nodes.send.output.body" }
-  ],
-  "edges": [
-    { "from": "start", "to": "normalize" },
-    { "from": "normalize", "to": "send" },
-    { "from": "send", "to": "end" }
-  ]
-}</code></pre>
-
-<h3>18.5 Error routing with compensation</h3>
-<pre><code>{
-  "name": "order-with-fallback", "version": "0.1.0",
-  "nodes": [
-    { "id": "start", "kind": "start" },
-    { "id": "create", "kind": "task", "task": "http.request",
-      "input": { "url": "$.trigger.primary_endpoint", "method": "POST",
-                 "body": "$.trigger.order", "fail_on_error_status": true },
-      "retry": { "max": 2, "backoff": "exponential", "initial_ms": 300 },
-      "timeout_ms": 8000 },
-    { "id": "fallback", "kind": "task", "task": "http.request",
-      "input": { "url": "$.trigger.fallback_endpoint", "method": "POST",
-                 "body": { "order": "$.trigger.order",
-                           "reason": "$.nodes.create.error" },
-                 "fail_on_error_status": true } },
-    { "id": "ok",    "kind": "end" },
-    { "id": "saved", "kind": "end", "status": "degraded" }
-  ],
-  "edges": [
-    { "from": "start", "to": "create" },
-    { "from": "create", "to": "ok" },
-    { "from": "create", "to": "fallback", "on": "error" },
-    { "from": "fallback", "to": "saved" }
-  ]
-}</code></pre>
-
-<hr>
-<p class="muted">workflow-forge · spec 1.0 · For engine internals and extension development, see the <a href="infrastructure.html">Infrastructure Manual</a>.</p>
-
-</main>
-</body>
+        <footer class="border-t border-slate-900 py-10 text-center text-xs text-slate-500">
+            <p>&copy; 2026 Workflow Forge. Dual MIT / Apache-2.0.</p>
+        </footer>
+    </body>
 </html>

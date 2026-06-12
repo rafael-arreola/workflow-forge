@@ -6,10 +6,12 @@
 //! | `util.noop` | Devuelve su input tal cual |
 //! | `util.log` | Loggea `message` con `level` y devuelve `value` (o null) |
 //! | `util.delay` | Espera `ms` milisegundos y devuelve `value` (o null) |
+//! | `util.idempotency_key` | Clave estable derivada de `value` → `{ key }` |
 
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
+use workflow_forge_core::idempotency;
 use workflow_forge_core::runtime::WorkflowContext;
 use workflow_forge_core::task::TaskRegistry;
 use workflow_forge_core::task::{Task, TaskManifest};
@@ -20,6 +22,7 @@ pub fn register(registry: &TaskRegistry) {
     registry.register(NoopTask::default());
     registry.register(LogTask::default());
     registry.register(DelayTask::default());
+    registry.register(IdempotencyKeyTask::default());
 }
 
 fn schema(value: Value) -> workflow_forge_core::schemars::Schema {
@@ -141,5 +144,48 @@ impl Task for DelayTask {
         Ok(WorkflowData(
             input.get("value").cloned().unwrap_or(Value::Null),
         ))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// util.idempotency_key
+// ---------------------------------------------------------------------------
+
+pub struct IdempotencyKeyTask {
+    manifest: TaskManifest,
+}
+
+impl Default for IdempotencyKeyTask {
+    fn default() -> Self {
+        let mut manifest = TaskManifest::new("util.idempotency_key");
+        manifest.description = Some(
+            "Deriva una clave de idempotencia estable de `value` y la devuelve como `{ key }`"
+                .into(),
+        );
+        manifest.input_schema = Some(schema(json!({
+            "type": "object",
+            "required": ["value"],
+            "properties": {
+                "value": { "description": "Payload del que derivar la clave (cualquier JSON)" }
+            }
+        })));
+        manifest.output_schema = Some(schema(json!({
+            "type": "object",
+            "required": ["key"],
+            "properties": { "key": { "type": "string" } }
+        })));
+        Self { manifest }
+    }
+}
+
+#[async_trait]
+impl Task for IdempotencyKeyTask {
+    fn manifest(&self) -> &TaskManifest {
+        &self.manifest
+    }
+
+    async fn execute(&self, _ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult {
+        let value = input.get("value").cloned().unwrap_or(Value::Null);
+        Ok(WorkflowData(json!({ "key": idempotency::key_for(&value) })))
     }
 }

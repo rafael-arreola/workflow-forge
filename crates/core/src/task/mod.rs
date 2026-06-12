@@ -11,9 +11,11 @@
 
 pub mod profile;
 pub mod registry;
+pub mod typed;
 
 pub use profile::ProfileTask;
 pub use registry::TaskRegistry;
+pub use typed::{FnTask, TaskCtx, TypedTask};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

@@ -9,6 +9,44 @@ under `schemas/1.0/`); a crate version bump does not imply a spec bump.
 
 ## [Unreleased]
 
+### Added
+
+- Low-friction task authoring on top of the `Task` trait:
+  - `TaskRegistry::register_typed(id, closure)` / `TypedTask<In, Out>` — a typed
+    async closure whose input/output JSON Schemas are **derived** from the Rust
+    types via `schemars`; the engine validates input (before) and output (after)
+    as it does for any task, and nested types/enums (`$ref`/`$defs`) are enforced.
+  - `TaskRegistry::register_fn(id, closure)` / `FnTask` — a raw `WorkflowData`
+    closure for trivial tasks, no schemas.
+  - `TaskCtx` — a by-value view of per-execution resources (`execution_id`,
+    `parent_execution_id`, `blobs`) handed to closure-based tasks.
+- `testing` feature (`workflow_forge::testing` / `workflow_forge_core::testing`):
+  `MockTask` (returning / failing / closure behaviors) and a `CallLog` handle to
+  dry-run a workflow against mocked tasks and assert what it would have called —
+  no network, filesystem or secrets.
+- Runnable examples under `crates/forge/examples/` (`greet`, `routing`,
+  `custom_tasks`), checked by CI.
+- Idempotency keys for side-effecting tasks: `idempotency::key_for(value)`
+  (stable, content-addressed UUID v5), the `util.idempotency_key` task
+  (`{ value } -> { key }`), and `TaskCtx::idempotency_key`.
+- Durable observer adapters: `TracingObserver` (emits events via `tracing`)
+  and `JsonlObserver` (append-only JSON-lines audit log, to any writer or file).
+- Execution-level limits via `WorkflowExecutor::run_with(trigger, RunOptions)`:
+  a total `deadline` and a cooperative `CancellationToken` — **unlimited by
+  default** (`run` imposes nothing). New error codes `EXECUTION_TIMEOUT` and
+  `EXECUTION_CANCELLED`.
+- Connection reuse at volume:
+  - `http`: `register_with_client(registry, client)` to inject a tuned
+    `reqwest::Client` (pool size, timeouts, proxy, TLS). The default already
+    pools connections per host via one shared client.
+  - `sftp`: `register_pooled(registry, max_idle_per_conn)` + `SftpPool` —
+    reuses authenticated SSH sessions across calls (keyed by connection, with a
+    liveness check and reconnect), opening a cheap SFTP channel per call.
+- `forge` CLI (new crate `workflow-forge-cli`): `forge run workflow.json`
+  (`--input`/stdin, `--timeout-ms`), `forge validate`, `forge catalog`.
+- Crate publishing metadata across the workspace (`description`, `rust-version`,
+  `keywords`, `categories`, `homepage`); MSRV declared as 1.85.
+
 ## [0.1.0] - 2026-06-10
 
 First release. Declarative workflow engine defined, validated and extended

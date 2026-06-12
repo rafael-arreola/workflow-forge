@@ -175,11 +175,42 @@ per-execution `BlobStore` that is cleaned up when the run ends.
 
 ### Writing your own extension
 
+A task is the unit of extension, and the fast path is a closure. With
+`register_typed`, you write two Rust types and the engine **derives** their
+JSON Schemas (via [`schemars`]) — input/output validation and the task catalog
+come for free, no hand-written schema:
+
+```rust
+use serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
+
+#[derive(Deserialize, JsonSchema)]
+struct CreateShipmentIn { sku: String, qty: u32 }
+
+#[derive(Serialize, JsonSchema)]
+struct CreateShipmentOut { tracking: String }
+
+registry.register_typed("acme.create_shipment", |ctx, input: CreateShipmentIn| async move {
+    // `ctx` exposes per-execution resources (blobs, execution id)
+    Ok(CreateShipmentOut { tracking: format!("{}-{}", input.sku, input.qty) })
+});
+```
+
+For trivial JSON-in/JSON-out tasks, `register_fn` skips the types entirely:
+
+```rust
+registry.register_fn("util.echo", |_ctx, input| async move { Ok(input) });
+```
+
+When a task needs to hold state or dependencies (a DB pool, a configured HTTP
+client) or read the full execution state, implement the `Task` trait directly —
+the struct you register can carry whatever it needs:
+
 ```rust
 use workflow_forge::prelude::*;
 use async_trait::async_trait;
 
-struct MyTask { manifest: TaskManifest }
+struct MyTask { manifest: TaskManifest /* + pools, clients, config… */ }
 
 #[async_trait]
 impl Task for MyTask {
@@ -191,9 +222,34 @@ impl Task for MyTask {
 }
 ```
 
-Declare JSON Schemas for your input/output in the manifest and the engine
-validates them on every run. `TaskRegistry::catalog()` exports every
-registered manifest as JSON ([extension schema](schemas/1.0/extension.schema.json)).
+Either way, `TaskRegistry::catalog()` exports every registered manifest as JSON
+([extension schema](schemas/1.0/extension.schema.json)) — the foundation for
+tooling and visual editors.
+
+#### Validation: tolerant by default, strict on request
+
+For `register_typed` tasks the engine validates the input against the derived
+schema **before** the closure runs and the output **after**, and the typed
+wrapper additionally deserializes/serializes your Rust types — two aligned
+layers (`schemars` reads the same `serde` attributes the deserializer uses, so
+the schema and the deserialization never disagree). Nested types and enums are
+fully enforced: a derived schema's internal `$ref`/`$defs` are resolved and
+applied, so an invalid sub-field is rejected with `TASK_INPUT_INVALID`.
+
+By default validation is **tolerant**: extra, undeclared fields in the input
+are accepted (neither `schemars` nor `serde` reject unknown keys). This is
+usually what you want — forward-compatible inputs. When you need **strict**
+validation that rejects unknown fields, add `#[serde(deny_unknown_fields)]` to
+your input type; `schemars` honors it and emits `additionalProperties: false`,
+keeping both layers strict and aligned:
+
+```rust
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)] // schema becomes additionalProperties: false
+struct CreateShipmentIn { sku: String, qty: u32 }
+```
+
+[`schemars`]: https://docs.rs/schemars
 
 ## Spec & schemas
 

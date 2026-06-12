@@ -133,6 +133,12 @@ pub const JOIN_INCOMPLETE: &str = "JOIN_INCOMPLETE";
 pub const NO_OUTPUT: &str = "NO_OUTPUT";
 /// El bind de un perfil produce un input que la tarea base rechaza.
 pub const PROFILE_BIND_INVALID: &str = "PROFILE_BIND_INVALID";
+/// La ejecución superó el `deadline` indicado en las opciones de `run_with`.
+/// (Por defecto las ejecuciones son ilimitadas; el host decide el límite.)
+pub const EXECUTION_TIMEOUT: &str = "EXECUTION_TIMEOUT";
+/// La ejecución se canceló de forma cooperativa vía el `CancellationToken`
+/// de `run_with`.
+pub const EXECUTION_CANCELLED: &str = "EXECUTION_CANCELLED";
 
 // ---------------------------------------------------------------------------
 // Recursos del host (blobs, secretos)
@@ -195,6 +201,8 @@ pub const ALL: &[&str] = &[
     JOIN_INCOMPLETE,
     NO_OUTPUT,
     PROFILE_BIND_INVALID,
+    EXECUTION_TIMEOUT,
+    EXECUTION_CANCELLED,
     INVALID_BLOB_ID,
     BLOB_NOT_FOUND,
     BLOB_IO_ERROR,

@@ -1,10 +1,14 @@
 [package]
 name = "workflow-forge-ext-sftp"
-description = "Extensión sftp de workflow-forge: get, put y list sobre SFTP"
+description = "sftp extension for workflow-forge: get, put and list tasks over SFTP"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 workflow-forge-core = { workspace = true }

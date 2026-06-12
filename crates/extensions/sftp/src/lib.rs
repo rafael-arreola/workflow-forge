@@ -18,9 +18,10 @@
 use std::io::Write;
 use std::net::TcpStream;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use async_trait::async_trait;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use workflow_forge_core::error::WorkflowError;
@@ -30,11 +31,30 @@ use workflow_forge_core::task::TaskRegistry;
 use workflow_forge_core::task::{Task, TaskManifest};
 use workflow_forge_core::task::{WorkflowData, WorkflowResult};
 
-/// Registra todas las tareas de la extensión en el registry
+mod pool;
+use pool::{Connector, Pool};
+
+/// Pool de sesiones SSH reutilizables entre llamadas (ver [`register_pooled`]).
+pub type SftpPool = Pool<Ssh2Connector>;
+
+/// Registra las tareas SFTP que **abren una sesión nueva por llamada**.
+/// Para alto volumen contra los mismos hosts, prefiere [`register_pooled`].
 pub fn register(registry: &TaskRegistry) {
     registry.register(GetTask::default());
     registry.register(PutTask::default());
     registry.register(ListTask::default());
+}
+
+/// Registra las tareas SFTP respaldadas por un [`SftpPool`] compartido, que
+/// **reutiliza sesiones SSH autenticadas** entre llamadas (la parte cara:
+/// TCP + handshake + auth). `max_idle_per_conn` acota cuántas sesiones ociosas
+/// se guardan por identidad de conexión. La vía recomendada cuando un `foreach`
+/// hace muchas transferencias contra el mismo servidor.
+pub fn register_pooled(registry: &TaskRegistry, max_idle_per_conn: usize) {
+    let pool = Arc::new(SftpPool::new(Ssh2Connector, max_idle_per_conn));
+    registry.register(GetTask::pooled(pool.clone()));
+    registry.register(PutTask::pooled(pool.clone()));
+    registry.register(ListTask::pooled(pool));
 }
 
 fn schema(value: Value) -> workflow_forge_core::schemars::Schema {
@@ -49,8 +69,10 @@ fn sftp_error(message: impl std::fmt::Display) -> WorkflowError {
 // Conexión
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Deserialize)]
-struct Connection {
+/// Parámetros de conexión SFTP. Tipo opaco (campos privados): se deserializa
+/// del input de las tareas; aparece en la firma pública del pool.
+#[derive(Clone, Deserialize, Serialize)]
+pub struct Connection {
     host: String,
     #[serde(default = "default_port")]
     port: u16,
@@ -65,7 +87,7 @@ fn default_port() -> u16 {
     22
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum Auth {
     Password {
@@ -103,8 +125,10 @@ fn connection_schema() -> Value {
     })
 }
 
-/// Abre sesión + canal SFTP. Bloqueante: invocar dentro de spawn_blocking.
-fn connect(conn: &Connection) -> Result<(ssh2::Session, ssh2::Sftp), WorkflowError> {
+/// Abre una sesión SSH autenticada (sin canal SFTP todavía). Bloqueante:
+/// invocar dentro de spawn_blocking. Es la parte cara (TCP + handshake + auth)
+/// que el pool reutiliza.
+fn connect_session(conn: &Connection) -> Result<ssh2::Session, WorkflowError> {
     let tcp = TcpStream::connect((conn.host.as_str(), conn.port)).map_err(|e| {
         sftp_error(format!(
             "no se pudo conectar a {}:{}: {e}",
@@ -131,8 +155,54 @@ fn connect(conn: &Connection) -> Result<(ssh2::Session, ssh2::Sftp), WorkflowErr
             .map_err(|e| sftp_error(format!("autenticación por llave falló: {e}")))?,
     }
 
+    Ok(session)
+}
+
+/// Conector ssh2 del pool: abre sesiones reales y verifica su salud con un
+/// keepalive (una sesión muerta por timeout del servidor se descarta y se
+/// reconecta).
+pub struct Ssh2Connector;
+
+impl Connector for Ssh2Connector {
+    type Conn = ssh2::Session;
+
+    fn connect(&self, conn: &Connection) -> Result<ssh2::Session, WorkflowError> {
+        connect_session(conn)
+    }
+
+    fn alive(&self, session: &ssh2::Session) -> bool {
+        session.keepalive_send().is_ok()
+    }
+}
+
+/// Identidad estable de una conexión (host/puerto/usuario/auth/known_hosts),
+/// para indexar el pool. Reusa el hash determinista de idempotencia.
+fn conn_key(conn: &Connection) -> String {
+    workflow_forge_core::idempotency::key_for(&serde_json::to_value(conn).unwrap_or(Value::Null))
+}
+
+/// Ejecuta `f` con un canal SFTP, tomando la sesión del pool (reusada) o de un
+/// `connect_session` fresco. La sesión se devuelve al pool **solo si `f` tuvo
+/// éxito** (una sesión que falló a media operación se descarta). Bloqueante.
+fn with_sftp<R>(
+    pool: &Option<Arc<SftpPool>>,
+    conn: &Connection,
+    f: impl FnOnce(&ssh2::Sftp) -> Result<R, WorkflowError>,
+) -> Result<R, WorkflowError> {
+    let key = conn_key(conn);
+    let session = match pool {
+        Some(p) => p.checkout(&key, conn)?,
+        None => connect_session(conn)?,
+    };
     let sftp = session.sftp().map_err(sftp_error)?;
-    Ok((session, sftp))
+    let result = f(&sftp);
+    if result.is_ok() {
+        drop(sftp);
+        if let Some(p) = pool {
+            p.checkin(&key, session);
+        }
+    }
+    result
 }
 
 fn verify_host_key(
@@ -180,6 +250,7 @@ struct GetInput {
 
 pub struct GetTask {
     manifest: TaskManifest,
+    pool: Option<Arc<SftpPool>>,
 }
 
 impl Default for GetTask {
@@ -201,7 +272,20 @@ impl Default for GetTask {
             "required": ["file"],
             "properties": { "file": { "type": "object", "required": ["$blob"] } }
         })));
-        Self { manifest }
+        Self {
+            manifest,
+            pool: None,
+        }
+    }
+}
+
+impl GetTask {
+    /// Variante respaldada por un pool de sesiones compartido.
+    pub fn pooled(pool: Arc<SftpPool>) -> Self {
+        Self {
+            pool: Some(pool),
+            ..Self::default()
+        }
     }
 }
 
@@ -226,15 +310,17 @@ impl Task for GetTask {
         // Descarga por streaming a un archivo temporal local
         let temp = std::env::temp_dir().join(format!("wf-sftp-{}", uuid::Uuid::now_v7()));
         let temp_for_blocking = temp.clone();
+        let pool = self.pool.clone();
         let download = tokio::task::spawn_blocking(move || -> Result<(), WorkflowError> {
-            let (_session, sftp) = connect(&parsed.connection)?;
-            let mut remote = sftp
-                .open(std::path::Path::new(&parsed.path))
-                .map_err(|e| sftp_error(format!("no se pudo abrir '{}': {e}", parsed.path)))?;
-            let mut local = std::fs::File::create(&temp_for_blocking).map_err(sftp_error)?;
-            std::io::copy(&mut remote, &mut local).map_err(sftp_error)?;
-            local.flush().map_err(sftp_error)?;
-            Ok(())
+            with_sftp(&pool, &parsed.connection, |sftp| {
+                let mut remote = sftp
+                    .open(std::path::Path::new(&parsed.path))
+                    .map_err(|e| sftp_error(format!("no se pudo abrir '{}': {e}", parsed.path)))?;
+                let mut local = std::fs::File::create(&temp_for_blocking).map_err(sftp_error)?;
+                std::io::copy(&mut remote, &mut local).map_err(sftp_error)?;
+                local.flush().map_err(sftp_error)?;
+                Ok(())
+            })
         })
         .await
         .map_err(|e| sftp_error(format!("la descarga se interrumpió: {e}")))
@@ -266,6 +352,7 @@ struct PutInput {
 
 pub struct PutTask {
     manifest: TaskManifest,
+    pool: Option<Arc<SftpPool>>,
 }
 
 impl Default for PutTask {
@@ -289,7 +376,20 @@ impl Default for PutTask {
                 "size": { "type": "integer" }
             }
         })));
-        Self { manifest }
+        Self {
+            manifest,
+            pool: None,
+        }
+    }
+}
+
+impl PutTask {
+    /// Variante respaldada por un pool de sesiones compartido.
+    pub fn pooled(pool: Arc<SftpPool>) -> Self {
+        Self {
+            pool: Some(pool),
+            ..Self::default()
+        }
     }
 }
 
@@ -305,15 +405,17 @@ impl Task for PutTask {
         let local_path = ctx.blobs().local_path(&parsed.file)?;
 
         let remote_path = parsed.path.clone();
+        let pool = self.pool.clone();
         let size = tokio::task::spawn_blocking(move || -> Result<u64, WorkflowError> {
-            let (_session, sftp) = connect(&parsed.connection)?;
-            let mut local = std::fs::File::open(&local_path).map_err(sftp_error)?;
-            let mut remote = sftp
-                .create(std::path::Path::new(&parsed.path))
-                .map_err(|e| sftp_error(format!("no se pudo crear '{}': {e}", parsed.path)))?;
-            let size = std::io::copy(&mut local, &mut remote).map_err(sftp_error)?;
-            remote.flush().map_err(sftp_error)?;
-            Ok(size)
+            with_sftp(&pool, &parsed.connection, |sftp| {
+                let mut local = std::fs::File::open(&local_path).map_err(sftp_error)?;
+                let mut remote = sftp
+                    .create(std::path::Path::new(&parsed.path))
+                    .map_err(|e| sftp_error(format!("no se pudo crear '{}': {e}", parsed.path)))?;
+                let size = std::io::copy(&mut local, &mut remote).map_err(sftp_error)?;
+                remote.flush().map_err(sftp_error)?;
+                Ok(size)
+            })
         })
         .await
         .map_err(|e| sftp_error(format!("la subida se interrumpió: {e}")))
@@ -336,6 +438,7 @@ struct ListInput {
 
 pub struct ListTask {
     manifest: TaskManifest,
+    pool: Option<Arc<SftpPool>>,
 }
 
 impl Default for ListTask {
@@ -369,7 +472,20 @@ impl Default for ListTask {
                 }
             }
         })));
-        Self { manifest }
+        Self {
+            manifest,
+            pool: None,
+        }
+    }
+}
+
+impl ListTask {
+    /// Variante respaldada por un pool de sesiones compartido.
+    pub fn pooled(pool: Arc<SftpPool>) -> Self {
+        Self {
+            pool: Some(pool),
+            ..Self::default()
+        }
     }
 }
 
@@ -383,30 +499,32 @@ impl Task for ListTask {
         let parsed: ListInput = serde_json::from_value(input.0)
             .map_err(|e| WorkflowError::new("SFTP_INPUT_INVALID", e.to_string()))?;
 
+        let pool = self.pool.clone();
         let entries = tokio::task::spawn_blocking(move || -> Result<Vec<Value>, WorkflowError> {
-            let (_session, sftp) = connect(&parsed.connection)?;
-            let listing = sftp
-                .readdir(std::path::Path::new(&parsed.path))
-                .map_err(|e| sftp_error(format!("no se pudo listar '{}': {e}", parsed.path)))?;
-            Ok(listing
-                .into_iter()
-                .map(|(path, stat)| {
-                    let kind = if stat.is_dir() {
-                        "dir"
-                    } else if stat.is_file() {
-                        "file"
-                    } else {
-                        "other"
-                    };
-                    json!({
-                        "name": path.file_name().map(|n| n.to_string_lossy().into_owned())
-                            .unwrap_or_default(),
-                        "kind": kind,
-                        "size": stat.size,
-                        "modified": stat.mtime
+            with_sftp(&pool, &parsed.connection, |sftp| {
+                let listing = sftp
+                    .readdir(std::path::Path::new(&parsed.path))
+                    .map_err(|e| sftp_error(format!("no se pudo listar '{}': {e}", parsed.path)))?;
+                Ok(listing
+                    .into_iter()
+                    .map(|(path, stat)| {
+                        let kind = if stat.is_dir() {
+                            "dir"
+                        } else if stat.is_file() {
+                            "file"
+                        } else {
+                            "other"
+                        };
+                        json!({
+                            "name": path.file_name().map(|n| n.to_string_lossy().into_owned())
+                                .unwrap_or_default(),
+                            "kind": kind,
+                            "size": stat.size,
+                            "modified": stat.mtime
+                        })
                     })
-                })
-                .collect())
+                    .collect())
+            })
         })
         .await
         .map_err(|e| sftp_error(format!("el listado se interrumpió: {e}")))

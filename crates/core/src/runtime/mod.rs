@@ -21,5 +21,5 @@ pub mod registry;
 pub(crate) mod schemas;
 
 pub use context::WorkflowContext;
-pub use executor::{WorkflowExecutor, WorkflowExecutorBuilder};
+pub use executor::{CancellationToken, RunOptions, WorkflowExecutor, WorkflowExecutorBuilder};
 pub use registry::WorkflowRegistry;

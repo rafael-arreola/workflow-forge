@@ -20,11 +20,45 @@ async fn run(workflow: Value, trigger: Value) -> WorkflowData {
 }
 
 #[test]
-fn registra_las_tres_tareas_con_manifiestos() {
+fn registra_las_tareas_con_manifiestos() {
     let catalog = registry().catalog();
     let ids: Vec<&str> = catalog.iter().map(|m| m.id.0.as_str()).collect();
-    assert_eq!(ids, vec!["util.delay", "util.log", "util.noop"]);
+    assert_eq!(
+        ids,
+        vec![
+            "util.delay",
+            "util.idempotency_key",
+            "util.log",
+            "util.noop"
+        ]
+    );
     assert!(catalog.iter().all(|m| m.description.is_some()));
+}
+
+#[tokio::test]
+async fn idempotency_key_es_estable_por_payload() {
+    let workflow = json!({
+        "name": "idem", "version": "0.1.0",
+        "nodes": [
+            { "id": "start", "kind": "start" },
+            { "id": "key", "kind": "task", "task": "util.idempotency_key",
+              "input": { "value": "$.trigger" } },
+            { "id": "end", "kind": "end" }
+        ],
+        "edges": [
+            { "from": "start", "to": "key" },
+            { "from": "key", "to": "end" }
+        ]
+    });
+
+    // Igual payload (aunque el orden de llaves difiera) → igual clave.
+    let a = run(workflow.clone(), json!({ "sku": "A", "qty": 2 })).await;
+    let b = run(workflow.clone(), json!({ "qty": 2, "sku": "A" })).await;
+    let c = run(workflow, json!({ "sku": "B", "qty": 2 })).await;
+
+    let key_a = a.0["key"].as_str().unwrap();
+    assert_eq!(key_a, b.0["key"].as_str().unwrap());
+    assert_ne!(key_a, c.0["key"].as_str().unwrap());
 }
 
 #[tokio::test]

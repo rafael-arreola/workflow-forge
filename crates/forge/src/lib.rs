@@ -33,6 +33,7 @@
 use std::sync::Arc;
 
 pub use workflow_forge_core as core;
+pub use workflow_forge_core::idempotency;
 
 use workflow_forge_core::task::TaskRegistry;
 
@@ -42,12 +43,21 @@ pub mod prelude {
     pub use workflow_forge_core::io::secret::{EnvSecrets, SecretProvider};
     pub use workflow_forge_core::observe::{
         EventKind, ExecutionEvent, ExecutionObserver, ExecutionReport, InMemoryHistory,
+        JsonlObserver, TracingObserver,
     };
-    pub use workflow_forge_core::runtime::{WorkflowContext, WorkflowExecutor, WorkflowRegistry};
+    pub use workflow_forge_core::runtime::{
+        CancellationToken, RunOptions, WorkflowContext, WorkflowExecutor, WorkflowRegistry,
+    };
     pub use workflow_forge_core::spec::{TaskProfile, WorkflowDefinition};
-    pub use workflow_forge_core::task::{Task, TaskId, TaskManifest, TaskRegistry};
+    pub use workflow_forge_core::task::{
+        FnTask, Task, TaskCtx, TaskId, TaskManifest, TaskRegistry, TypedTask,
+    };
     pub use workflow_forge_core::task::{WorkflowData, WorkflowResult};
 }
+
+/// Mock tasks + dry-run helpers (enabled by the `testing` feature).
+#[cfg(feature = "testing")]
+pub use workflow_forge_core::testing;
 
 /// Registra en el registry todas las extensiones habilitadas por features
 pub fn register_extensions(registry: &TaskRegistry) {

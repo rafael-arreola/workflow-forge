@@ -12,8 +12,10 @@
 //! ejecución y produce un [`ExecutionReport`] — la respuesta embebida a
 //! "¿qué pasó con la ejecución X?".
 
+pub mod adapters;
 pub mod history;
 
+pub use adapters::{JsonlObserver, TracingObserver};
 pub use history::{ExecutionReport, ExecutionStatus, InMemoryHistory, NodeReport, NodeStatus};
 
 use serde::{Deserialize, Serialize};

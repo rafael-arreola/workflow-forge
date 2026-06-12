@@ -1,0 +1,74 @@
+//! Deterministic idempotency keys for side-effecting tasks.
+//!
+//! Creating an order (or any non-reversible effect) under a retry is a
+//! correctness hazard: a timeout that actually reached the destination, then a
+//! retry, can create the order twice. The defense is an **idempotency key** the
+//! destination system uses to deduplicate.
+//!
+//! [`key_for`] derives a **stable, content-addressed** key from a JSON value:
+//! the same payload always yields the same key — across retries *and* across
+//! re-runs or replays of the same data. That is the right semantics for
+//! "never create this order twice". The key is a UUID (v5, derived from the
+//! payload — deterministic, not random), so it is a safe header/field value.
+//!
+//! There are two ways to obtain a key:
+//!
+//! - **Declarative** — the `util.idempotency_key` task (`{ value } -> { key }`),
+//!   whose output you wire into the creating task's input/profile `bind`
+//!   (e.g. an `Idempotency-Key` header).
+//! - **In code** — call [`key_for`] (or [`crate::task::TaskCtx::idempotency_key`])
+//!   directly from a custom [`crate::task::Task`].
+//!
+//! Scope: the key is purely a function of the value. For run-scoped uniqueness
+//! include a discriminator in the value (e.g. `$.workflow.execution_id`); for
+//! per-system uniqueness include the target system. Composition, not flags.
+
+use serde_json::Value;
+use uuid::Uuid;
+
+/// Fixed namespace for workflow-forge idempotency keys (UUID v5 names live
+/// under this namespace so they never collide with other v5 uses).
+const NAMESPACE: Uuid = Uuid::from_u128(0x77_6f_72_6b_66_6c_6f_77_5f_66_6f_72_67_65_69_64);
+
+/// A stable key derived from `value`: identical payloads always produce the
+/// identical key. Returns a UUID (v5) string.
+///
+/// Object key order does not affect the result (the canonical JSON encoding
+/// sorts keys), so two logically equal payloads hash the same.
+///
+/// ```
+/// # use serde_json::json;
+/// # use workflow_forge_core::idempotency::key_for;
+/// let a = key_for(&json!({ "sku": "A", "qty": 2 }));
+/// let b = key_for(&json!({ "qty": 2, "sku": "A" })); // different key order
+/// assert_eq!(a, b);
+/// ```
+pub fn key_for(value: &Value) -> String {
+    let canonical = serde_json::to_vec(value).unwrap_or_default();
+    Uuid::new_v5(&NAMESPACE, &canonical).to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn stable_across_key_order() {
+        assert_eq!(
+            key_for(&json!({ "a": 1, "b": 2 })),
+            key_for(&json!({ "b": 2, "a": 1 })),
+        );
+    }
+
+    #[test]
+    fn differs_by_content() {
+        assert_ne!(key_for(&json!({ "n": 1 })), key_for(&json!({ "n": 2 })));
+    }
+
+    #[test]
+    fn is_a_uuid() {
+        let key = key_for(&json!({ "order": "o-1" }));
+        assert!(Uuid::parse_str(&key).is_ok());
+    }
+}

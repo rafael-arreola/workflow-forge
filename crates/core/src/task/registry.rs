@@ -3,11 +3,18 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+use std::future::Future;
+
+use schemars::JsonSchema;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+
 use crate::error::{WorkflowError, codes};
 use crate::io::secret::SecretProvider;
 use crate::spec::profile::TaskProfile;
 use crate::task::profile::ProfileTask;
-use crate::task::{Task, TaskId, TaskManifest};
+use crate::task::typed::{FnTask, TaskCtx, TypedTask};
+use crate::task::{Task, TaskId, TaskManifest, WorkflowData, WorkflowResult};
 
 /// Registro global de tareas disponibles para ejecución.
 /// Las tareas se registran por su `task_id()` y se resuelven en runtime
@@ -42,6 +49,56 @@ impl TaskRegistry {
         let key = task.task_id().clone();
         let mut map = self.tasks.write().expect("TaskRegistry lock poisoned");
         map.insert(key, task);
+    }
+
+    /// Registra una tarea **tipada** a partir de una closure async sobre tus
+    /// propios tipos. Los JSON Schema de input/output se derivan de `In`/`Out`
+    /// vía `schemars` y el engine los valida como con cualquier otra tarea.
+    ///
+    /// El atajo de baja fricción para extender: una tarea es esencialmente una
+    /// función `entrada → salida`. Para añadir una descripción al manifiesto,
+    /// usa [`TypedTask::new`] + [`TypedTask::description`] y `register`.
+    ///
+    /// ```
+    /// # use workflow_forge_core::task::{TaskRegistry, TaskCtx};
+    /// # use serde::{Deserialize, Serialize};
+    /// # use schemars::JsonSchema;
+    /// #[derive(Deserialize, JsonSchema)]
+    /// struct In { nombre: String }
+    /// #[derive(Serialize, JsonSchema)]
+    /// struct Out { saludo: String }
+    ///
+    /// let registry = TaskRegistry::new();
+    /// registry.register_typed("demo.saludar", |_ctx: TaskCtx, input: In| async move {
+    ///     Ok(Out { saludo: format!("Hola {}!", input.nombre) })
+    /// });
+    /// ```
+    pub fn register_typed<In, Out, F, Fut>(&self, id: impl Into<TaskId>, f: F)
+    where
+        In: DeserializeOwned + JsonSchema + Send + 'static,
+        Out: Serialize + JsonSchema + Send + 'static,
+        F: Fn(TaskCtx, In) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Out, WorkflowError>> + Send + 'static,
+    {
+        self.register(TypedTask::new(id, f));
+    }
+
+    /// Registra una tarea a partir de una closure async sobre JSON crudo
+    /// ([`WorkflowData`]), sin schemas declarados. El atajo mínimo para
+    /// transformaciones triviales. Para tipos y validación, usa
+    /// [`register_typed`](Self::register_typed).
+    ///
+    /// ```
+    /// # use workflow_forge_core::task::TaskRegistry;
+    /// let registry = TaskRegistry::new();
+    /// registry.register_fn("util.echo", |_ctx, input| async move { Ok(input) });
+    /// ```
+    pub fn register_fn<F, Fut>(&self, id: impl Into<TaskId>, f: F)
+    where
+        F: Fn(TaskCtx, WorkflowData) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = WorkflowResult> + Send + 'static,
+    {
+        self.register(FnTask::new(id, f));
     }
 
     /// Registra un perfil de tarea: una instancia nombrada y reusable de una

@@ -59,7 +59,7 @@
             </div>
 
             <!-- Portals Grid -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-16">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-16 max-w-4xl mx-auto">
                 <!-- Usage & Implementation Card -->
                 <div
                     class="group relative rounded-2xl border border-slate-800 bg-slate-900/40 p-8 hover:bg-slate-900/60 hover:border-indigo-500/30 transition-all duration-300 flex flex-col justify-between"
@@ -152,105 +152,7 @@
                     </div>
                 </div>
 
-                <!-- Architecture & Extensibility Card -->
-                <div
-                    class="group relative rounded-2xl border border-slate-800 bg-slate-900/40 p-8 hover:bg-slate-900/60 hover:border-purple-500/30 transition-all duration-300 flex flex-col justify-between"
-                >
-                    <div
-                        class="absolute -inset-px rounded-2xl bg-gradient-to-b from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300"
-                        aria-hidden="true"
-                    ></div>
-                    <div class="space-y-4 relative z-10">
-                        <div
-                            class="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20"
-                        >
-                            <svg
-                                class="h-6 w-6"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                                />
-                            </svg>
-                        </div>
-                        <h2
-                            class="text-2xl font-bold text-white tracking-tight"
-                        >
-                            2. Core Architecture & Extensibility
-                        </h2>
-                        <p class="text-slate-400 text-sm leading-relaxed">
-                            Understand the engine's internal internals to
-                            deploy, repair, optimize, or write custom plugins.
-                            This guide explains crates/core layering, Tokio
-                            concurrent runtimes, static DAG validation
-                            algorithms (cycles/orphans), BlobStore streaming
-                            backends, panic-routing boundaries, and custom task
-                            development.
-                        </p>
-                        <ul class="space-y-2 text-xs text-slate-500 pt-2">
-                            <li class="flex items-center space-x-2">
-                                <span
-                                    class="h-1.5 w-1.5 rounded-full bg-purple-500"
-                                ></span>
-                                <span
-                                    >Internal workspace layout & traits
-                                    model</span
-                                >
-                            </li>
-                            <li class="flex items-center space-x-2">
-                                <span
-                                    class="h-1.5 w-1.5 rounded-full bg-purple-500"
-                                ></span>
-                                <span>Static compilation & graph analysis</span>
-                            </li>
-                            <li class="flex items-center space-x-2">
-                                <span
-                                    class="h-1.5 w-1.5 rounded-full bg-purple-500"
-                                ></span>
-                                <span
-                                    >Tokio task scheduler & state
-                                    mutations</span
-                                >
-                            </li>
-                            <li class="flex items-center space-x-2">
-                                <span
-                                    class="h-1.5 w-1.5 rounded-full bg-purple-500"
-                                ></span>
-                                <span
-                                    >Writing custom plugins with Schemars</span
-                                >
-                            </li>
-                        </ul>
-                    </div>
-                    <div class="pt-8 relative z-10 mt-auto">
-                        <a
-                            href="architecture.html"
-                            class="inline-flex items-center justify-center w-full rounded-xl bg-purple-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-purple-600/20 hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-200"
-                        >
-                            Go to Architectural Guide
-                            <svg
-                                class="ml-2 h-4 w-4"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M14 5l7 7m0 0l-7 7m7-7H3"
-                                />
-                            </svg>
-                        </a>
-                    </div>
-                </div>
-
-                <!-- Crate Infrastructure & Guts Card -->
+                <!-- Core Architecture & Infrastructure Card -->
                 <div
                     class="group relative rounded-2xl border border-slate-800 bg-slate-900/40 p-8 hover:bg-slate-900/60 hover:border-amber-500/30 transition-all duration-300 flex flex-col justify-between"
                 >
@@ -285,21 +187,29 @@
                         <h2
                             class="text-2xl font-bold text-white tracking-tight"
                         >
-                            3. Crate Infrastructure & Guts
+                            2. Core Architecture & Extensibility
                         </h2>
                         <p class="text-slate-400 text-sm leading-relaxed">
-                            Examine the repository's concrete file structure,
-                            internal module-by-module codes, safe RwLock-locked
-                            context documents, topographical Tokio schedulers,
-                            and binary async streams.
+                            A complete, code-faithful tour of the engine's
+                            internals — every module family, the spec types, the
+                            validation pipeline, the executor's traversal and
+                            policy, the resource and observability subsystems —
+                            and the seams designed for future expansion.
                         </p>
                         <ul class="space-y-2 text-xs text-slate-500 pt-2">
                             <li class="flex items-center space-x-2">
                                 <span
                                     class="h-1.5 w-1.5 rounded-full bg-amber-500"
                                 ></span>
+                                <span>Module families & crate layout</span>
+                            </li>
+                            <li class="flex items-center space-x-2">
                                 <span
-                                    >Crates physical file tree walkthrough</span
+                                    class="h-1.5 w-1.5 rounded-full bg-amber-500"
+                                ></span>
+                                <span
+                                    >Spec types, the 13-rule validation
+                                    pipeline</span
                                 >
                             </li>
                             <li class="flex items-center space-x-2">
@@ -307,21 +217,15 @@
                                     class="h-1.5 w-1.5 rounded-full bg-amber-500"
                                 ></span>
                                 <span
-                                    >State RwLock & thread-safety
-                                    internals</span
+                                    >Executor traversal, policy &
+                                    handlers</span
                                 >
                             </li>
                             <li class="flex items-center space-x-2">
                                 <span
                                     class="h-1.5 w-1.5 rounded-full bg-amber-500"
                                 ></span>
-                                <span>Topological try_join_all traversal</span>
-                            </li>
-                            <li class="flex items-center space-x-2">
-                                <span
-                                    class="h-1.5 w-1.5 rounded-full bg-amber-500"
-                                ></span>
-                                <span>Memory-efficient file streams</span>
+                                <span>Extension seams & frozen contracts</span>
                             </li>
                         </ul>
                     </div>

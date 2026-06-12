@@ -48,9 +48,20 @@ use workflow_forge_core::task::TaskRegistry;
 use workflow_forge_core::task::{Task, TaskManifest};
 use workflow_forge_core::task::{WorkflowData, WorkflowResult};
 
-/// Registra todas las tareas de la extensión en el registry
+/// Registra todas las tareas de la extensión en el registry.
+///
+/// La tarea por defecto reutiliza un único `reqwest::Client`, que ya hace
+/// **pooling de conexiones** (keep-alive por host). Para afinar el pool
+/// (tamaño, timeouts, proxy, TLS) a volumen, usa [`register_with_client`].
 pub fn register(registry: &TaskRegistry) {
     registry.register(HttpRequestTask::default());
+}
+
+/// Como [`register`], pero con un `reqwest::Client` provisto por el host: la
+/// vía recomendada para producción a volumen, donde quieres controlar el pool
+/// (`pool_max_idle_per_host`, `timeout`, `connect_timeout`, proxy…).
+pub fn register_with_client(registry: &TaskRegistry, client: reqwest::Client) {
+    registry.register(HttpRequestTask::with_client(client));
 }
 
 fn schema(value: Value) -> workflow_forge_core::schemars::Schema {
@@ -244,6 +255,18 @@ impl Default for HttpRequestTask {
         Self {
             manifest,
             client: reqwest::Client::new(),
+        }
+    }
+}
+
+impl HttpRequestTask {
+    /// Construye la tarea reutilizando un `reqwest::Client` provisto por el
+    /// host. Un único client comparte y reutiliza conexiones (pool keep-alive)
+    /// entre todas las peticiones; inyéctalo afinado para uso a volumen.
+    pub fn with_client(client: reqwest::Client) -> Self {
+        Self {
+            client,
+            ..Self::default()
         }
     }
 }

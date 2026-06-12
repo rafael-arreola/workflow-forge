@@ -2,7 +2,12 @@
 
 > Motor de workflows declarativos estilo BPMN, definido, validado y extendido con
 > JSON Schema + JSONPath. Escrito en Rust, embebible como librería.
-> Estado: decisiones fundacionales tomadas el 2026-06-09. Pre-spec.
+> Estado (2026-06-12): **v0.1 implementado**. Spec 1.0 + schemas publicados;
+> core completo (executor, validación, gateways, foreach, sub-workflows,
+> perfiles, blobs, secrets, observabilidad); extensiones `util`/`data`/`http`/
+> `sftp`/`tabular`; fachada con feature flags; ejemplos ejecutables, harness de
+> pruebas y CI. Decisiones fundacionales tomadas el 2026-06-09; ver el detalle
+> de la implementación en `docs/` (manuales de uso y de arquitectura).
 
 ## Visión
 
@@ -48,6 +53,11 @@ embebiendo el core en su aplicación Rust. El core publica dos contratos:
 | 25 | HTTP completo | `http.request` cubre todos los cuerpos — `body` (JSON), `form` (urlencoded), `text` (raw), `body_blob` (binario streamed) y `multipart` (form-data con partes texto/json/blob) — mutuamente excluyentes; y `response_body: auto\|text\|blob` para descargar binarios al BlobStore. Blobs siempre por streaming | Solo JSON; cargar binarios a memoria/base64; extensión aparte para multipart |
 | 26 | Conversiones por campo | Tarea `data.cast`: conversiones declarativas por campo (fechas con formato, números con separadores, int/bool/string, trim/upper/lower/replace, defaults) sobre un objeto o array de filas; `on_invalid: fail\|null\|collect` decide qué pasa con valores inconvertibles | Helpers de conversión en mappings (rompe #14); pipes estilo template; dejar la conversión al host |
 | 27 | Sub-workflows | `kind: "subworkflow"` (deja de estar reservado): el `input` resuelto es el trigger del hijo y el output final del hijo es el output del nodo. Registro dual como los perfiles: `WorkflowRegistry` compartido + sección `workflows` inline (precedencia). Las 3 salidas aplican (error/panic del hijo rutean). BlobStore compartido, eventos con `parent_execution_id`, ciclos y profundidad >8 rechazados al construir | Solo inline; solo registry; retry/timeout en el nodo subworkflow (diferido); ejecución aislada sin compartir blobs |
+| 28 | Autoría de tareas | Tres niveles sobre el trait `Task`: `register_typed` (closure tipada, schemas de input/output **derivados** de los tipos vía `schemars`, validados por el engine; refs anidados/enums se aplican), `register_fn` (closure sobre JSON crudo, sin schema) y `impl Task` (struct con estado/dependencias y acceso al `WorkflowContext` completo). Las closures reciben un `TaskCtx` por valor (execution_id, blobs, idempotency_key) para no lidiar con lifetimes. Validación tolerante por defecto; estricta con `#[serde(deny_unknown_fields)]` | Solo el trait a mano; schemas siempre escritos a mano; pasar `&WorkflowContext` a las closures (lifetimes) |
+| 29 | Pruebas | Feature `testing` con `MockTask` (`returning`/`failing`/`with_fn`) + `CallLog`: dry-run de un workflow contra tareas simuladas, asertando salida y qué se habría llamado, sin red/FS/secrets. Es el complemento de "declarar sin programar": probar flujos sin dependencias vivas | Sin utilidades de prueba; que cada quien mockee con `register_fn` a mano |
+| 30 | Idempotencia | Convención de clave **determinista y content-addressed**: `idempotency::key_for(value)` deriva un UUID v5 estable del payload (mismo payload → misma clave, entre reintentos y re-runs). Declarativa vía `util.idempotency_key` (`{ value } → { key }`) cableada al `bind` del perfil/tarea creadora; en código vía `TaskCtx::idempotency_key`. El alcance se compone metiendo discriminadores en el value (execution_id, sistema destino) | Clave por (execution+node) que solo dedupe reintentos de una corrida; hook con estado por-nodo (carrera bajo paralelismo); dejar la idempotencia 100% al host |
+| 31 | Observabilidad durable | Adaptadores `ExecutionObserver` listos: `TracingObserver` (emite por `tracing` → cualquier subscriber/OTel del host) y `JsonlObserver` (una línea JSON por evento a un `Write`/archivo, append-only, replayable). Síncronos (como el trait); `JsonlObserver` hace flush por evento. La persistencia/cola sigue siendo del host, pero ya no se reescribe desde cero | Solo `InMemoryHistory`; obligar a cada host a implementar el trait; persistencia asíncrona dentro del core |
+| 32 | Cancelación y deadline | `run_with(trigger, RunOptions)` añade `deadline` (timeout total de la ejecución) y `cancel` (`CancellationToken` cooperativo). **Por defecto ilimitado**: `run` no impone límites; el host decide. Al vencer/cancelar se abandona la ejecución (descarte de futuros: cooperativo en los `await`) y se devuelve `EXECUTION_TIMEOUT`/`EXECUTION_CANCELLED`; los blobs se limpian igual. Resuelve la pregunta abierta #1 | Límites por defecto; cancelación forzada (kill de tareas a media syscall); timeout solo por nodo |
 
 ## Modelo conceptual
 
@@ -262,9 +272,9 @@ Un nodo task sin `input` recibe el output de su predecesor.
 | `util` | `util.delay`, `util.log`, `util.noop` | Debug, pruebas y ejemplos |
 | `sftp` | `sftp.get`, `sftp.put`, `sftp.list` | Integraciones empresariales; usa `$blob` |
 | `tabular` | `tabular.parse`, `tabular.write` | CSV y XLSX ↔ JSON; usa `$blob` |
-| `fs` | `fs.read`, `fs.write` | Local, complementa sftp; usa `$blob` |
 
-Roadmap de extensiones: `compress` (zip/gzip), `crypto` (hash/HMAC), `storage`
+Roadmap de extensiones: `fs` (`fs.read`/`fs.write` local, complementa sftp,
+usa `$blob`), `compress` (zip/gzip), `crypto` (hash/HMAC), `storage`
 (S3-compatible) y `smtp` en v1.x; `db` (SQL) y `queue` (AMQP/Kafka) post-v1.
 
 ### Nodo `foreach`
@@ -410,6 +420,7 @@ crates/
     sftp/                → workflow-forge-ext-sftp
     tabular/             → workflow-forge-ext-tabular
   forge/                 → workflow-forge (fachada con feature flags)
+  cli/                   → workflow-forge-cli (binario `forge`: run/validate/catalog)
 ```
 
 Reglas: cada extensión depende solo de core (nunca de otra extensión), expone
@@ -427,37 +438,50 @@ Reglas: cada extensión depende solo de core (nunca de otra extensión), expone
 ## Open source
 
 - **Licencia**: dual MIT / Apache-2.0 (estándar del ecosistema Rust).
-- **Workspace**: ver "Layout del workspace" arriba (+ futuro `crates/cli`).
+- **Workspace**: ver "Layout del workspace" arriba.
 - **Mínimos de release**: README con quickstart, schemas publicados, ejemplos
   ejecutables, CI (fmt + clippy + test), CHANGELOG, publicación en crates.io.
 
 ## Roadmap
 
-### Fase 0 — Spec draft
+### Fase 0 — Spec draft ✅
 JSON Schema del workflow (nodos, gateways, edges, retry, mappings), JSON Schema
-del manifiesto de extensión, y 3–5 workflows de ejemplo que validen contra
-ellos. *La spec se diseña sobre ejemplos, no al revés.*
+del manifiesto de extensión, y workflows de ejemplo que validan contra ellos.
 
-### Fase 1 — Core alineado a la spec
-Evolucionar el executor actual: contexto global, resolución JSONPath de
-mappings, gateways (exclusive/parallel/join), retry/timeout/on_error,
-validación del grafo (ciclos, nodos huérfanos, aristas a ids inexistentes),
-catálogo exportable de tareas.
+### Fase 1 — Core alineado a la spec ✅
+Executor con contexto global, resolución JSONPath de mappings, gateways
+(exclusive/parallel/join), foreach, retry/timeout/on_error/on_panic, sub-workflows,
+perfiles, blobs, secrets, validación del grafo y catálogo exportable de tareas.
 
-### Fase 2 — Extensiones oficiales
+### Fase 2 — Extensiones oficiales ✅
 `ext-util`, `ext-data`, `ext-http`, `ext-tabular`, `ext-sftp` + fachada, cada
 una con manifiesto, schemas y tests de integración.
 
-### Fase 3 — Pulido OSS y v1.0
-Docs, ejemplos, CI, licencias, publicación en crates.io, anuncio.
+### Fase 3 — Pulido OSS y v1.0 ✅ (v0.1 lista)
+Docs (manuales de uso y arquitectura en `docs/`), ejemplos ejecutables, CI
+(fmt + clippy + tests), licencias, metadata de crates.io. Pendiente solo el
+`cargo publish` final.
+
+### Hecho post-0.1 (aditivo, sin tocar la spec)
+- Autoría de baja fricción: `register_typed`/`register_fn` con schemas derivados.
+- Harness de pruebas: feature `testing` con `MockTask`/`CallLog`.
+- Idempotencia: `idempotency::key_for` + tarea `util.idempotency_key`.
+- Observabilidad durable: adaptadores `TracingObserver` y `JsonlObserver`.
+- Cancelación + deadline de ejecución (`run_with`/`RunOptions`), ilimitado por
+  defecto.
+- Reuso de conexiones a volumen: `http::register_with_client` (Client afinable;
+  el default ya hace pooling) y `sftp::register_pooled` + `SftpPool` (reutiliza
+  sesiones SSH autenticadas, con liveness y reconexión).
+- CLI runtime: crate `workflow-forge-cli`, binario `forge` (`run`/`validate`/
+  `catalog`).
 
 ### Futuro (post-v1)
-- CLI runtime (`forge run workflow.json`)
 - Extensiones WASM instalables sin recompilar
 - Durabilidad: executor event-sourced detrás de un trait de storage; espera de
   eventos externos
-- Servidor con API / triggers
-- Editor visual (el grafo + schemas lo hacen posible)
+- Servidor con API / triggers; scheduling
+- Despacho dinámico a sub-workflows por campo (resuelto en runtime)
+- Editor visual (el grafo + schemas + catálogo lo hacen posible)
 
 ## Contratos de extensiones (decididos en implementación)
 
@@ -502,7 +526,16 @@ Docs, ejemplos, CI, licencias, publicación en crates.io, anuncio.
 
 ## Preguntas abiertas
 
-1. **Cancelación**: ¿API de cancelación cooperativa de una ejecución en v1?
-   (No afecta la spec JSON; se decide al diseñar la API del executor.)
-2. **Operadores definitivos del mini-DSL de condiciones**: la lista propuesta
-   arriba se cierra al redactar los JSON Schemas de la spec (Fase 0 pendiente).
+_(Las dos preguntas originales quedaron resueltas en la implementación.)_
+
+1. ~~**Cancelación**: ¿API de cancelación cooperativa en v1?~~ **Resuelta**
+   (decisión #32): `run_with(trigger, RunOptions)` con `deadline` y
+   `CancellationToken`, ilimitado por defecto. No afectó la spec JSON.
+2. ~~**Operadores definitivos del mini-DSL de condiciones**~~ **Resuelta**:
+   13 operadores built-in (`eq`/`ne`/`gt`/`gte`/`lt`/`lte`/`in`/`contains`/
+   `exists`/`is_null`/`starts_with`/`ends_with`/`matches`) + registro de
+   operadores custom del host (`expr::operators`), validado en build-time.
+
+Pendientes nuevos (de uso real como plataforma de integración, ver decisiones
+y "Futuro"): reuso de conexiones (pools en extensiones HTTP/SFTP a volumen) y
+despacho dinámico a sub-workflows por campo. Ambos son aditivos.

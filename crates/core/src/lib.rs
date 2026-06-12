@@ -24,7 +24,8 @@
 //!
 //! | Quiero agregar | Dónde |
 //! |---|---|
-//! | una tarea nueva | implementa [`task::Task`] en tu crate de extensión y regístrala en el [`task::TaskRegistry`] |
+//! | una tarea (atajo) | una closure async: [`TaskRegistry::register_typed`] (tipada, schemas derivados) o [`TaskRegistry::register_fn`] (JSON crudo) |
+//! | una tarea (control total) | implementa [`task::Task`] (struct con estado/dependencias) y regístrala en el [`task::TaskRegistry`] |
 //! | un perfil de tarea | [`spec::TaskProfile`] + `register_profile` (o sección `tasks` inline del documento) |
 //! | un operador de condición | implementa [`expr::operators::ConditionOperator`] y regístralo en [`expr::operators::global`] |
 //! | una regla de validación | implementa [`validate::ValidationRule`]; integrada → [`validate::rules`], del host → `builder().rule(...)` |
@@ -38,11 +39,14 @@
 
 pub mod error;
 pub mod expr;
+pub mod idempotency;
 pub mod io;
 pub mod observe;
 pub mod runtime;
 pub mod spec;
 pub mod task;
+#[cfg(feature = "testing")]
+pub mod testing;
 pub mod validate;
 
 // Re-export para que las extensiones construyan schemas sin depender
@@ -54,9 +58,14 @@ pub use schemars;
 pub mod prelude {
     pub use crate::error::WorkflowError;
     pub use crate::observe::{ExecutionObserver, InMemoryHistory};
-    pub use crate::runtime::{WorkflowContext, WorkflowExecutor, WorkflowRegistry};
+    pub use crate::runtime::{
+        CancellationToken, RunOptions, WorkflowContext, WorkflowExecutor, WorkflowRegistry,
+    };
     pub use crate::spec::{TaskProfile, WorkflowDefinition};
-    pub use crate::task::{Task, TaskId, TaskManifest, TaskRegistry, WorkflowData, WorkflowResult};
+    pub use crate::task::{
+        FnTask, Task, TaskCtx, TaskId, TaskManifest, TaskRegistry, TypedTask, WorkflowData,
+        WorkflowResult,
+    };
 }
 
 /// Versión del crate workflow-forge-core

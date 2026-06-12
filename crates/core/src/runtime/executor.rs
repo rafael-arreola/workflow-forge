@@ -7,10 +7,11 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use futures::future::{BoxFuture, try_join_all};
 use serde_json::{Value, json};
+pub use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use crate::error::{WorkflowError, codes};
@@ -29,6 +30,55 @@ use crate::validate::ValidationRule;
 
 /// Tokens que llegaron a un join, identificados por su nodo de origen.
 pub(crate) type JoinArrivals = Vec<(NodeId, Arc<Value>)>;
+
+/// Límites opcionales de una ejecución. **Por defecto, ilimitada**: sin
+/// `deadline` y sin cancelación. El host decide cuándo y cómo acotar.
+///
+/// ```
+/// # use std::time::Duration;
+/// # use workflow_forge_core::runtime::{RunOptions, CancellationToken};
+/// let token = CancellationToken::new();
+/// let options = RunOptions::default()
+///     .deadline(Duration::from_secs(30)) // límite total de la ejecución
+///     .cancel(token.clone());            // cancelación cooperativa externa
+/// // token.cancel(); // desde otra tarea para abortar la ejecución
+/// # let _ = options;
+/// ```
+#[derive(Default, Clone)]
+pub struct RunOptions {
+    /// Tiempo máximo total de la ejecución. `None` = ilimitado (default).
+    pub deadline: Option<Duration>,
+    /// Token de cancelación cooperativa externa. `None` = sin cancelación.
+    pub cancel: Option<CancellationToken>,
+}
+
+impl RunOptions {
+    /// Fija el tiempo máximo total de la ejecución.
+    pub fn deadline(mut self, deadline: Duration) -> Self {
+        self.deadline = Some(deadline);
+        self
+    }
+
+    /// Asocia un token de cancelación cooperativa.
+    pub fn cancel(mut self, token: CancellationToken) -> Self {
+        self.cancel = Some(token);
+        self
+    }
+}
+
+fn timeout_error(deadline: Duration) -> WorkflowError {
+    WorkflowError::new(
+        codes::EXECUTION_TIMEOUT,
+        format!(
+            "La ejecución superó el deadline de {} ms",
+            deadline.as_millis()
+        ),
+    )
+}
+
+fn cancelled_error() -> WorkflowError {
+    WorkflowError::new(codes::EXECUTION_CANCELLED, "La ejecución fue cancelada")
+}
 
 /// Niveles máximos de anidamiento de sub-workflows (la raíz es el nivel 1)
 const MAX_SUBWORKFLOW_DEPTH: usize = 8;
@@ -349,20 +399,68 @@ impl WorkflowExecutor {
         }
     }
 
-    /// Ejecuta el workflow hasta terminar o fallar (run-to-completion).
+    /// Ejecuta el workflow hasta terminar o fallar (run-to-completion),
+    /// **sin límite** de tiempo ni cancelación. Para acotarla, usa
+    /// [`run_with`](Self::run_with).
     pub async fn run(&self, trigger: WorkflowData) -> WorkflowResult {
+        self.run_with(trigger, RunOptions::default()).await
+    }
+
+    /// Como [`run`](Self::run), pero con [`RunOptions`]: un `deadline` total
+    /// y/o un `CancellationToken`. Por defecto las ejecuciones son ilimitadas;
+    /// estos límites son opt-in del host.
+    ///
+    /// Al vencer el deadline o cancelarse, la ejecución en curso se abandona
+    /// (sus futuros se descartan: cancelación cooperativa en los `await`) y se
+    /// devuelve `EXECUTION_TIMEOUT` / `EXECUTION_CANCELLED`. Los blobs de la
+    /// ejecución se limpian igual.
+    pub async fn run_with(&self, trigger: WorkflowData, options: RunOptions) -> WorkflowResult {
         let ctx = WorkflowContext::with_blob_factory(
             &self.workflow,
             trigger.0.clone(),
             self.blobs.as_ref(),
         );
-        let result = self.run_with_ctx(trigger, &ctx).await;
+        let result = self.run_bounded(trigger, &ctx, &options).await;
         // Solo la ejecución raíz limpia los blobs: los sub-workflows
         // comparten este store y sus referencias pueden cruzar la frontera
         if let Err(e) = ctx.blobs().cleanup().await {
             warn!(code = %e.code, message = %e.message, "No se pudieron limpiar los blobs");
         }
         result
+    }
+
+    /// Corre `run_with_ctx` bajo los límites de `options`. Sin límites, es un
+    /// simple `await`; con ellos, una carrera contra el deadline y el token.
+    async fn run_bounded(
+        &self,
+        trigger: WorkflowData,
+        ctx: &WorkflowContext,
+        options: &RunOptions,
+    ) -> WorkflowResult {
+        let work = self.run_with_ctx(trigger, ctx);
+
+        match (options.deadline, options.cancel.clone()) {
+            (None, None) => work.await,
+            (Some(deadline), None) => {
+                tokio::select! {
+                    result = work => result,
+                    _ = tokio::time::sleep(deadline) => Err(timeout_error(deadline)),
+                }
+            }
+            (None, Some(token)) => {
+                tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(cancelled_error()),
+                }
+            }
+            (Some(deadline), Some(token)) => {
+                tokio::select! {
+                    result = work => result,
+                    _ = tokio::time::sleep(deadline) => Err(timeout_error(deadline)),
+                    _ = token.cancelled() => Err(cancelled_error()),
+                }
+            }
+        }
     }
 
     /// Cuerpo común de una ejecución (raíz o sub-workflow): eventos de
