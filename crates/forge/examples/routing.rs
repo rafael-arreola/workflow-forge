@@ -1,7 +1,7 @@
-//! Exclusive gateway: route on a trigger field, with two terminal outcomes.
-//! Uses only `util`/`data` tasks — no network.
+//! Gateway exclusive: rutea según un campo del trigger, con dos salidas
+//! terminales. Usa solo tareas `util`/`data` — sin red.
 //!
-//! Run with:
+//! Ejecutar con:
 //!     cargo run -p workflow-forge --example routing
 //!     cargo run -p workflow-forge --example routing -- 1500
 
@@ -9,7 +9,7 @@ use workflow_forge::prelude::*;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Optional CLI arg: the order amount (defaults to 250).
+    // Arg opcional de CLI: el monto de la orden (default 250).
     let amount: i64 = std::env::args()
         .nth(1)
         .and_then(|a| a.parse().ok())

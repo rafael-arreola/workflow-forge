@@ -172,6 +172,65 @@ async fn fail_on_error_status_permite_retry() {
     assert_eq!(mock.calls_async().await, 3);
 }
 
+#[tokio::test]
+async fn retry_on_status_deja_pasar_los_no_listados() {
+    let server = MockServer::start_async().await;
+    let mock = server
+        .mock_async(|when, then| {
+            when.method(GET).path("/recurso");
+            then.status(404).json_body(json!({ "error": "not found" }));
+        })
+        .await;
+
+    // 404 no está en retry_on_status: es dato, no falla ni reintenta
+    let result = run(
+        single_request_workflow(json!({
+            "url": format!("{}/recurso", server.base_url()),
+            "retry_on_status": [429, 503]
+        })),
+        json!({}),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(result.0["status"], 404);
+    assert_eq!(mock.calls_async().await, 1, "no debió reintentar un 404");
+}
+
+#[tokio::test]
+async fn retry_after_se_propaga_como_pista_en_el_error() {
+    let server = MockServer::start_async().await;
+    server
+        .mock_async(|when, then| {
+            when.method(GET).path("/limitado");
+            then.status(429).header("retry-after", "120");
+        })
+        .await;
+
+    // 429 listado como reintentable, sin política de retry en el nodo → falla
+    // y rutea por on: error; el token de error lleva retry_after_ms = 120s
+    let workflow = json!({
+        "name": "rate-limit", "version": "0.1.0",
+        "nodes": [
+            { "id": "start", "kind": "start" },
+            { "id": "req", "kind": "task", "task": "http.request",
+              "input": {
+                  "url": format!("{}/limitado", server.base_url()),
+                  "retry_on_status": [429]
+              } },
+            { "id": "capture", "kind": "end" }
+        ],
+        "edges": [
+            { "from": "start", "to": "req" },
+            { "from": "req", "on": "error", "to": "capture" }
+        ]
+    });
+
+    let result = run(workflow, json!({})).await.unwrap();
+    assert_eq!(result.0["code"], "HTTP_STATUS_ERROR");
+    assert_eq!(result.0["retry_after_ms"], 120_000);
+}
+
 // ---------------------------------------------------------------------------
 // Cuerpos: form, text, body_blob, multipart
 // ---------------------------------------------------------------------------

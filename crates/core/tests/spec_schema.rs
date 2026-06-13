@@ -102,6 +102,61 @@ fn workflow_completo_valida() {
 }
 
 #[test]
+fn workflow_con_loop_valida() {
+    // Paginación canónica: itera mientras `next` no sea null, con tope
+    assert_valid_everywhere(json!({
+        "spec": "1.0",
+        "name": "paginado", "version": "0.1.0",
+        "nodes": [
+            { "id": "start", "kind": "start" },
+            { "id": "fetch_pages", "kind": "loop",
+              "task": "http.request",
+              "input": { "url": "$.trigger.api", "query": { "page": "1" } },
+              "next": { "url": "@.output.body.next" },
+              "while": { "path": "$.output.body.next", "is_null": false },
+              "max_iterations": 50,
+              "on_max": "fail",
+              "collect": "all",
+              "retry": { "max": 2, "jitter": true },
+              "timeout_ms": 10000 },
+            { "id": "fallo", "kind": "task", "task": "util.log",
+              "input": { "level": "error", "message": "$.nodes.fetch_pages.error" } },
+            { "id": "end", "kind": "end" },
+            { "id": "end-error", "kind": "end", "status": "error" }
+        ],
+        "edges": [
+            { "from": "start", "to": "fetch_pages" },
+            { "from": "fetch_pages", "to": "end" },
+            { "from": "fetch_pages", "on": "error", "to": "fallo" },
+            { "from": "fallo", "to": "end-error" }
+        ]
+    }));
+}
+
+#[test]
+fn el_schema_rechaza_loops_invalidos() {
+    assert_schema_rejects(
+        json!({ "name": "x", "version": "1",
+            "nodes": [{ "id": "l", "kind": "loop", "task": "util.noop",
+                "while": { "path": "$.output.next", "exists": true } }] }),
+        "loop sin max_iterations",
+    );
+    assert_schema_rejects(
+        json!({ "name": "x", "version": "1",
+            "nodes": [{ "id": "l", "kind": "loop", "task": "util.noop",
+                "max_iterations": 10 }] }),
+        "loop sin while",
+    );
+    assert_schema_rejects(
+        json!({ "name": "x", "version": "1",
+            "nodes": [{ "id": "l", "kind": "loop", "task": "util.noop",
+                "while": { "path": "$.output.next", "exists": true },
+                "max_iterations": 0 }] }),
+        "loop con max_iterations 0",
+    );
+}
+
+#[test]
 fn el_schema_rechaza_documentos_invalidos() {
     assert_schema_rejects(
         json!({ "version": "1", "nodes": [{ "id": "s", "kind": "start" }] }),

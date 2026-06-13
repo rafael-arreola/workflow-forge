@@ -95,6 +95,7 @@ pub fn validate_tasks(
             let task = match &node.kind {
                 NodeKind::Task(task_node) => &task_node.task,
                 NodeKind::Foreach(foreach) => &foreach.task,
+                NodeKind::Loop(lp) => &lp.task,
                 _ => return None,
             };
             (!registry.contains(task)).then(|| {
@@ -187,6 +188,58 @@ mod tests {
         let found = codes(&workflow);
         assert!(found.contains(&"GATEWAY_BRANCH_WITHOUT_EDGE".to_string())); // falta "fail"
         assert!(found.contains(&"GATEWAY_EDGE_WITHOUT_BRANCH".to_string())); // sobra "huerfana"
+    }
+
+    #[test]
+    fn gateway_exclusive_rechaza_labels_duplicados() {
+        // Dos aristas con el mismo label: el handler seguiría ambas a la vez
+        // (fan-out accidental desde un exclusive)
+        let workflow = wf(json!({
+            "name": "dup", "version": "0.1.0",
+            "nodes": [
+                { "id": "start", "kind": "start" },
+                { "id": "check", "kind": "gateway", "gateway": "exclusive", "branches": [
+                    { "when": { "path": "$.trigger.x", "eq": 1 }, "edge": "ok" },
+                    { "else": true, "edge": "fail" }
+                ]},
+                { "id": "a", "kind": "task", "task": "noop" },
+                { "id": "end", "kind": "end" }
+            ],
+            "edges": [
+                { "from": "start", "to": "check" },
+                { "from": "check", "to": "a", "label": "ok" },
+                { "from": "check", "to": "end", "label": "ok" },
+                { "from": "check", "to": "end", "label": "fail" },
+                { "from": "a", "to": "end" }
+            ]
+        }));
+        let found = codes(&workflow);
+        assert_eq!(
+            found
+                .iter()
+                .filter(|c| *c == "GATEWAY_DUPLICATE_EDGE_LABEL")
+                .count(),
+            1,
+            "un error por label duplicado, encontrados: {found:?}"
+        );
+
+        // Dos ramas hacia el mismo label también es ambiguo
+        let workflow = wf(json!({
+            "name": "dup-branch", "version": "0.1.0",
+            "nodes": [
+                { "id": "start", "kind": "start" },
+                { "id": "check", "kind": "gateway", "gateway": "exclusive", "branches": [
+                    { "when": { "path": "$.trigger.x", "eq": 1 }, "edge": "ok" },
+                    { "when": { "path": "$.trigger.y", "eq": 2 }, "edge": "ok" }
+                ]},
+                { "id": "end", "kind": "end" }
+            ],
+            "edges": [
+                { "from": "start", "to": "check" },
+                { "from": "check", "to": "end", "label": "ok" }
+            ]
+        }));
+        assert!(codes(&workflow).contains(&"GATEWAY_DUPLICATE_EDGE_LABEL".to_string()));
     }
 
     #[test]

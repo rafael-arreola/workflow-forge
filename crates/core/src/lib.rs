@@ -24,7 +24,7 @@
 //!
 //! | Quiero agregar | Dónde |
 //! |---|---|
-//! | una tarea (atajo) | una closure async: [`TaskRegistry::register_typed`] (tipada, schemas derivados) o [`TaskRegistry::register_fn`] (JSON crudo) |
+//! | una tarea (atajo) | una closure async: [`register_typed`](task::TaskRegistry::register_typed) (tipada, schemas derivados) o [`register_fn`](task::TaskRegistry::register_fn) (JSON crudo) |
 //! | una tarea (control total) | implementa [`task::Task`] (struct con estado/dependencias) y regístrala en el [`task::TaskRegistry`] |
 //! | un perfil de tarea | [`spec::TaskProfile`] + `register_profile` (o sección `tasks` inline del documento) |
 //! | un operador de condición | implementa [`expr::operators::ConditionOperator`] y regístralo en [`expr::operators::global`] |

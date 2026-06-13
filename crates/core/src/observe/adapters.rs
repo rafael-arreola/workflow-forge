@@ -1,33 +1,34 @@
-//! Ready-made [`ExecutionObserver`] adapters for durable audit trails.
+//! Adaptadores [`ExecutionObserver`] listos para usar como bitácora durable.
 //!
-//! The executor only knows the [`ExecutionObserver`] trait; these are batteries
-//! included so a host doesn't have to write persistence from scratch:
+//! El executor solo conoce el trait [`ExecutionObserver`]; estos son
+//! "baterías incluidas" para que un host no escriba la persistencia desde
+//! cero:
 //!
-//! - [`TracingObserver`] — emits each event through the `tracing` crate, so it
-//!   flows into whatever subscriber the host already has (stdout, journald,
-//!   OpenTelemetry via `tracing-opentelemetry`, …).
-//! - [`JsonlObserver`] — appends each event as one JSON line to any writer or
-//!   file. A simple, greppable, append-only audit log.
+//! - [`TracingObserver`] — emite cada evento por el crate `tracing`, de modo
+//!   que fluye hacia el subscriber que el host ya tenga (stdout, journald,
+//!   OpenTelemetry vía `tracing-opentelemetry`, …).
+//! - [`JsonlObserver`] — anexa cada evento como una línea JSON a cualquier
+//!   writer o archivo. Un audit log append-only, simple y greppeable.
 //!
-//! Both are synchronous (as the trait requires). [`JsonlObserver`] flushes
-//! every line so nothing is lost on a crash; for very high throughput, wrap a
-//! channel-backed observer of your own instead.
+//! Ambos son síncronos (como exige el trait). [`JsonlObserver`] hace flush en
+//! cada línea para no perder nada ante un crash; para throughput muy alto,
+//! envuelve tu propio observer respaldado por un canal.
 
 use std::io::Write;
 use std::sync::Mutex;
 
 use super::{ExecutionEvent, ExecutionObserver};
 
-/// Observer that logs every event via the `tracing` crate.
+/// Observer que loggea cada evento vía el crate `tracing`.
 ///
-/// Failures (`workflow_failed`, `node_failed`, `task_attempt_failed`) are
-/// emitted at `error` level, the rest at `info`, each carrying `execution_id`,
-/// `seq` and the event `type`.
+/// Los fallos (`workflow_failed`, `node_failed`, `task_attempt_failed`) se
+/// emiten a nivel `error`, el resto a `info`, cada uno con `execution_id`,
+/// `seq` y el `type` del evento.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct TracingObserver;
 
 impl TracingObserver {
-    /// A new tracing observer.
+    /// Un observer de tracing nuevo.
     pub fn new() -> Self {
         Self
     }
@@ -65,15 +66,16 @@ impl ExecutionObserver for TracingObserver {
     }
 }
 
-/// Observer that appends each event as one JSON line (JSON Lines / `.jsonl`)
-/// to a writer. The full event is serialized, so the log is replayable.
+/// Observer que anexa cada evento como una línea JSON (JSON Lines / `.jsonl`)
+/// a un writer. El evento se serializa completo, así que el log es
+/// reproducible (replayable).
 pub struct JsonlObserver<W: Write + Send> {
     writer: Mutex<W>,
 }
 
 impl<W: Write + Send> JsonlObserver<W> {
-    /// Write events to an arbitrary writer (e.g. an in-memory `Vec<u8>` in
-    /// tests, or a `File`).
+    /// Escribe los eventos a un writer arbitrario (p. ej. un `Vec<u8>` en
+    /// memoria para tests, o un `File`).
     pub fn new(writer: W) -> Self {
         Self {
             writer: Mutex::new(writer),
@@ -82,7 +84,7 @@ impl<W: Write + Send> JsonlObserver<W> {
 }
 
 impl JsonlObserver<std::io::BufWriter<std::fs::File>> {
-    /// Append events to a file at `path` (created if missing).
+    /// Anexa los eventos a un archivo en `path` (se crea si no existe).
     pub fn to_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
         let file = std::fs::OpenOptions::new()
             .create(true)
@@ -132,8 +134,8 @@ mod tests {
     }
 
     #[test]
-    fn jsonl_writes_one_line_per_event() {
-        // Shared buffer so we can read what was written.
+    fn jsonl_escribe_una_linea_por_evento() {
+        // Buffer compartido para poder leer lo escrito.
         let buf = std::sync::Arc::new(Mutex::new(Vec::<u8>::new()));
         {
             let observer = JsonlObserver::new(SharedBuf(buf.clone()));
@@ -157,13 +159,13 @@ mod tests {
         let text = String::from_utf8(written.clone()).unwrap();
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(lines.len(), 2);
-        // Each line is a self-contained, parseable event.
+        // Cada línea es un evento autocontenido y parseable.
         let first: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
         assert_eq!(first["type"], "workflow_completed");
         assert_eq!(first["seq"], 0);
     }
 
-    // A `Write` over a shared buffer, for the test above.
+    // Un `Write` sobre un buffer compartido, para el test de arriba.
     struct SharedBuf(std::sync::Arc<Mutex<Vec<u8>>>);
     impl Write for SharedBuf {
         fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {

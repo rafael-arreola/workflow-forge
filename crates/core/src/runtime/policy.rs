@@ -57,6 +57,25 @@ pub(crate) fn backoff_delay(retry: &RetryPolicy, attempt: u32) -> Duration {
     Duration::from_millis(ms)
 }
 
+/// Espera real a aplicar: con `jitter`, uniforme en `[0, delay]` (full
+/// jitter); sin él, `delay` tal cual.
+pub(crate) fn jittered(delay: Duration, jitter: bool) -> Duration {
+    if !jitter || delay.is_zero() {
+        return delay;
+    }
+    Duration::from_millis(fastrand::u64(0..=delay.as_millis() as u64))
+}
+
+/// Aplica el piso de `retry_after_ms` (pista del error, p. ej. el header HTTP
+/// `Retry-After`) sobre la espera ya calculada: nunca se reintenta antes de
+/// lo que el destino pidió, pero un backoff mayor sí se respeta.
+pub(crate) fn delay_with_floor(computed: Duration, retry_after_ms: Option<u64>) -> Duration {
+    match retry_after_ms {
+        Some(ms) => computed.max(Duration::from_millis(ms)),
+        None => computed,
+    }
+}
+
 impl WorkflowExecutor {
     /// Invoca una tarea con validación de schemas, timeout y reintentos.
     /// Es el camino compartido entre nodos task y elementos de foreach.
@@ -143,7 +162,12 @@ impl WorkflowExecutor {
                     let retries_left = err.code != codes::TASK_PANIC
                         && policy.retry.is_some_and(|r| attempt <= r.max);
                     let delay = retries_left.then(|| {
-                        backoff_delay(policy.retry.expect("retries_left lo implica"), attempt)
+                        let retry = policy.retry.expect("retries_left lo implica");
+                        // El jitter se aplica aquí (no en backoff_delay, que es
+                        // pura) para que el evento reporte la espera real; el
+                        // Retry-After del destino actúa como piso de esa espera
+                        let computed = jittered(backoff_delay(retry, attempt), retry.jitter);
+                        delay_with_floor(computed, err.retry_after_ms)
                     });
                     if policy.emit_attempts {
                         self.emit(
@@ -183,6 +207,7 @@ mod tests {
             max: 5,
             backoff,
             initial_ms,
+            jitter: false,
         }
     }
 
@@ -209,6 +234,31 @@ mod tests {
         let policy = retry(Backoff::Exponential, u64::MAX / 2);
         // saturating: no panic por overflow en intentos altos
         let _ = backoff_delay(&policy, 60);
+    }
+
+    #[test]
+    fn jitter_acota_la_espera_y_sin_el_es_identidad() {
+        fastrand::seed(7);
+        let delay = Duration::from_millis(1_000);
+        for _ in 0..100 {
+            assert!(jittered(delay, true) <= delay);
+        }
+        assert_eq!(jittered(delay, false), delay);
+        assert_eq!(jittered(Duration::ZERO, true), Duration::ZERO);
+    }
+
+    #[test]
+    fn el_retry_after_es_piso_no_techo() {
+        let backoff = Duration::from_millis(100);
+        // Retry-After mayor que el backoff: gana el Retry-After
+        assert_eq!(
+            delay_with_floor(backoff, Some(5_000)),
+            Duration::from_millis(5_000)
+        );
+        // Retry-After menor: gana el backoff (no aceleramos por debajo)
+        assert_eq!(delay_with_floor(backoff, Some(10)), backoff);
+        // Sin pista: el backoff tal cual
+        assert_eq!(delay_with_floor(backoff, None), backoff);
     }
 
     #[test]

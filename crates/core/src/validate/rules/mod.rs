@@ -22,6 +22,7 @@ pub const BUILTIN: &[&dyn ValidationRule] = &[
     &structure::StartEndPresence,
     &structure::StartEndEdges,
     &nodes::ForeachConcurrency,
+    &nodes::LoopMaxIterations,
     &nodes::SubworkflowName,
     &nodes::InlineWorkflowNames,
     &gateway::GatewayCoherence,

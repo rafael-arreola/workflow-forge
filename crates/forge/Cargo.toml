@@ -12,12 +12,13 @@ categories.workspace = true
 
 [features]
 default = ["util", "data", "http"]
-full = ["util", "data", "http", "tabular", "sftp"]
+full = ["util", "data", "http", "tabular", "sftp", "compress"]
 util = ["dep:workflow-forge-ext-util"]
 data = ["dep:workflow-forge-ext-data"]
 http = ["dep:workflow-forge-ext-http"]
 tabular = ["dep:workflow-forge-ext-tabular"]
 sftp = ["dep:workflow-forge-ext-sftp"]
+compress = ["dep:workflow-forge-ext-compress"]
 # Mock tasks + dry-run helpers for testing workflows without live dependencies.
 testing = ["workflow-forge-core/testing"]
 
@@ -31,6 +32,7 @@ workflow-forge-ext-data = { workspace = true, optional = true }
 workflow-forge-ext-http = { workspace = true, optional = true }
 workflow-forge-ext-tabular = { workspace = true, optional = true }
 workflow-forge-ext-sftp = { workspace = true, optional = true }
+workflow-forge-ext-compress = { workspace = true, optional = true }
 
 [dev-dependencies]
 httpmock = { workspace = true }

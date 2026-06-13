@@ -234,7 +234,7 @@ $.workflow             → metadata (id, name, version, execution_id)</code></pr
   "retry": { "max": 3, "backoff": "exponential", "initial_ms": 500 },
   "timeout_ms": 10000
 }</code></pre>
-                    <p class="text-slate-300 text-sm"><code>retry</code> = <code>{ max, backoff, initial_ms }</code>; <code>backoff</code> is <code>exponential</code> (default), <code>linear</code> or <code>fixed</code>. <code>timeout_ms</code> applies per attempt.</p>
+                    <p class="text-slate-300 text-sm"><code>retry</code> = <code>{ max, backoff, initial_ms, jitter }</code>; <code>backoff</code> is <code>exponential</code> (default), <code>linear</code> or <code>fixed</code>; <code>jitter: true</code> makes the actual wait uniform in <code>[0, computed delay]</code> (full jitter — de-synchronizes retry waves against the same target). <code>timeout_ms</code> applies per attempt.</p>
 
                     <h3 class="text-xl font-semibold text-white pt-2">gateway</h3>
                     <p class="text-slate-300 text-sm">Control flow, in three kinds:</p>
@@ -267,6 +267,26 @@ $.workflow             → metadata (id, name, version, execution_id)</code></pr
                         <li><code>concurrency</code> limits in-flight items; <code>throttle_ms</code> spaces out item <em>starts</em> (rate limit toward the target).</li>
                         <li><code>on_item_error: "fail"</code> — first error cancels in-flight items and the node fails (its <code>on: error</code> edges apply). Output: array of outputs in <code>items</code> order.</li>
                         <li><code>on_item_error: "collect"</code> — all run; output <code>{ "ok": [...], "failed": [{ index, item, error }] }</code> and the node does not fail. (A panic still aborts the whole node.)</li>
+                    </ul>
+
+                    <h3 class="text-xl font-semibold text-white pt-2">loop</h3>
+                    <p class="text-slate-300 text-sm">Invokes a task repeatedly until its <code>while</code> condition turns false or a <strong>mandatory</strong> hard cap is hit — the canonical pagination primitive. The cycle lives <em>inside</em> the node, so the graph stays acyclic and termination is guaranteed.</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>{
+  "id": "pages", "kind": "loop",
+  "task": "acme.list_orders",
+  "input": { "url": "$.trigger.first_page_url" },        // first iteration
+  "next": { "url": "@.output.next" },                    // following ones
+  "while": { "path": "$.output.next", "is_null": false },
+  "max_iterations": 100,                                  // required
+  "on_max": "fail",                                       // "fail" (default) | "stop"
+  "collect": "all",                                       // "last" (default) | "all"
+  "retry": { "max": 3, "jitter": true }, "timeout_ms": 10000
+}</code></pre>
+                    <ul class="text-sm text-slate-300 list-disc pl-6 space-y-1">
+                        <li>The <strong>first iteration always runs</strong> with <code>input</code> (or the predecessor token); <code>while</code> is evaluated <em>after</em> each iteration against the local iteration document <code>{ input, output, index }</code>.</li>
+                        <li>If it continues, the <code>next</code> shape (<code>@.</code> rules) builds the next input from that same document; without <code>next</code>, the next iteration receives the previous output as-is.</li>
+                        <li>Hitting <code>max_iterations</code> with <code>while</code> still true fails the node with <code>LOOP_MAX_ITERATIONS_EXCEEDED</code> (default <code>on_max: "fail"</code> — silent truncation is dangerous); <code>"stop"</code> finishes cleanly with what was collected.</li>
+                        <li><code>collect: "last"</code> (default) keeps memory bounded — ideal for polling; <code>"all"</code> returns every output in order. <code>retry</code>/<code>timeout_ms</code> apply per iteration.</li>
                     </ul>
 
                     <h3 class="text-xl font-semibold text-white pt-2">subworkflow</h3>
@@ -413,13 +433,14 @@ impl Task for MyTask {
                 <!-- 12 -->
                 <section id="extensions" class="space-y-6">
                     <h2 class="text-2xl font-bold text-white border-b border-slate-800 pb-2">12. Official extensions</h2>
-                    <p class="text-slate-300 text-sm">Enable via feature flags on the <code>workflow-forge</code> facade (<code>util</code>, <code>data</code>, <code>http</code> on by default; add <code>tabular</code>, <code>sftp</code>, or <code>full</code>).</p>
+                    <p class="text-slate-300 text-sm">Enable via feature flags on the <code>workflow-forge</code> facade (<code>util</code>, <code>data</code>, <code>http</code> on by default; add <code>tabular</code>, <code>sftp</code>, <code>compress</code>, or <code>full</code>).</p>
 
                     <h3 class="text-lg font-semibold text-white"><code>util</code></h3>
                     <div class="overflow-x-auto"><table class="w-full text-sm border border-slate-800 rounded-lg overflow-hidden"><thead class="bg-slate-900 text-slate-300"><tr><th class="text-left px-4 py-2">Task</th><th class="text-left px-4 py-2">Contract</th></tr></thead><tbody class="divide-y divide-slate-800 text-slate-400">
                         <tr><td class="px-4 py-2"><code>util.noop</code></td><td class="px-4 py-2">Returns its input unchanged.</td></tr>
                         <tr><td class="px-4 py-2"><code>util.log</code></td><td class="px-4 py-2"><code>{ message, level?, value? }</code> → logs and returns <code>value</code> (or null).</td></tr>
                         <tr><td class="px-4 py-2"><code>util.delay</code></td><td class="px-4 py-2"><code>{ ms, value? }</code> → sleeps, then returns <code>value</code> (or null).</td></tr>
+                        <tr><td class="px-4 py-2"><code>util.idempotency_key</code></td><td class="px-4 py-2"><code>{ value }</code> → <code>{ key }</code> — stable, content-addressed key (UUID v5): identical payloads always yield the identical key. Wire it into the input of a side-effecting task (e.g. an <code>Idempotency-Key</code> header) so the destination deduplicates under retries.</td></tr>
                     </tbody></table></div>
 
                     <h3 class="text-lg font-semibold text-white"><code>data</code> — all reshaping lives here</h3>
@@ -432,7 +453,7 @@ impl Task for MyTask {
                     </tbody></table></div>
 
                     <h3 class="text-lg font-semibold text-white"><code>http</code></h3>
-                    <p class="text-slate-300 text-sm"><code>http.request</code> — methods, headers, query, basic/bearer auth. A 4xx/5xx is <strong>not</strong> an error by default (status is data; route it with a gateway); set <code>fail_on_error_status: true</code> to make it fail and trigger <code>retry</code>/<code>on: error</code>.</p>
+                    <p class="text-slate-300 text-sm"><code>http.request</code> — methods, headers, query, basic/bearer auth. A 4xx/5xx is <strong>not</strong> an error by default (status is data; route it with a gateway); set <code>fail_on_error_status: true</code> to make it fail and trigger <code>retry</code>/<code>on: error</code>. For rate-limited APIs, <code>retry_on_status: [429, 503]</code> fails (and thus retries) only on the transient statuses — not on permanent ones like 400/404 — and any status failure carries the response's <code>Retry-After</code> header so the node's retry policy waits at least that long before the next attempt.</p>
                     <ul class="text-sm text-slate-300 list-disc pl-6 space-y-1">
                         <li><strong>Request body</strong> (mutually exclusive): <code>body</code> (JSON), <code>form</code> (urlencoded), <code>text</code> (raw), <code>body_blob</code> (binary, streamed from a <code>$blob</code>), <code>multipart</code> (form-data; parts may be text/json/blob).</li>
                         <li><strong>Response</strong>: <code>response_body</code> = <code>auto</code> (JSON if content-type is json, else string), <code>text</code>, or <code>blob</code> (streamed to the BlobStore; body is a <code>$blob</code> reference).</li>
@@ -450,6 +471,16 @@ impl Task for MyTask {
                     <div class="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 text-sm text-slate-300">
                         <strong class="text-indigo-300">Connection reuse at volume.</strong> The default <code>http.request</code> already pools connections (one shared <code>reqwest::Client</code>); inject a tuned client with <code>workflow_forge_ext_http::register_with_client</code>. For SFTP, <code>workflow_forge_ext_sftp::register_pooled(&amp;registry, max_idle)</code> reuses authenticated SSH sessions across calls (keyed by connection, liveness-checked) — register it instead of the default when a <code>foreach</code> hammers the same host.
                     </div>
+
+                    <h3 class="text-lg font-semibold text-white"><code>compress</code> — gzip &amp; zip over <code>$blob</code></h3>
+                    <p class="text-slate-300 text-sm">For the <code>.csv.gz</code> and <code>.zip</code> files that move over SFTP. All streamed through temp files (bounded memory) with pure-Rust deflate (no C deps).</p>
+                    <div class="overflow-x-auto"><table class="w-full text-sm border border-slate-800 rounded-lg overflow-hidden"><thead class="bg-slate-900 text-slate-300"><tr><th class="text-left px-4 py-2">Task</th><th class="text-left px-4 py-2">Contract</th></tr></thead><tbody class="divide-y divide-slate-800 text-slate-400">
+                        <tr><td class="px-4 py-2"><code>compress.gzip</code></td><td class="px-4 py-2"><code>{ file: $blob, name? }</code> → <code>{ file: $blob }</code> (default name: original + <code>.gz</code>).</td></tr>
+                        <tr><td class="px-4 py-2"><code>compress.gunzip</code></td><td class="px-4 py-2"><code>{ file: $blob, name? }</code> → <code>{ file: $blob }</code> (default name: original without <code>.gz</code>).</td></tr>
+                        <tr><td class="px-4 py-2"><code>compress.zip</code></td><td class="px-4 py-2"><code>{ entries: [{ name, file: $blob }], name? }</code> → <code>{ file: $blob }</code>.</td></tr>
+                        <tr><td class="px-4 py-2"><code>compress.unzip</code></td><td class="px-4 py-2"><code>{ file: $blob }</code> → <code>{ entries: [{ name, file: $blob }] }</code> (directories skipped).</td></tr>
+                    </tbody></table></div>
+                    <p class="text-slate-300 text-sm">Typical chain: <code>sftp.get</code> → <code>compress.gunzip</code> → <code>tabular.parse</code> → … and the reverse on the way out.</p>
                 </section>
 
                 <!-- 13 -->
@@ -470,6 +501,20 @@ executor.run(WorkflowData(trigger)).await?;
 let report = history.report();          // root execution: status + per-node timeline
 println!("{}", serde_json::to_string_pretty(&report)?);</code></pre>
                     <p class="text-slate-300 text-sm">Events include <code>workflow_started/completed/failed</code>, <code>node_started/completed/failed</code>, <code>task_attempt_started/failed</code> and <code>foreach_item_completed/failed</code>, each carrying <code>execution_id</code>, a total-order <code>seq</code> and <code>elapsed_ms</code>. See the architecture manual for the full event contract.</p>
+
+                    <h3 class="text-lg font-semibold text-white pt-2">Durable observers</h3>
+                    <p class="text-slate-300 text-sm">Two ready-made adapters cover the common persistence needs without custom code: <code>TracingObserver</code> emits every event through the <code>tracing</code> crate (failures at <code>error</code> level), flowing into whatever subscriber you already run — stdout, journald, OpenTelemetry; <code>JsonlObserver::to_file("audit.jsonl")</code> appends each event as one JSON line (flushed per line), giving you a greppable, replayable audit log. Both implement <code>ExecutionObserver</code>; register them like any other observer.</p>
+
+                    <h3 class="text-lg font-semibold text-white pt-2">Deadlines &amp; cancellation</h3>
+                    <p class="text-slate-300 text-sm">Runs are <strong>unlimited by default</strong> — <code>run</code> imposes nothing. Per-run limits are opt-in through <code>run_with</code>:</p>
+                    <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>let token = CancellationToken::new();
+let options = RunOptions::default()
+    .deadline(Duration::from_secs(30))   // total execution budget
+    .cancel(token.clone());              // cooperative external cancellation
+
+let result = executor.run_with(WorkflowData(trigger), options).await;
+// token.cancel() from anywhere aborts the run</code></pre>
+                    <p class="text-slate-300 text-sm">On expiry or cancellation the run is abandoned at its next <code>await</code> and returns <code>EXECUTION_TIMEOUT</code> / <code>EXECUTION_CANCELLED</code>; per-execution blobs are cleaned up either way.</p>
 
                     <h3 class="text-lg font-semibold text-white pt-2">Dry-run testing with mock tasks</h3>
                     <p class="text-slate-300 text-sm">Enable the <code>testing</code> feature to swap a real task (an HTTP call, an SFTP transfer, a client profile) for a <code>MockTask</code>, run the workflow with the real executor, and assert both the output and <em>what it would have called</em> — no network, filesystem or secrets.</p>

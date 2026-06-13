@@ -57,6 +57,7 @@ impl CompiledSchemas {
             let task_ref = match &node.kind {
                 NodeKind::Task(task_node) => Some(&task_node.task),
                 NodeKind::Foreach(foreach) => Some(&foreach.task),
+                NodeKind::Loop(lp) => Some(&lp.task),
                 _ => None,
             };
             if let Some(task_ref) = task_ref

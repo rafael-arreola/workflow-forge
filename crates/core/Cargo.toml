@@ -17,6 +17,7 @@ testing = []
 
 [dependencies]
 async-trait = { workspace = true }
+fastrand = { workspace = true }
 futures = { workspace = true }
 jsonpath-rust = { workspace = true }
 jsonschema = { workspace = true }

@@ -28,6 +28,13 @@ pub struct WorkflowError {
     /// Datos parciales generados antes del fallo
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub response: Option<Box<WorkflowData>>,
+    /// Pista para la política de reintentos: espera **al menos** estos
+    /// milisegundos antes del siguiente intento. La fija la tarea cuando el
+    /// destino indica cuándo reintentar (p. ej. el header HTTP `Retry-After`);
+    /// el engine toma `max(backoff, retry_after_ms)`. Sin reintentos
+    /// configurados en el nodo no tiene efecto.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retry_after_ms: Option<u64>,
     /// Causa raíz (error interno del sistema)
     #[serde(skip)]
     pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
@@ -42,6 +49,7 @@ impl WorkflowError {
             source_task: None,
             payload: None,
             response: None,
+            retry_after_ms: None,
             source: None,
         }
     }
@@ -49,6 +57,13 @@ impl WorkflowError {
     /// Asigna la tarea/nodo de origen
     pub fn with_source_task(mut self, source_task: impl Into<String>) -> Self {
         self.source_task = Some(source_task.into());
+        self
+    }
+
+    /// Fija la pista [`retry_after_ms`](Self::retry_after_ms): el engine
+    /// esperará al menos este tiempo antes de reintentar.
+    pub fn with_retry_after_ms(mut self, ms: u64) -> Self {
+        self.retry_after_ms = Some(ms);
         self
     }
 }
@@ -62,6 +77,7 @@ impl Clone for WorkflowError {
             source_task: self.source_task.clone(),
             payload: self.payload.clone(),
             response: self.response.clone(),
+            retry_after_ms: self.retry_after_ms,
             source: None,
         }
     }

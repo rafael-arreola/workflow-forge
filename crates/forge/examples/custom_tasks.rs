@@ -1,9 +1,10 @@
-//! Author your own tasks and drive them with `foreach`.
+//! Escribe tus propias tareas y recórrelas con `foreach`.
 //!
-//! Registers a typed task (schemas derived from Rust types) and a raw closure
-//! task on top of the default registry, then prices a batch of orders.
+//! Registra una tarea tipada (schemas derivados de los tipos Rust) y una
+//! tarea por closure cruda sobre el registry por defecto, y luego cotiza un
+//! lote de órdenes.
 //!
-//! Run with:
+//! Ejecutar con:
 //!     cargo run -p workflow-forge --example custom_tasks
 
 use schemars::JsonSchema;
@@ -26,8 +27,8 @@ struct PricedOut {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let registry = workflow_forge::default_registry();
 
-    // Level 1: a typed task — input/output JSON Schemas are derived from the
-    // Rust types, and the engine validates them on every call.
+    // Nivel 1: tarea tipada — los JSON Schema de input/output se derivan de
+    // los tipos Rust y el engine los valida en cada llamada.
     registry.register_typed("demo.price", |_ctx, order: OrderIn| async move {
         Ok(PricedOut {
             sku: order.sku,
@@ -35,7 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
     });
 
-    // Level 2: a raw closure task — no schema, just JSON in / JSON out.
+    // Nivel 2: tarea por closure cruda — sin schema, JSON entra / JSON sale.
     registry.register_fn("demo.stamp", |_ctx, input| async move { Ok(input) });
 
     let workflow: WorkflowDefinition = serde_json::from_str(

@@ -94,6 +94,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
+name = "arbitrary"
+version = "1.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
+dependencies = [
+ "derive_arbitrary",
+]
+
+[[package]]
 name = "assert-json-diff"
 version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -261,7 +270,7 @@ dependencies = [
  "log",
  "quick-xml",
  "serde",
- "zip",
+ "zip 7.2.0",
 ]
 
 [[package]]
@@ -464,6 +473,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7eed2c4702fa172d1ce21078faa7c5203e69f5394d48cc436d25928394a867a2"
 
 [[package]]
+name = "derive_arbitrary"
+version = "1.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e567bd82dcff979e4b03460c307b3cdc9e96fde3d73bed1496d2bc75d9dd62a"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -569,6 +589,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8eb564c5c7423d25c886fb561d1e4ee69f72354d16918afa32c08811f6b6a55"
 
 [[package]]
+name = "fastrand"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -580,6 +606,7 @@ version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
+ "crc32fast",
  "miniz_oxide",
  "zlib-rs",
 ]
@@ -1876,7 +1903,7 @@ version = "0.95.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f281b687352597d29efaad39701d1167d5c48aa76fb973e392bc13e9d44e7f36"
 dependencies = [
- "zip",
+ "zip 7.2.0",
 ]
 
 [[package]]
@@ -3051,6 +3078,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "workflow-forge-core",
+ "workflow-forge-ext-compress",
  "workflow-forge-ext-data",
  "workflow-forge-ext-http",
  "workflow-forge-ext-sftp",
@@ -3073,6 +3101,7 @@ name = "workflow-forge-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "fastrand",
  "futures",
  "jsonpath-rust",
  "jsonschema",
@@ -3085,6 +3114,20 @@ dependencies = [
  "tokio-util",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "workflow-forge-ext-compress"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "flate2",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+ "workflow-forge-core",
+ "zip 2.4.2",
 ]
 
 [[package]]
@@ -3104,6 +3147,7 @@ name = "workflow-forge-ext-http"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "futures",
  "httpmock",
  "reqwest",
@@ -3261,6 +3305,23 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "zip"
+version = "2.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fabe6324e908f85a1c52063ce7aa26b68dcb7eb6dbc83a2d148403c9bc3eba50"
+dependencies = [
+ "arbitrary",
+ "crc32fast",
+ "crossbeam-utils",
+ "displaydoc",
+ "flate2",
+ "indexmap",
+ "memchr",
+ "thiserror",
+ "zopfli",
 ]
 
 [[package]]

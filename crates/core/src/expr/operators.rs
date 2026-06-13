@@ -226,11 +226,21 @@ impl Comparison {
     }
 }
 
-/// Orden entre dos valores JSON: números entre sí (como f64) y strings
-/// entre sí (lexicográfico). Tipos mezclados no son comparables.
+/// Orden entre dos valores JSON: números entre sí y strings entre sí
+/// (lexicográfico). Tipos mezclados no son comparables.
 fn compare_order(a: &Value, b: &Value) -> Option<std::cmp::Ordering> {
     match (a, b) {
-        (Value::Number(x), Value::Number(y)) => x.as_f64()?.partial_cmp(&y.as_f64()?),
+        (Value::Number(x), Value::Number(y)) => {
+            // Enteros: comparación exacta. Pasar por f64 pierde precisión
+            // arriba de 2^53 (p. ej. IDs numéricos grandes).
+            if let (Some(i), Some(j)) = (x.as_i64(), y.as_i64()) {
+                return Some(i.cmp(&j));
+            }
+            if let (Some(i), Some(j)) = (x.as_u64(), y.as_u64()) {
+                return Some(i.cmp(&j));
+            }
+            x.as_f64()?.partial_cmp(&y.as_f64()?)
+        }
         (Value::String(x), Value::String(y)) => Some(x.as_str().cmp(y.as_str())),
         _ => None,
     }
@@ -264,6 +274,22 @@ mod tests {
                 ]}
             ]
         })));
+    }
+
+    #[test]
+    fn enteros_grandes_comparan_exacto() {
+        use std::cmp::Ordering;
+        // Como f64, ambos pares colapsarían a "iguales" (precisión de 2^53)
+        assert_eq!(
+            compare_order(&json!(i64::MAX), &json!(i64::MAX - 1)),
+            Some(Ordering::Greater)
+        );
+        assert_eq!(
+            compare_order(&json!(u64::MAX), &json!(u64::MAX - 1)),
+            Some(Ordering::Greater)
+        );
+        // Floats siguen comparando como antes
+        assert_eq!(compare_order(&json!(1.5), &json!(2)), Some(Ordering::Less));
     }
 
     #[test]

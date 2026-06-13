@@ -33,6 +33,11 @@ pub struct RetryPolicy {
     /// Espera base antes del primer reintento, en milisegundos
     #[serde(default = "default_initial_ms")]
     pub initial_ms: u64,
+    /// Full jitter: la espera real es uniforme en `[0, espera_calculada]`.
+    /// Evita que reintentos sincronizados golpeen al destino en oleadas
+    /// (thundering herd) tras un outage.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub jitter: bool,
 }
 
 fn default_initial_ms() -> u64 {

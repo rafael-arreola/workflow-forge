@@ -23,6 +23,19 @@ pub fn register(registry: &TaskRegistry) {
     registry.register(WriteTask::default());
 }
 
+/// Códigos de error que esta extensión puede emitir. Mismo contrato que
+/// [`workflow_forge_core::error::codes`]: constantes estables, nunca cambian
+/// de valor. Los errores de blobs reusan los códigos del core.
+pub mod codes {
+    /// El input de una tarea `tabular.*` no deserializa contra su contrato.
+    pub const TABULAR_INPUT_INVALID: &str = "TABULAR_INPUT_INVALID";
+    /// No se pudo inferir el formato del blob (sin `format` explícito y la
+    /// extensión del nombre no es `.csv`/`.tsv`/`.xlsx`).
+    pub const TABULAR_FORMAT_UNKNOWN: &str = "TABULAR_FORMAT_UNKNOWN";
+    /// Fallo de parseo o escritura del archivo tabular (CSV o XLSX).
+    pub const TABULAR_ERROR: &str = "TABULAR_ERROR";
+}
+
 fn schema(value: Value) -> workflow_forge_core::schemars::Schema {
     serde_json::from_value(value).expect("schema estático válido")
 }
@@ -46,7 +59,7 @@ fn infer_format(explicit: Option<Format>, blob: &BlobRef) -> Result<Format, Work
         Ok(Format::Xlsx)
     } else {
         Err(WorkflowError::new(
-            "TABULAR_FORMAT_UNKNOWN",
+            codes::TABULAR_FORMAT_UNKNOWN,
             format!(
                 "No se pudo inferir el formato del blob '{}'; especifica `format`",
                 blob.name.as_deref().unwrap_or(&blob.id)
@@ -56,7 +69,7 @@ fn infer_format(explicit: Option<Format>, blob: &BlobRef) -> Result<Format, Work
 }
 
 fn tabular_error(message: impl std::fmt::Display) -> WorkflowError {
-    WorkflowError::new("TABULAR_ERROR", message.to_string())
+    WorkflowError::new(codes::TABULAR_ERROR, message.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -261,7 +274,7 @@ impl Task for ParseTask {
 
     async fn execute(&self, ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult {
         let parsed: ParseInput = serde_json::from_value(input.0)
-            .map_err(|e| WorkflowError::new("TABULAR_INPUT_INVALID", e.to_string()))?;
+            .map_err(|e| WorkflowError::new(codes::TABULAR_INPUT_INVALID, e.to_string()))?;
         let format = infer_format(parsed.format, &parsed.file)?;
         let path = ctx.blobs().local_path(&parsed.file)?;
 
@@ -428,7 +441,7 @@ impl Task for WriteTask {
 
     async fn execute(&self, ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult {
         let parsed: WriteInput = serde_json::from_value(input.0)
-            .map_err(|e| WorkflowError::new("TABULAR_INPUT_INVALID", e.to_string()))?;
+            .map_err(|e| WorkflowError::new(codes::TABULAR_INPUT_INVALID, e.to_string()))?;
         let columns = resolve_columns(&parsed);
 
         let (bytes, default_name) = match parsed.format {

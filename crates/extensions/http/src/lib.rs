@@ -29,7 +29,11 @@
 //!
 //! Un status 4xx/5xx no es error por default: el status es dato y se rutea
 //! con gateways. Con `fail_on_error_status: true` la tarea falla y aplican
-//! `retry`/`on_error` del nodo.
+//! `retry`/`on_error` del nodo. Con `retry_on_status: [429, 503]` solo esos
+//! status fallan (los transitorios), sin gastar reintentos en errores
+//! permanentes; en cualquier fallo por status se adjunta el header
+//! `Retry-After` como pista, y la política de retry del nodo espera al menos
+//! ese tiempo antes del siguiente intento.
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -42,11 +46,29 @@ use tokio::io::AsyncWriteExt;
 use tokio_util::io::ReaderStream;
 
 use workflow_forge_core::error::WorkflowError;
+use workflow_forge_core::error::codes as core_codes;
 use workflow_forge_core::io::blob::BlobRef;
 use workflow_forge_core::runtime::WorkflowContext;
 use workflow_forge_core::task::TaskRegistry;
 use workflow_forge_core::task::{Task, TaskManifest};
 use workflow_forge_core::task::{WorkflowData, WorkflowResult};
+
+/// Códigos de error que esta extensión puede emitir. Mismo contrato que
+/// [`workflow_forge_core::error::codes`]: constantes estables, nunca cambian
+/// de valor. Los errores de blobs reusan los códigos del core
+/// (`BLOB_IO_ERROR`).
+pub mod codes {
+    /// El input de `http.request` no cumple el contrato: no deserializa,
+    /// el método no es válido o combina cuerpos mutuamente excluyentes.
+    pub const HTTP_INPUT_INVALID: &str = "HTTP_INPUT_INVALID";
+    /// La petición no se pudo completar (DNS, conexión, TLS, lectura del
+    /// cuerpo). Suele ser transitorio: candidato natural a `retry`.
+    pub const HTTP_REQUEST_FAILED: &str = "HTTP_REQUEST_FAILED";
+    /// La respuesta tuvo status >= 400 y el input pedía
+    /// `fail_on_error_status: true`. El output `{status, headers, body}`
+    /// completo viaja en `error.response`.
+    pub const HTTP_STATUS_ERROR: &str = "HTTP_STATUS_ERROR";
+}
 
 /// Registra todas las tareas de la extensión en el registry.
 ///
@@ -93,6 +115,12 @@ struct RequestInput {
     response_body: ResponseBodyMode,
     #[serde(default)]
     fail_on_error_status: bool,
+    /// Status que se tratan como fallo **reintentable**: la tarea falla con
+    /// `HTTP_STATUS_ERROR` (y, si el nodo tiene `retry`, se reintenta) solo si
+    /// el status está en esta lista. Pensado para los transitorios (429, 503)
+    /// sin gastar reintentos en errores permanentes (400, 404).
+    #[serde(default)]
+    retry_on_status: Vec<u16>,
 }
 
 fn default_method() -> String {
@@ -238,7 +266,12 @@ impl Default for HttpRequestTask {
                     "enum": ["auto", "text", "blob"],
                     "default": "auto"
                 },
-                "fail_on_error_status": { "type": "boolean", "default": false }
+                "fail_on_error_status": { "type": "boolean", "default": false },
+                "retry_on_status": {
+                    "description": "Status tratados como fallo reintentable (p.ej. [429, 503]); con `retry` en el nodo se reintentan honrando Retry-After, sin gastar intentos en errores permanentes",
+                    "type": "array",
+                    "items": { "type": "integer" }
+                }
             }
         })));
         manifest.output_schema = Some(schema(json!({
@@ -272,7 +305,7 @@ impl HttpRequestTask {
 }
 
 fn input_error(message: impl Into<String>) -> WorkflowError {
-    WorkflowError::new("HTTP_INPUT_INVALID", message)
+    WorkflowError::new(codes::HTTP_INPUT_INVALID, message)
 }
 
 fn has_header(headers: &HashMap<String, String>, name: &str) -> bool {
@@ -287,7 +320,7 @@ async fn blob_stream(
     let path = ctx.blobs().local_path(blob)?;
     let file = tokio::fs::File::open(&path).await.map_err(|e| {
         WorkflowError::new(
-            "BLOB_IO_ERROR",
+            core_codes::BLOB_IO_ERROR,
             format!("No se pudo abrir el blob '{}': {e}", blob.id),
         )
     })?;
@@ -296,7 +329,7 @@ async fn blob_stream(
         .await
         .map_err(|e| {
             WorkflowError::new(
-                "BLOB_IO_ERROR",
+                core_codes::BLOB_IO_ERROR,
                 format!("No se pudo leer el tamaño del blob '{}': {e}", blob.id),
             )
         })?
@@ -310,6 +343,34 @@ fn part_with_mime(
 ) -> Result<reqwest::multipart::Part, WorkflowError> {
     part.mime_str(content_type)
         .map_err(|e| input_error(format!("content_type '{content_type}' inválido: {e}")))
+}
+
+/// Interpreta el header `Retry-After`: segundos (`"120"`) o HTTP-date
+/// (`"Wed, 21 Oct 2099 07:28:00 GMT"`). Devuelve la espera en ms, o `None` si
+/// el header falta o no parsea. Una fecha en el pasado da `Some(0)`.
+fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<u64> {
+    let raw = headers
+        .get(reqwest::header::RETRY_AFTER)?
+        .to_str()
+        .ok()?
+        .trim();
+    if let Ok(secs) = raw.parse::<u64>() {
+        return Some(secs.saturating_mul(1000));
+    }
+    // HTTP-date (IMF-fixdate): "Wed, 21 Oct 2099 07:28:00 GMT". El día de la
+    // semana se ignora (es derivable de la fecha; no dependemos de que el
+    // servidor lo mande consistente). chrono solo parsea; el "ahora" sale de
+    // SystemTime (no requiere la feature `clock`)
+    let date = raw.split_once(", ").map(|(_, rest)| rest).unwrap_or(raw);
+    let when_ms = chrono::NaiveDateTime::parse_from_str(date, "%d %b %Y %H:%M:%S GMT")
+        .ok()?
+        .and_utc()
+        .timestamp_millis();
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    Some((when_ms - now_ms).max(0) as u64)
 }
 
 /// Extrae `filename="..."` de un header content-disposition
@@ -435,7 +496,7 @@ impl Task for HttpRequestTask {
 
         let response = builder.send().await.map_err(|e| {
             let mut err = WorkflowError::new(
-                "HTTP_REQUEST_FAILED",
+                codes::HTTP_REQUEST_FAILED,
                 format!("La petición a '{}' falló: {e}", request.url),
             );
             err.source = Some(Box::new(e));
@@ -460,6 +521,9 @@ impl Task for HttpRequestTask {
             .and_then(|v| v.to_str().ok())
             .is_some_and(|ct| ct.contains("json"));
 
+        // Se lee antes de consumir el cuerpo (la rama Blob mueve `response`)
+        let retry_after_ms = parse_retry_after(response.headers());
+
         let body = match request.response_body {
             ResponseBodyMode::Blob => {
                 let name = content_disposition_filename(response.headers());
@@ -469,7 +533,7 @@ impl Task for HttpRequestTask {
             mode => {
                 let raw = response.text().await.map_err(|e| {
                     WorkflowError::new(
-                        "HTTP_REQUEST_FAILED",
+                        codes::HTTP_REQUEST_FAILED,
                         format!("No se pudo leer el cuerpo de la respuesta: {e}"),
                     )
                 })?;
@@ -485,12 +549,18 @@ impl Task for HttpRequestTask {
 
         let output = json!({ "status": status, "headers": headers, "body": body });
 
-        if request.fail_on_error_status && status >= 400 {
+        // Un status falla la tarea si está marcado como reintentable o si
+        // `fail_on_error_status` cubre todos los >= 400. En ambos casos se
+        // adjunta `Retry-After` como pista para la política de retry del nodo.
+        let should_fail = request.retry_on_status.contains(&status)
+            || (request.fail_on_error_status && status >= 400);
+        if should_fail {
             let mut err = WorkflowError::new(
-                "HTTP_STATUS_ERROR",
+                codes::HTTP_STATUS_ERROR,
                 format!("La petición a '{}' devolvió status {status}", request.url),
             );
             err.response = Some(Box::new(WorkflowData(output)));
+            err.retry_after_ms = retry_after_ms;
             return Err(err);
         }
 
@@ -509,7 +579,7 @@ async fn download_to_blob(
     let result = async {
         let mut file = tokio::fs::File::create(&temp).await.map_err(|e| {
             WorkflowError::new(
-                "BLOB_IO_ERROR",
+                core_codes::BLOB_IO_ERROR,
                 format!("No se pudo crear el archivo temporal de descarga: {e}"),
             )
         })?;
@@ -517,20 +587,20 @@ async fn download_to_blob(
         while let Some(chunk) = stream.next().await {
             let chunk = chunk.map_err(|e| {
                 WorkflowError::new(
-                    "HTTP_REQUEST_FAILED",
+                    codes::HTTP_REQUEST_FAILED,
                     format!("No se pudo leer el cuerpo de la respuesta: {e}"),
                 )
             })?;
             file.write_all(&chunk).await.map_err(|e| {
                 WorkflowError::new(
-                    "BLOB_IO_ERROR",
+                    core_codes::BLOB_IO_ERROR,
                     format!("No se pudo escribir la descarga a disco: {e}"),
                 )
             })?;
         }
         file.flush().await.map_err(|e| {
             WorkflowError::new(
-                "BLOB_IO_ERROR",
+                core_codes::BLOB_IO_ERROR,
                 format!("No se pudo escribir la descarga a disco: {e}"),
             )
         })?;
@@ -539,4 +609,44 @@ async fn download_to_blob(
     .await;
     let _ = tokio::fs::remove_file(&temp).await;
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_retry_after;
+    use reqwest::header::{HeaderMap, HeaderValue, RETRY_AFTER};
+
+    fn headers(retry_after: &str) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        h.insert(RETRY_AFTER, HeaderValue::from_str(retry_after).unwrap());
+        h
+    }
+
+    #[test]
+    fn retry_after_en_segundos() {
+        assert_eq!(parse_retry_after(&headers("120")), Some(120_000));
+        assert_eq!(parse_retry_after(&headers("0")), Some(0));
+    }
+
+    #[test]
+    fn retry_after_ausente_o_invalido_es_none() {
+        assert_eq!(parse_retry_after(&HeaderMap::new()), None);
+        assert_eq!(parse_retry_after(&headers("ya mismo")), None);
+    }
+
+    #[test]
+    fn retry_after_como_http_date_futura() {
+        // Una fecha muy futura debe dar una espera positiva y grande
+        let ms = parse_retry_after(&headers("Wed, 21 Oct 2099 07:28:00 GMT"))
+            .expect("una fecha válida produce ms");
+        assert!(ms > 0);
+    }
+
+    #[test]
+    fn retry_after_como_http_date_pasada_es_cero() {
+        assert_eq!(
+            parse_retry_after(&headers("Wed, 21 Oct 1999 07:28:00 GMT")),
+            Some(0)
+        );
+    }
 }

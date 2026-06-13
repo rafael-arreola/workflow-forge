@@ -19,10 +19,14 @@ workflow-forge-ext-data = { path = "crates/extensions/data", version = "0.1.0" }
 workflow-forge-ext-http = { path = "crates/extensions/http", version = "0.1.0" }
 workflow-forge-ext-tabular = { path = "crates/extensions/tabular", version = "0.1.0" }
 workflow-forge-ext-sftp = { path = "crates/extensions/sftp", version = "0.1.0" }
+workflow-forge-ext-compress = { path = "crates/extensions/compress", version = "0.1.0" }
 workflow-forge = { path = "crates/forge", version = "0.1.0" }
 
 async-trait = "0.1"
 clap = { version = "4", features = ["derive"] }
+fastrand = "2"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
 chrono = { version = "0.4", default-features = false, features = ["std", "alloc"] }
 futures = "0.3"
 jsonpath-rust = "1.0.4"

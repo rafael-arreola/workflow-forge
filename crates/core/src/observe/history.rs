@@ -152,10 +152,10 @@ pub struct NodeReport {
     /// Error del nodo, si falló
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<WorkflowError>,
-    /// Elementos exitosos (solo foreach)
+    /// Elementos/iteraciones exitosos (solo foreach y loop)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub items_ok: Option<usize>,
-    /// Elementos fallidos (solo foreach)
+    /// Elementos/iteraciones fallidos (solo foreach y loop)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub items_failed: Option<usize>,
 }
@@ -223,11 +223,12 @@ impl ExecutionReport {
                         };
                         node.error = Some(error.clone());
                     }
-                    EventKind::ForeachItemCompleted { .. } => {
+                    EventKind::ForeachItemCompleted { .. }
+                    | EventKind::LoopIterationCompleted { .. } => {
                         *node.items_ok.get_or_insert(0) += 1;
                         node.items_failed.get_or_insert(0);
                     }
-                    EventKind::ForeachItemFailed { .. } => {
+                    EventKind::ForeachItemFailed { .. } | EventKind::LoopIterationFailed { .. } => {
                         *node.items_failed.get_or_insert(0) += 1;
                         node.items_ok.get_or_insert(0);
                     }

@@ -10,6 +10,7 @@
 //! | [`event`] | `start`, `end` | schema del trigger, defaults, output final |
 //! | [`task`] | `task` | resolución de input y ejecución con política |
 //! | [`foreach`] | `foreach` | iteración con concurrencia/throttle por elemento |
+//! | [`loop_node`] | `loop` | iteración acotada con condición de continuación |
 //! | [`gateway`] | `gateway` | exclusive (ramas), parallel (fan-out), join (fan-in) |
 //! | [`subworkflow`] | `subworkflow` | ejecución del workflow hijo como tarea |
 //!
@@ -21,5 +22,6 @@
 pub(crate) mod event;
 pub(crate) mod foreach;
 pub(crate) mod gateway;
+pub(crate) mod loop_node;
 pub(crate) mod subworkflow;
 pub(crate) mod task;

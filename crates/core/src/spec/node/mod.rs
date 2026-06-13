@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 pub mod event;
 pub mod foreach;
 pub mod gateway;
+pub mod loop_node;
 pub mod task;
 
 /// Identificador único de un nodo dentro del grafo del workflow.
@@ -64,6 +65,9 @@ pub enum NodeKind {
     Task(task::TaskNode),
     /// Nodo que itera un array invocando una tarea por elemento
     Foreach(foreach::ForeachNode),
+    /// Nodo que invoca una tarea repetidamente con condición de continuación
+    /// y tope duro de iteraciones
+    Loop(loop_node::LoopNode),
     /// Nodo de control de flujo (exclusive/parallel/join)
     Gateway(gateway::GatewayNode),
     /// Nodo que ejecuta otro workflow como si fuera una tarea
@@ -78,6 +82,7 @@ impl NodeKind {
             NodeKind::End(_) => "end",
             NodeKind::Task(_) => "task",
             NodeKind::Foreach(_) => "foreach",
+            NodeKind::Loop(_) => "loop",
             NodeKind::Gateway(_) => "gateway",
             NodeKind::Subworkflow(_) => "subworkflow",
         }

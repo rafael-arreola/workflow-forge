@@ -20,9 +20,10 @@ executed by an embeddable, async core.
   its input/output). The engine enforces the contracts at runtime and can
   export the full task catalog as JSON — the foundation for tooling and
   visual editors.
-- **Real control flow**: exclusive/parallel/join gateways, per-node retries
-  with backoff, timeouts, error routes (`on: "error"`), and a condition
-  mini-DSL that is itself JSON.
+- **Real control flow**: exclusive/parallel/join gateways, `foreach` over
+  arrays, bounded `loop`s (pagination!), per-node retries with backoff and
+  jitter, timeouts, error routes (`on: "error"`), and a condition mini-DSL
+  that is itself JSON.
 
 ## Quickstart
 
@@ -159,15 +160,16 @@ like `eq`, `gt`, `in`, `contains`, `exists`, `starts_with`, `matches`:
 
 Extensions are crates that register tasks. Enable them via feature flags on
 the `workflow-forge` facade (`util`, `data`, `http` are on by default; add
-`tabular` and `sftp`, or use `full`).
+`tabular`, `sftp`, `compress`, or use `full`).
 
-| Namespace | Tasks                                           | Notes                                                 |
-| --------- | ----------------------------------------------- | ----------------------------------------------------- |
-| `util`    | `util.noop`, `util.log`, `util.delay`           | Debugging, testing, examples                          |
-| `data`    | `data.transform`, `data.merge`, `data.template` | All data reshaping lives here                         |
-| `http`    | `http.request`                                  | Methods, headers, query, JSON body, basic/bearer auth |
-| `tabular` | `tabular.parse`, `tabular.write`                | CSV / XLSX ↔ JSON, via `$blob`                        |
-| `sftp`    | `sftp.get`, `sftp.put`, `sftp.list`             | Streaming transfers, via `$blob`                      |
+| Namespace | Tasks                                                                  | Notes                                                       |
+| --------- | ---------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `util`    | `util.noop`, `util.log`, `util.delay`, `util.idempotency_key`          | Debugging, testing, idempotency for side-effecting calls    |
+| `data`    | `data.transform`, `data.map`, `data.merge`, `data.template`, `data.cast` | All data reshaping and conversion lives here              |
+| `http`    | `http.request`                                                         | Bodies (JSON/form/raw/blob/multipart), auth, blob downloads |
+| `tabular` | `tabular.parse`, `tabular.write`                                       | CSV / XLSX ↔ JSON, via `$blob`                              |
+| `sftp`    | `sftp.get`, `sftp.put`, `sftp.list`                                    | Streaming transfers, via `$blob`, optional session pooling  |
+| `compress`| `compress.gzip`, `compress.gunzip`, `compress.zip`, `compress.unzip`   | gzip & zip over `$blob` (the `.csv.gz` / `.zip` a partner sends) |
 
 Large files never travel inline in the context: tasks exchange **blob
 references** (`{ "$blob": "<id>", "name": "...", "size": ... }`) backed by a
@@ -251,6 +253,53 @@ struct CreateShipmentIn { sku: String, qty: u32 }
 
 [`schemars`]: https://docs.rs/schemars
 
+## Observability, limits and testing
+
+The executor emits typed, serializable events to any `ExecutionObserver`.
+Two adapters ship ready to use — `TracingObserver` (events through the
+`tracing` crate) and `JsonlObserver` (append-only JSON-lines audit log) — and
+`InMemoryHistory` folds the events of a run into a per-node
+`ExecutionReport`:
+
+```rust
+let history = std::sync::Arc::new(InMemoryHistory::new());
+let executor = WorkflowExecutor::new(workflow, registry)?
+    .with_observer(history.clone());
+```
+
+Runs are **unlimited by default**; deadlines and cooperative cancellation are
+opt-in per run:
+
+```rust
+let token = CancellationToken::new();
+let options = RunOptions::default()
+    .deadline(Duration::from_secs(30))
+    .cancel(token.clone()); // token.cancel() aborts from anywhere
+let result = executor.run_with(trigger, options).await;
+```
+
+And with the `testing` feature, `MockTask` replaces any registered task to
+dry-run a workflow — assert the output *and* what it would have called, with
+no network or filesystem:
+
+```rust
+let mock = MockTask::returning("acme.create_order", json!({ "order_id": "o-1" }));
+let calls = mock.call_log(); // inspect inputs after the run
+registry.register(mock);
+```
+
+## CLI
+
+The `workflow-forge-cli` crate ships a `forge` binary that runs, validates
+and inspects workflows with all official extensions bundled:
+
+```bash
+forge run workflow.json --input '{"who":"world"}'   # or pipe stdin
+forge run workflow.json --timeout-ms 30000
+forge validate workflow.json                        # non-zero exit if invalid
+forge catalog                                       # task catalog as JSON
+```
+
 ## Spec & schemas
 
 The execution contract is versioned independently from the crates:
@@ -270,6 +319,7 @@ crates/
   extensions/
     util/ data/ http/ tabular/ sftp/          — official extensions (one crate each)
   forge/                 workflow-forge       — facade with feature flags
+  cli/                   workflow-forge-cli   — the `forge` binary (run/validate/catalog)
 ```
 
 Rules: extensions depend only on `core`, never on each other; every task ships
@@ -277,8 +327,7 @@ a manifest and integration tests against the real executor.
 
 ## Roadmap
 
-- v1.x extensions: `compress`, `crypto`, `storage` (S3-compatible), `smtp`
-- CLI runtime (`forge run workflow.json`)
+- v1.x extensions: `crypto` (HMAC, PGP), `storage` (S3-compatible), `smtp`, `db`
 - WASM extensions (installable without recompiling)
 - Durable execution (event-sourced executor behind a storage trait)
 - Visual editor (the graph model + schemas make it possible)

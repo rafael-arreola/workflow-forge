@@ -269,13 +269,14 @@ Un nodo task sin `input` recibe el output de su predecesor.
 |-----------|--------|-------|
 | `http` | `http.request` | Métodos estándar, headers, auth basic/bearer, body JSON |
 | `data` | `data.transform`, `data.map`, `data.merge`, `data.template`, `data.cast` | Reshape con JSONPath, plantillas de strings, conversiones por campo |
-| `util` | `util.delay`, `util.log`, `util.noop` | Debug, pruebas y ejemplos |
+| `util` | `util.delay`, `util.log`, `util.noop`, `util.idempotency_key` | Debug, pruebas, ejemplos e idempotencia |
 | `sftp` | `sftp.get`, `sftp.put`, `sftp.list` | Integraciones empresariales; usa `$blob` |
 | `tabular` | `tabular.parse`, `tabular.write` | CSV y XLSX ↔ JSON; usa `$blob` |
+| `compress` | `compress.gzip`, `compress.gunzip`, `compress.zip`, `compress.unzip` | gzip y zip; usa `$blob` |
 
 Roadmap de extensiones: `fs` (`fs.read`/`fs.write` local, complementa sftp,
-usa `$blob`), `compress` (zip/gzip), `crypto` (hash/HMAC), `storage`
-(S3-compatible) y `smtp` en v1.x; `db` (SQL) y `queue` (AMQP/Kafka) post-v1.
+usa `$blob`), `crypto` (hash/HMAC, PGP), `storage` (S3-compatible) y `smtp`
+en v1.x; `db` (SQL) y `queue` (AMQP/Kafka) post-v1.
 
 ### Nodo `foreach`
 
@@ -315,6 +316,51 @@ Semántica:
   `{ "ok": [...], "failed": [{ "index", "item", "error" }] }` y el nodo no
   falla — los fallos se rutean con gateways
   (ej. `{ "path": "$.nodes.x.output.failed[0]", "exists": true }`).
+
+### Nodo `loop`
+
+Iteración **acotada** de una tarea con condición de continuación — el caso
+canónico es la paginación ("pide la siguiente página hasta que `next` sea
+null"), inexpresable en un grafo acíclico puro. El ciclo vive **dentro** del
+nodo (como en `foreach`): el grafo sigue siendo un DAG y la terminación queda
+garantizada por el tope obligatorio.
+
+```json
+{
+  "id": "paginas",
+  "kind": "loop",
+  "task": "acme.listar_ordenes",
+  "input": { "url": "$.trigger.primera_pagina" },
+  "next": { "url": "@.output.next" },
+  "while": { "path": "$.output.next", "is_null": false },
+  "max_iterations": 100,
+  "on_max": "fail",
+  "collect": "all",
+  "retry": { "max": 3, "jitter": true },
+  "timeout_ms": 10000
+}
+```
+
+Semántica:
+
+- La **primera iteración siempre corre**, con `input` (mapping `$.` contra el
+  contexto; sin `input`, el token del predecesor). `while` se evalúa después
+  de cada iteración, nunca antes de la primera.
+- Tras cada iteración se construye su *documento de iteración*
+  `{ "input": <input usado>, "output": <output>, "index": <n> }` (0-based):
+  `while` se evalúa contra él como raíz local (`$.output…`, `$.index`) y, si
+  continúa, el shape `next` (reglas `@.`) construye el input siguiente contra
+  ese mismo documento. Sin `next`, la siguiente recibe el output anterior.
+- `max_iterations` es **obligatorio** (`LOOP_INVALID_MAX_ITERATIONS` si es 0).
+  Alcanzar el tope con `while` aún verdadera es `on_max: "fail"` (default,
+  error `LOOP_MAX_ITERATIONS_EXCEEDED` — truncar datos en silencio es
+  peligroso) o `"stop"` (termina bien con lo acumulado).
+- `collect: "last"` (default, memoria acotada) devuelve el output de la última
+  iteración; `"all"` el array completo en orden.
+- `retry`/`timeout_ms` aplican por iteración; una iteración que falla en
+  definitivo hace fallar el nodo (aplican `on: error`/`on: panic`).
+- Observabilidad: eventos `loop_iteration_completed/failed` por iteración,
+  plegados en el reporte como `items_ok`/`items_failed`.
 
 ### Observabilidad
 
@@ -426,6 +472,16 @@ crates/
 Reglas: cada extensión depende solo de core (nunca de otra extensión), expone
 `register(&TaskRegistry)` y sus manifiestos, y trae sus propios tests.
 
+**El CLI vive en el workspace** (decisión consciente, no separarlo): es una
+capa delgada sin ciclo de vida propio que debe evolucionar en lockstep con el
+engine y la spec — `cargo test --workspace` lo compila contra cada cambio y
+`forge validate` nunca diverge de `schemas/` ni de la validación del core. La
+publicación es per-crate, así que la distribución (`cargo install
+workflow-forge-cli`) no depende del layout. Se separaría a su propio repo solo
+si se convierte en producto con vida propia: modo servidor/daemon, triggers o
+scheduling (el "hosting layer" post-v1), dependencias pesadas propias o una
+cadencia de releases distinta a la del engine.
+
 ## Versionado del contrato
 
 - Cada workflow declara `"spec": "1.0"`.
@@ -462,7 +518,7 @@ Docs (manuales de uso y arquitectura en `docs/`), ejemplos ejecutables, CI
 (fmt + clippy + tests), licencias, metadata de crates.io. Pendiente solo el
 `cargo publish` final.
 
-### Hecho post-0.1 (aditivo, sin tocar la spec)
+### Hecho post-0.1 (aditivo)
 - Autoría de baja fricción: `register_typed`/`register_fn` con schemas derivados.
 - Harness de pruebas: feature `testing` con `MockTask`/`CallLog`.
 - Idempotencia: `idempotency::key_for` + tarea `util.idempotency_key`.
@@ -474,6 +530,21 @@ Docs (manuales de uso y arquitectura en `docs/`), ejemplos ejecutables, CI
   sesiones SSH autenticadas, con liveness y reconexión).
 - CLI runtime: crate `workflow-forge-cli`, binario `forge` (`run`/`validate`/
   `catalog`).
+- Nodo `loop` (extensión **aditiva** de la spec 1.0): iteración acotada de una
+  tarea con `while`/`next`/`max_iterations` — paginación expresable sin romper
+  el DAG. Ver "Nodo `loop`".
+- `jitter` opcional en `retry` (campo aditivo de la spec): full jitter sobre
+  el backoff para des-sincronizar oleadas de reintentos.
+- Regla `GATEWAY_DUPLICATE_EDGE_LABEL`: un exclusive con labels de arista
+  repetidos (fan-out accidental) ahora se rechaza en validación.
+- Comparación entera exacta en condiciones (`gt`/`lt`/…): los enteros ya no
+  pasan por f64 (que pierde precisión arriba de 2^53).
+- Extensión `compress`: gzip/zip sobre `$blob` (deflate puro en Rust, sin
+  deps C) — abre/produce los `.csv.gz` y `.zip` del intercambio por archivos.
+- Resiliencia HTTP: `retry_on_status` (solo los transitorios fallan, sin
+  gastar reintentos en errores permanentes) y honra el header `Retry-After`
+  vía el campo aditivo `WorkflowError::retry_after_ms`, que el core respeta
+  como piso del backoff.
 
 ### Futuro (post-v1)
 - Extensiones WASM instalables sin recompilar
@@ -488,8 +559,8 @@ Docs (manuales de uso y arquitectura en `docs/`), ejemplos ejecutables, CI
 - **`data.transform`**: `{ source, shape }`. Los strings de `shape` con prefijo
   `@.` son JSONPath **relativos al source** (sin colisión con los mappings `$.`
   del executor); `@` solo es el source completo; `@@.` escapa; un path ausente
-  produce `null`. La resolución de shapes vive en `core::shape` (compartida
-  con el `bind`/`output` de los perfiles).
+  produce `null`. La resolución de shapes vive en `core::expr::shape`
+  (compartida con el `bind`/`output` de los perfiles).
 - **`data.map`**: `{ items, shape }`, aplica el shape a **cada elemento** del
   array (paths `@.` relativos al elemento; ausente → null). Es la respuesta v1
   al caso "reestructurar filas de un CSV/array" sin nodo de iteración genérico.
@@ -522,7 +593,19 @@ Docs (manuales de uso y arquitectura en `docs/`), ejemplos ejecutables, CI
   `auto` (default: JSON si el content-type es json, string en otro caso) |
   `text` (fuerza string) | `blob` (descarga streamed al BlobStore; el `body`
   del output es la referencia `{"$blob", name, size}`, con `name` tomado del
-  `content-disposition` si viene).
+  `content-disposition` si viene). Resiliencia: `retry_on_status: [int]`
+  marca los status reintentables (p. ej. `[429, 503]`) — solo esos fallan,
+  sin gastar reintentos en errores permanentes; en cualquier fallo por status
+  se adjunta `Retry-After` (segundos o HTTP-date) como `retry_after_ms` del
+  error, y la política de retry del nodo espera al menos ese tiempo.
+- **`compress.*`**: gzip/zip sobre la convención `$blob`, todo por streaming a
+  través de temporales (memoria acotada) y con deflate **puro en Rust**
+  (flate2/miniz_oxide + zip, sin deps C — coherente con la postura rustls del
+  resto). `gzip`/`gunzip`: `{ file: $blob, name? } → { file: $blob }`.
+  `zip`: `{ entries: [{name, file}], name? } → { file: $blob }`.
+  `unzip`: `{ file: $blob } → { entries: [{name, file: $blob}] }` (los nombres
+  del archivo se usan como etiqueta, nunca como ruta de escritura: el destino
+  es un temporal con id propio, sin riesgo de path traversal).
 
 ## Preguntas abiertas
 

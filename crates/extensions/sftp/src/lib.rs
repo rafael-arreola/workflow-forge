@@ -61,8 +61,24 @@ fn schema(value: Value) -> workflow_forge_core::schemars::Schema {
     serde_json::from_value(value).expect("schema estático válido")
 }
 
+/// Códigos de error que esta extensión puede emitir. Mismo contrato que
+/// [`workflow_forge_core::error::codes`]: constantes estables, nunca cambian
+/// de valor. Los errores de blobs reusan los códigos del core.
+pub mod codes {
+    /// El input de una tarea `sftp.*` no deserializa contra su contrato.
+    pub const SFTP_INPUT_INVALID: &str = "SFTP_INPUT_INVALID";
+    /// Fallo de conexión, autenticación o transferencia SFTP. Suele ser
+    /// transitorio: candidato natural a `retry`.
+    pub const SFTP_ERROR: &str = "SFTP_ERROR";
+    /// El host no aparece en el archivo `known_hosts` provisto.
+    pub const SFTP_HOST_UNKNOWN: &str = "SFTP_HOST_UNKNOWN";
+    /// La llave del host NO coincide con `known_hosts` (posible MITM).
+    /// Nunca debe reintentarse a ciegas.
+    pub const SFTP_HOST_KEY_MISMATCH: &str = "SFTP_HOST_KEY_MISMATCH";
+}
+
 fn sftp_error(message: impl std::fmt::Display) -> WorkflowError {
-    WorkflowError::new("SFTP_ERROR", message.to_string())
+    WorkflowError::new(codes::SFTP_ERROR, message.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -220,11 +236,11 @@ fn verify_host_key(
     match known_hosts.check_port(&conn.host, conn.port, key) {
         ssh2::CheckResult::Match => Ok(()),
         ssh2::CheckResult::NotFound => Err(WorkflowError::new(
-            "SFTP_HOST_UNKNOWN",
+            codes::SFTP_HOST_UNKNOWN,
             format!("El host '{}' no está en known_hosts", conn.host),
         )),
         ssh2::CheckResult::Mismatch => Err(WorkflowError::new(
-            "SFTP_HOST_KEY_MISMATCH",
+            codes::SFTP_HOST_KEY_MISMATCH,
             format!(
                 "La llave del host '{}' NO coincide con known_hosts (posible MITM)",
                 conn.host
@@ -297,7 +313,7 @@ impl Task for GetTask {
 
     async fn execute(&self, ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult {
         let parsed: GetInput = serde_json::from_value(input.0)
-            .map_err(|e| WorkflowError::new("SFTP_INPUT_INVALID", e.to_string()))?;
+            .map_err(|e| WorkflowError::new(codes::SFTP_INPUT_INVALID, e.to_string()))?;
         let name = parsed.name.clone().unwrap_or_else(|| {
             parsed
                 .path
@@ -401,7 +417,7 @@ impl Task for PutTask {
 
     async fn execute(&self, ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult {
         let parsed: PutInput = serde_json::from_value(input.0)
-            .map_err(|e| WorkflowError::new("SFTP_INPUT_INVALID", e.to_string()))?;
+            .map_err(|e| WorkflowError::new(codes::SFTP_INPUT_INVALID, e.to_string()))?;
         let local_path = ctx.blobs().local_path(&parsed.file)?;
 
         let remote_path = parsed.path.clone();
@@ -497,7 +513,7 @@ impl Task for ListTask {
 
     async fn execute(&self, _ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult {
         let parsed: ListInput = serde_json::from_value(input.0)
-            .map_err(|e| WorkflowError::new("SFTP_INPUT_INVALID", e.to_string()))?;
+            .map_err(|e| WorkflowError::new(codes::SFTP_INPUT_INVALID, e.to_string()))?;
 
         let pool = self.pool.clone();
         let entries = tokio::task::spawn_blocking(move || -> Result<Vec<Value>, WorkflowError> {

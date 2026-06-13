@@ -1,4 +1,4 @@
-//! Reglas específicas de kinds de nodo (foreach, subworkflow) y de la
+//! Reglas específicas de kinds de nodo (foreach, loop, subworkflow) y de la
 //! sección `workflows` inline.
 
 use std::collections::HashSet;
@@ -31,6 +31,39 @@ impl ValidationRule for ForeachConcurrency {
                         codes::FOREACH_INVALID_CONCURRENCY,
                         format!(
                             "El foreach '{}' declara concurrency 0; debe ser >= 1",
+                            node.id
+                        ),
+                    )
+                    .with_source_task(node.id.to_string()),
+                );
+            }
+        }
+    }
+}
+
+/// Un loop debe declarar `max_iterations >= 1`.
+pub struct LoopMaxIterations;
+
+impl ValidationRule for LoopMaxIterations {
+    fn codes(&self) -> &'static [&'static str] {
+        &[codes::LOOP_INVALID_MAX_ITERATIONS]
+    }
+
+    fn check(
+        &self,
+        workflow: &WorkflowDefinition,
+        _ctx: &ValidationCtx<'_>,
+        errors: &mut Vec<WorkflowError>,
+    ) {
+        for node in &workflow.nodes {
+            if let NodeKind::Loop(lp) = &node.kind
+                && lp.max_iterations == 0
+            {
+                errors.push(
+                    WorkflowError::new(
+                        codes::LOOP_INVALID_MAX_ITERATIONS,
+                        format!(
+                            "El loop '{}' declara max_iterations 0; debe ser >= 1",
                             node.id
                         ),
                     )

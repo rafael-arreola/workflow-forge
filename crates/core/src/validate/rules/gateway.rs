@@ -1,6 +1,8 @@
 //! Coherencia de gateways: ramas, labels de aristas y aridad mínima
 //! según el tipo (`exclusive`, `parallel`, `join`).
 
+use std::collections::HashSet;
+
 use crate::error::{WorkflowError, codes};
 use crate::spec::node::NodeKind;
 use crate::spec::node::gateway::GatewayKind;
@@ -9,7 +11,10 @@ use crate::validate::{ValidationCtx, ValidationRule};
 
 /// Reglas de los tres tipos de gateway:
 /// - `exclusive`: declara branches, cada rama tiene `when` o es `else`
-///   (solo una), y branches ↔ labels de aristas salientes son biyectivos.
+///   (solo una), branches ↔ labels de aristas salientes son biyectivos y
+///   **sin labels repetidos**: el handler sigue todas las aristas con el
+///   label ganador, así que un duplicado convertiría el exclusive en un
+///   fan-out accidental.
 /// - `parallel`: sin branches y al menos 2 salidas.
 /// - `join`: sin branches y al menos 2 entradas del flujo normal.
 pub struct GatewayCoherence;
@@ -19,6 +24,7 @@ impl ValidationRule for GatewayCoherence {
         &[
             codes::GATEWAY_NO_BRANCHES,
             codes::GATEWAY_MULTIPLE_ELSE,
+            codes::GATEWAY_DUPLICATE_EDGE_LABEL,
             codes::GATEWAY_BRANCH_WITHOUT_WHEN,
             codes::GATEWAY_BRANCH_WITHOUT_EDGE,
             codes::GATEWAY_EDGE_WITHOUT_BRANCH,
@@ -96,6 +102,45 @@ impl ValidationRule for GatewayCoherence {
                                     format!(
                                         "La arista {}→{} (label {:?}) no corresponde a ninguna rama del gateway",
                                         edge.from, edge.to, label
+                                    ),
+                                )
+                                .with_source_task(node.id.to_string()),
+                            );
+                        }
+                    }
+                    // Labels repetidos: la rama ganadora seguiría todas las
+                    // aristas con ese label concurrentemente
+                    let mut seen: HashSet<&str> = HashSet::new();
+                    let mut reported: HashSet<&str> = HashSet::new();
+                    for edge in out {
+                        if let Some(label) = edge.label.as_deref()
+                            && !seen.insert(label)
+                            && reported.insert(label)
+                        {
+                            errors.push(
+                                WorkflowError::new(
+                                    codes::GATEWAY_DUPLICATE_EDGE_LABEL,
+                                    format!(
+                                        "El gateway exclusive '{}' tiene más de una arista \
+                                         saliente con el label '{label}'; un exclusive sigue \
+                                         una sola arista (para fan-out usa un gateway parallel)",
+                                        node.id
+                                    ),
+                                )
+                                .with_source_task(node.id.to_string()),
+                            );
+                        }
+                    }
+                    let mut seen_branches: HashSet<&str> = HashSet::new();
+                    for branch in &gw.branches {
+                        if !seen_branches.insert(branch.edge.as_str()) {
+                            errors.push(
+                                WorkflowError::new(
+                                    codes::GATEWAY_DUPLICATE_EDGE_LABEL,
+                                    format!(
+                                        "El gateway exclusive '{}' declara más de una rama \
+                                         hacia el label '{}'",
+                                        node.id, branch.edge
                                     ),
                                 )
                                 .with_source_task(node.id.to_string()),

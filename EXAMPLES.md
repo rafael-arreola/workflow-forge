@@ -1253,6 +1253,89 @@ Semantics worth knowing:
 
 ---
 
+## 14. Paginated API: fetch every page with `loop`
+
+The classic integration wall: an API returns orders one page at a time, with
+a `next` URL that is `null` on the last page. A `loop` node iterates a task
+until its `while` condition turns false, with a **mandatory** hard cap —
+the graph stays acyclic and termination is guaranteed.
+
+How each iteration flows: the first one runs with `input` (the rest of the
+config is baked into the profile); after each iteration the engine evaluates
+`while` against the local *iteration document* `{ input, output, index }`,
+and if it continues, the `next` shape (`@.` rules) builds the next input from
+that same document.
+
+```json
+{
+  "spec": "1.0",
+  "name": "fetch-all-orders",
+  "version": "1.0.0",
+  "tasks": [
+    {
+      "id": "acme.list_orders",
+      "extends": "http.request",
+      "description": "One page of ACME orders",
+      "bind": {
+        "url": "@.url",
+        "method": "GET",
+        "auth": { "type": "bearer", "token": { "$secret": "ACME_TOKEN" } }
+      },
+      "output": { "orders": "@.body.orders", "next": "@.body.next" }
+    }
+  ],
+  "nodes": [
+    { "id": "start", "kind": "start" },
+    {
+      "id": "pages",
+      "kind": "loop",
+      "task": "acme.list_orders",
+      "input": { "url": "$.trigger.first_page_url" },
+      "next": { "url": "@.output.next" },
+      "while": { "path": "$.output.next", "is_null": false },
+      "max_iterations": 100,
+      "collect": "all",
+      "retry": { "max": 3, "backoff": "exponential", "jitter": true },
+      "timeout_ms": 10000
+    },
+    {
+      "id": "alert",
+      "kind": "task",
+      "task": "util.log",
+      "input": { "level": "error", "message": "$.nodes.pages.error" }
+    },
+    { "id": "end", "kind": "end", "output": { "pages": "$.nodes.pages.output" } },
+    { "id": "end-failed", "kind": "end", "status": "error" }
+  ],
+  "edges": [
+    { "from": "start", "to": "pages" },
+    { "from": "pages", "to": "end" },
+    { "from": "pages", "on": "error", "to": "alert" },
+    { "from": "alert", "to": "end-failed" }
+  ]
+}
+```
+
+Run it with `{ "first_page_url": "https://api.acme.com/orders?limit=100" }`
+and the output is every page in order (`collect: "all"`), each one already
+reshaped by the profile to `{ orders, next }`.
+
+Worth noting:
+
+- **The first iteration always runs** — `while` is evaluated *after* each
+  iteration, never before the first.
+- **The cap is a safety net, not a target**: hitting `max_iterations` while
+  `while` is still true fails the node with `LOOP_MAX_ITERATIONS_EXCEEDED`
+  (and routes through `on: "error"` here). If truncating is acceptable for
+  your case, set `"on_max": "stop"` to finish cleanly with what was
+  collected.
+- **`collect: "last"`** (the default) keeps memory bounded when you only
+  need the final iteration — e.g. polling a job status until it's done.
+- `retry`/`timeout_ms` apply **per iteration**, and `"jitter": true`
+  de-synchronizes retry waves against the API.
+
+---
+
 ## Patterns & gotchas worth knowing
 
 - **Implicit token vs explicit mapping**: a task *without* `input` receives
@@ -1273,8 +1356,6 @@ Semantics worth knowing:
 
 ## Not there yet (so you don't design around it)
 
-- **No loops/pagination**: the graph is acyclic; "fetch pages until `next`
-  is null" can't be expressed yet.
 - **Ephemeral execution**: run-to-completion, in memory. No resume after a
   crash, no waiting for external events — durability is on the roadmap.
 - **No scheduler/triggers**: the embedding application decides *when* to run

@@ -1,5 +1,5 @@
-//! Execution-level deadline and cooperative cancellation via `run_with`.
-//! Both are opt-in: `run` (and `run_with` with default options) is unlimited.
+//! Deadline a nivel ejecución y cancelación cooperativa vía `run_with`.
+//! Ambos son opt-in: `run` (y `run_with` con opciones default) es ilimitado.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -10,7 +10,7 @@ use workflow_forge_core::error::codes;
 use workflow_forge_core::runtime::{CancellationToken, RunOptions, WorkflowExecutor};
 use workflow_forge_core::task::{TaskRegistry, WorkflowData};
 
-/// start → slow → end, where `slow` sleeps for `sleep_ms`.
+/// start → slow → end, donde `slow` duerme `sleep_ms`.
 fn registry_with_slow(sleep_ms: u64) -> Arc<TaskRegistry> {
     let registry = Arc::new(TaskRegistry::new());
     registry.register_fn("test.slow", move |_ctx, input| async move {
@@ -44,8 +44,8 @@ fn executor(sleep_ms: u64) -> WorkflowExecutor {
 }
 
 #[tokio::test]
-async fn unlimited_by_default() {
-    // A short task completes normally with plain `run` (no limits).
+async fn ilimitada_por_defecto() {
+    // Una tarea corta completa normalmente con `run` a secas (sin límites).
     let out = executor(10)
         .run(WorkflowData(json!({ "ok": 1 })))
         .await
@@ -54,7 +54,7 @@ async fn unlimited_by_default() {
 }
 
 #[tokio::test]
-async fn deadline_aborts_a_long_run() {
+async fn el_deadline_aborta_una_ejecucion_larga() {
     let started = Instant::now();
     let err = executor(10_000)
         .run_with(
@@ -65,12 +65,12 @@ async fn deadline_aborts_a_long_run() {
         .expect_err("debe vencer el deadline");
 
     assert_eq!(err.code, codes::EXECUTION_TIMEOUT);
-    // Returned promptly, not after the 10s task.
+    // Regresa pronto, no después de los 10s de la tarea.
     assert!(started.elapsed() < Duration::from_secs(1));
 }
 
 #[tokio::test]
-async fn cancellation_token_aborts_a_long_run() {
+async fn el_token_de_cancelacion_aborta_una_ejecucion_larga() {
     let token = CancellationToken::new();
     let trigger_cancel = token.clone();
     let canceller = tokio::spawn(async move {

@@ -46,6 +46,57 @@ under `schemas/1.0/`); a crate version bump does not imply a spec bump.
   (`--input`/stdin, `--timeout-ms`), `forge validate`, `forge catalog`.
 - Crate publishing metadata across the workspace (`description`, `rust-version`,
   `keywords`, `categories`, `homepage`); MSRV declared as 1.85.
+- Every official extension now publishes its error codes as documented
+  constants under `<crate>::codes` (e.g.
+  `workflow_forge_ext_http::codes::HTTP_STATUS_ERROR`), mirroring the core
+  catalog so hosts can match on them without magic strings. Code **values**
+  are unchanged; the `http` extension's blob errors now reference
+  `workflow_forge_core::error::codes::BLOB_IO_ERROR` directly.
+- **`loop` node** (additive spec 1.0 extension): bounded iteration of a task —
+  the canonical pagination primitive ("fetch pages until `next` is null").
+  First iteration runs with `input`; `while` (a standard condition) is
+  evaluated after each iteration against the local document
+  `{ input, output, index }`, and the `next` shape builds the following input
+  from it. `max_iterations` is mandatory (`on_max: fail` errors with
+  `LOOP_MAX_ITERATIONS_EXCEEDED`, `stop` finishes with what was collected);
+  `collect: last|all` shapes the output; `retry`/`timeout_ms` apply per
+  iteration and failures route through `on: error`/`on: panic`. New events
+  `loop_iteration_completed/failed` fold into the report as
+  `items_ok`/`items_failed`. Published schema updated.
+- Retry `jitter` (additive spec field, default `false`): the actual wait
+  becomes uniform in `[0, computed delay]` (full jitter), de-synchronizing
+  retry waves against the same target after an outage. Reported delays in
+  `task_attempt_failed` events reflect the real (jittered) wait.
+- **`compress` extension** (`workflow-forge-ext-compress`, `compress` feature,
+  in `full`): `compress.gzip` / `compress.gunzip` and `compress.zip` /
+  `compress.unzip` over the `$blob` convention — the `.csv.gz` / `.zip` files
+  that move over SFTP. Everything is streamed through temp files (bounded
+  memory) with pure-Rust deflate (flate2/miniz_oxide + zip, no C deps).
+- HTTP resilience: `http.request` gains `retry_on_status: [int]` (only the
+  listed statuses fail and thus retry — e.g. `[429, 503]` — sparing permanent
+  errors like 400/404), and any status failure now carries the response's
+  `Retry-After` header (delta-seconds or HTTP-date) so retries wait at least
+  that long. Backed by a new additive `WorkflowError::retry_after_ms` field:
+  a general "wait at least this before retrying" hint the engine honors as a
+  floor over the computed backoff.
+- New validation rule (`GATEWAY_DUPLICATE_EDGE_LABEL`): an `exclusive`
+  gateway with two outgoing edges sharing a label — or two branches pointing
+  to the same label — is now rejected at build time. Previously the winning
+  branch silently followed **all** matching edges concurrently (accidental
+  fan-out from an exclusive).
+
+### Fixed
+
+- Conditions now compare integers exactly: `gt`/`gte`/`lt`/`lte` went through
+  `f64`, losing precision above 2^53 (e.g. large numeric IDs).
+
+### Changed
+
+- Readability pass, no behavior change: `workflow-forge-ext-data` reorganized
+  into one module per task (`transform`, `map`, `merge`, `template`, `cast`;
+  public re-exports preserved), executor construction split into named helpers
+  (`registry_with_inline_profiles`, `build_subworkflows`), and all in-code
+  documentation unified in Spanish (the project's code-doc convention).
 
 ## [0.1.0] - 2026-06-10
 

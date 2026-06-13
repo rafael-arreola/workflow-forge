@@ -104,6 +104,19 @@ pub enum EventKind {
         index: usize,
         error: WorkflowError,
     },
+    /// Una iteración de un loop terminó exitosamente
+    LoopIterationCompleted {
+        node_id: String,
+        index: usize,
+        output: Value,
+    },
+    /// Una iteración de un loop falló definitivamente (reintentos agotados);
+    /// el nodo loop completo falla con este error
+    LoopIterationFailed {
+        node_id: String,
+        index: usize,
+        error: WorkflowError,
+    },
     /// La ejecución completó con output final
     WorkflowCompleted { output: Value, duration_ms: u64 },
     /// La ejecución falló
@@ -123,7 +136,9 @@ impl EventKind {
             | EventKind::NodeCompleted { node_id, .. }
             | EventKind::NodeFailed { node_id, .. }
             | EventKind::ForeachItemCompleted { node_id, .. }
-            | EventKind::ForeachItemFailed { node_id, .. } => Some(node_id),
+            | EventKind::ForeachItemFailed { node_id, .. }
+            | EventKind::LoopIterationCompleted { node_id, .. }
+            | EventKind::LoopIterationFailed { node_id, .. } => Some(node_id),
             _ => None,
         }
     }

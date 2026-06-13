@@ -1,10 +1,11 @@
-//! Regla de vocabulario de condiciones: todo operador custom usado en un
-//! gateway debe estar registrado antes de construir el executor.
+//! Regla de vocabulario de condiciones: todo operador custom usado en el
+//! documento (ramas de gateway, `while` de loops) debe estar registrado
+//! antes de construir el executor.
 
 use crate::error::{WorkflowError, codes};
 use crate::expr::operators;
 use crate::spec::condition::{CompareOp, Condition};
-use crate::spec::node::NodeKind;
+use crate::spec::node::{NodeId, NodeKind};
 use crate::spec::workflow::WorkflowDefinition;
 use crate::validate::{ValidationCtx, ValidationRule};
 
@@ -25,32 +26,50 @@ impl ValidationRule for KnownConditionOperators {
         errors: &mut Vec<WorkflowError>,
     ) {
         for node in &workflow.nodes {
-            let NodeKind::Gateway(gw) = &node.kind else {
-                continue;
-            };
-            for branch in &gw.branches {
-                let Some(when) = &branch.when else { continue };
-                walk(when, &mut |op| {
-                    if let CompareOp::Custom { key, .. } = op
-                        && !operators::global().contains(key)
-                    {
-                        errors.push(
-                            WorkflowError::new(
-                                codes::UNKNOWN_CONDITION_OPERATOR,
-                                format!(
-                                    "La rama '{}' del gateway '{}' usa el operador '{}', que no \
-                                     es de la spec 1.0 ni está registrado en el registro de \
-                                     operadores",
-                                    branch.edge, node.id, key
-                                ),
-                            )
-                            .with_source_task(node.id.to_string()),
+            match &node.kind {
+                NodeKind::Gateway(gw) => {
+                    for branch in &gw.branches {
+                        let Some(when) = &branch.when else { continue };
+                        check_condition(
+                            when,
+                            &node.id,
+                            &format!("La rama '{}' del gateway", branch.edge),
+                            errors,
                         );
                     }
-                });
+                }
+                NodeKind::Loop(lp) => {
+                    check_condition(&lp.while_, &node.id, "El `while` del loop", errors);
+                }
+                _ => {}
             }
         }
     }
+}
+
+/// Reporta cada operador custom no registrado dentro de una condición.
+fn check_condition(
+    condition: &Condition,
+    node_id: &NodeId,
+    where_: &str,
+    errors: &mut Vec<WorkflowError>,
+) {
+    walk(condition, &mut |op| {
+        if let CompareOp::Custom { key, .. } = op
+            && !operators::global().contains(key)
+        {
+            errors.push(
+                WorkflowError::new(
+                    codes::UNKNOWN_CONDITION_OPERATOR,
+                    format!(
+                        "{where_} '{node_id}' usa el operador '{key}', que no es de la \
+                         spec 1.0 ni está registrado en el registro de operadores"
+                    ),
+                )
+                .with_source_task(node_id.to_string()),
+            );
+        }
+    });
 }
 
 /// Recorre todas las comparaciones de un árbol de condición.

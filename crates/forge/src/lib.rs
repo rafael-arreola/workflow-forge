@@ -71,6 +71,8 @@ pub fn register_extensions(registry: &TaskRegistry) {
     workflow_forge_ext_tabular::register(registry);
     #[cfg(feature = "sftp")]
     workflow_forge_ext_sftp::register(registry);
+    #[cfg(feature = "compress")]
+    workflow_forge_ext_compress::register(registry);
 }
 
 /// Registry nuevo con todas las extensiones habilitadas ya registradas

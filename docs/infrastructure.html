@@ -111,8 +111,9 @@
                     <pre class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 overflow-x-auto text-sm text-slate-200"><code>crates/
   core/                  workflow-forge-core   — spec types, executor, validation, BlobStore, manifest
   extensions/
-    util/   data/   http/   tabular/   sftp/   — official extensions (one crate each)
-  forge/                 workflow-forge        — facade: re-exports core + registers extensions by feature</code></pre>
+    util/ data/ http/ tabular/ sftp/ compress/  — official extensions (one crate each)
+  forge/                 workflow-forge        — facade: re-exports core + registers extensions by feature
+  cli/                   workflow-forge-cli    — the `forge` binary (run/validate/catalog)</code></pre>
                     <p class="text-slate-300 text-sm">Two rules keep the dependency graph clean:</p>
                     <ul class="text-sm text-slate-300 list-disc pl-6 space-y-1">
                         <li>Every extension depends <strong>only on core</strong>, never on another extension. Each exposes a <code>register(&amp;TaskRegistry)</code> function and ships its own integration tests against the real executor.</li>
@@ -375,6 +376,7 @@ struct ExecutionEvent {
                     </table>
                     </div>
                     <p class="text-slate-300 text-sm">The integrated <code>InMemoryHistory</code> (a <code>Mutex&lt;Vec&lt;ExecutionEvent&gt;&gt;</code>) folds events into a serializable <code>ExecutionReport</code>: global <code>status</code> (<code>Running</code>/<code>Completed</code>/<code>Failed</code>), <code>duration_ms</code>, <code>output</code>/<code>error</code>, and a per-node <code>NodeReport</code> (status incl. <code>ErrorRouted</code>, <code>attempts</code>, duration, output/error, foreach <code>items_ok</code>/<code>items_failed</code>). <code>report()</code> summarizes the root execution; <code>report_for(id)</code> a specific child; <code>executions()</code> lists all ids. <span class="src">observe/history.rs</span></p>
+                    <p class="text-slate-300 text-sm">Two durable adapters ship alongside it: <code>TracingObserver</code> emits every event through the <code>tracing</code> crate (failures at <code>error</code> level), so it reaches whatever subscriber the host already has; <code>JsonlObserver</code> appends each event as one JSON line to any writer or file (flushed per line) — a replayable, append-only audit log. <span class="src">observe/adapters.rs</span></p>
                 </section>
 
                 <!-- 11 -->
@@ -476,13 +478,12 @@ struct TaskManifest { id: TaskId, description: Option&lt;String&gt;,
                         <tbody class="divide-y divide-slate-800 text-slate-400">
                             <tr><td class="px-4 py-2">WASM extensions (install without recompiling)</td><td class="px-4 py-2">The serializable <code>TaskManifest</code> is the whole extension contract — a WASM loader consumes the same manifest, so the spec is unchanged. Compile-time traits become "just one more loader".</td></tr>
                             <tr><td class="px-4 py-2">Durable / event-sourced execution</td><td class="px-4 py-2">The typed, totally-ordered <code>ExecutionEvent</code> stream is designed as the journal. A future <code>EventStore</code> persists events and a replay reconstructs state; the event contract is frozen here.</td></tr>
-                            <tr><td class="px-4 py-2">CLI runtime (<code>forge run workflow.json</code>)</td><td class="px-4 py-2">A thin binary over the same executor and <code>default_registry()</code>.</td></tr>
                             <tr><td class="px-4 py-2">Visual editor</td><td class="px-4 py-2">The explicit graph + published workflow/extension schemas + <code>catalog()</code> export already make a builder UI possible.</td></tr>
                             <tr><td class="px-4 py-2">Pluggable storage backends (S3, …)</td><td class="px-4 py-2"><code>BlobStoreFactory</code> is the injection point; the temp-dir store is just the default.</td></tr>
                         </tbody>
                     </table>
                     </div>
-                    <p class="text-slate-300 text-sm">The honest boundary: v1 deliberately has <strong>no</strong> persistence, no external wait-states, no triggers/scheduling, no server and no cooperative cancellation API. Those belong to a hosting layer above this library, built on the seams above — not to the embeddable core.</p>
+                    <p class="text-slate-300 text-sm">The honest boundary: v1 deliberately has <strong>no</strong> persistence, no external wait-states, no triggers/scheduling and no server. Those belong to a hosting layer above this library, built on the seams above — not to the embeddable core. (Per-run limits <em>are</em> in the core: <code>run_with(trigger, RunOptions)</code> takes an optional total deadline and a cooperative <code>CancellationToken</code>; runs are unlimited by default. The <code>forge</code> CLI is that thin hosting layer in binary form: <code>run</code>/<code>validate</code>/<code>catalog</code> over the same executor and <code>default_registry()</code>.)</p>
                 </section>
 
                 <div class="border-t border-slate-800 pt-8 flex justify-between text-sm">

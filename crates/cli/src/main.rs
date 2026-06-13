@@ -1,7 +1,8 @@
-//! `forge` — the CLI runtime for workflow-forge.
+//! `forge` — el runtime CLI de workflow-forge.
 //!
-//! Runs, validates and inspects declarative JSON workflows using the bundled
-//! official extensions (`util`, `data`, `http`, `tabular`, `sftp`).
+//! Ejecuta, valida e inspecciona workflows JSON declarativos usando las
+//! extensiones oficiales incluidas (`util`, `data`, `http`, `tabular`,
+//! `sftp`).
 //!
 //! ```text
 //! forge run workflow.json --input '{"who":"world"}'
@@ -21,7 +22,7 @@ use workflow_forge::prelude::*;
 #[derive(Parser)]
 #[command(
     name = "forge",
-    about = "Run and inspect declarative JSON workflows",
+    about = "Ejecuta e inspecciona workflows JSON declarativos",
     version
 )]
 struct Cli {
@@ -31,25 +32,26 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Run a workflow to completion and print its output JSON to stdout.
+    /// Ejecuta un workflow hasta terminar e imprime su output JSON a stdout.
     Run {
-        /// Path to the workflow JSON document.
+        /// Ruta al documento JSON del workflow.
         workflow: PathBuf,
-        /// Trigger input: inline JSON, or `@path` to a JSON file. If omitted,
-        /// reads piped stdin, else defaults to `{}`.
+        /// Input del trigger: JSON inline, o `@ruta` a un archivo JSON. Si se
+        /// omite, lee stdin si viene de un pipe; si no, usa `{}`.
         #[arg(short, long)]
         input: Option<String>,
-        /// Abort the run after this many milliseconds (unlimited by default).
+        /// Aborta la ejecución después de estos milisegundos (ilimitada por
+        /// defecto).
         #[arg(long)]
         timeout_ms: Option<u64>,
     },
-    /// Validate a workflow document (structure, schemas, references) without
-    /// running it. Exit code is non-zero if invalid.
+    /// Valida un documento de workflow (estructura, schemas, referencias) sin
+    /// ejecutarlo. El exit code es distinto de cero si es inválido.
     Validate {
-        /// Path to the workflow JSON document.
+        /// Ruta al documento JSON del workflow.
         workflow: PathBuf,
     },
-    /// Print the task catalog (all bundled extensions) as JSON.
+    /// Imprime el catálogo de tareas (todas las extensiones incluidas) como JSON.
     Catalog,
 }
 
@@ -82,8 +84,8 @@ fn load_workflow(path: &Path) -> Result<WorkflowDefinition, String> {
     serde_json::from_str(&text).map_err(|e| format!("workflow JSON inválido: {e}"))
 }
 
-/// Resolve the trigger: `@file` → file contents, other text → inline JSON,
-/// `None` → piped stdin if present, else `{}`.
+/// Resuelve el trigger: `@archivo` → contenido del archivo, otro texto →
+/// JSON inline, `None` → stdin si viene de un pipe, si no `{}`.
 fn resolve_trigger(input: Option<String>) -> Result<serde_json::Value, String> {
     let text = match input {
         Some(arg) => match arg.strip_prefix('@') {

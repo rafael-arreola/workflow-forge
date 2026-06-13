@@ -42,6 +42,10 @@ pub const CYCLE_DETECTED: &str = "CYCLE_DETECTED";
 pub const GATEWAY_NO_BRANCHES: &str = "GATEWAY_NO_BRANCHES";
 /// Un gateway declara más de una rama `else`.
 pub const GATEWAY_MULTIPLE_ELSE: &str = "GATEWAY_MULTIPLE_ELSE";
+/// Un gateway `exclusive` tiene dos aristas salientes (o dos ramas) con el
+/// mismo label: la rama ganadora seguiría ambas aristas a la vez,
+/// convirtiendo el exclusive en un fan-out accidental.
+pub const GATEWAY_DUPLICATE_EDGE_LABEL: &str = "GATEWAY_DUPLICATE_EDGE_LABEL";
 /// Una rama de gateway no tiene `when` ni es `else`.
 pub const GATEWAY_BRANCH_WITHOUT_WHEN: &str = "GATEWAY_BRANCH_WITHOUT_WHEN";
 /// Una rama de gateway no tiene arista saliente con su label.
@@ -65,6 +69,8 @@ pub const ERROR_EDGE_INVALID_SOURCE: &str = "ERROR_EDGE_INVALID_SOURCE";
 pub const ERROR_EDGE_TO_JOIN: &str = "ERROR_EDGE_TO_JOIN";
 /// Un foreach declara `concurrency: 0`; debe ser >= 1.
 pub const FOREACH_INVALID_CONCURRENCY: &str = "FOREACH_INVALID_CONCURRENCY";
+/// Un loop declara `max_iterations: 0`; debe ser >= 1.
+pub const LOOP_INVALID_MAX_ITERATIONS: &str = "LOOP_INVALID_MAX_ITERATIONS";
 /// Un nodo subworkflow no declara el nombre del workflow hijo.
 pub const SUBWORKFLOW_MISSING_NAME: &str = "SUBWORKFLOW_MISSING_NAME";
 /// La sección `workflows` declara dos workflows con el mismo nombre.
@@ -125,6 +131,9 @@ pub const TASK_TIMEOUT: &str = "TASK_TIMEOUT";
 pub const TASK_PANIC: &str = "TASK_PANIC";
 /// El mapping `items` de un foreach no resolvió a un array.
 pub const FOREACH_ITEMS_NOT_ARRAY: &str = "FOREACH_ITEMS_NOT_ARRAY";
+/// Un loop alcanzó `max_iterations` con su condición `while` aún verdadera
+/// y `on_max: "fail"` (default). Con `on_max: "stop"` no es error.
+pub const LOOP_MAX_ITERATIONS_EXCEEDED: &str = "LOOP_MAX_ITERATIONS_EXCEEDED";
 /// Ninguna rama de un gateway `exclusive` se cumplió y no hay `else`.
 pub const NO_BRANCH_MATCHED: &str = "NO_BRANCH_MATCHED";
 /// La ejecución terminó con joins esperando ramas que nunca llegaron.
@@ -167,6 +176,7 @@ pub const ALL: &[&str] = &[
     CYCLE_DETECTED,
     GATEWAY_NO_BRANCHES,
     GATEWAY_MULTIPLE_ELSE,
+    GATEWAY_DUPLICATE_EDGE_LABEL,
     GATEWAY_BRANCH_WITHOUT_WHEN,
     GATEWAY_BRANCH_WITHOUT_EDGE,
     GATEWAY_EDGE_WITHOUT_BRANCH,
@@ -176,6 +186,7 @@ pub const ALL: &[&str] = &[
     ERROR_EDGE_INVALID_SOURCE,
     ERROR_EDGE_TO_JOIN,
     FOREACH_INVALID_CONCURRENCY,
+    LOOP_INVALID_MAX_ITERATIONS,
     SUBWORKFLOW_MISSING_NAME,
     SUBWORKFLOW_DUPLICATE_NAME,
     TASK_NOT_FOUND,
@@ -197,6 +208,7 @@ pub const ALL: &[&str] = &[
     TASK_TIMEOUT,
     TASK_PANIC,
     FOREACH_ITEMS_NOT_ARRAY,
+    LOOP_MAX_ITERATIONS_EXCEEDED,
     NO_BRANCH_MATCHED,
     JOIN_INCOMPLETE,
     NO_OUTPUT,

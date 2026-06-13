@@ -66,13 +66,14 @@
       "required": ["id", "kind"],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
-        "kind": { "enum": ["start", "end", "task", "foreach", "gateway", "subworkflow"] }
+        "kind": { "enum": ["start", "end", "task", "foreach", "loop", "gateway", "subworkflow"] }
       },
       "oneOf": [
         { "$ref": "#/$defs/startNode" },
         { "$ref": "#/$defs/endNode" },
         { "$ref": "#/$defs/taskNode" },
         { "$ref": "#/$defs/foreachNode" },
+        { "$ref": "#/$defs/loopNode" },
         { "$ref": "#/$defs/gatewayNode" },
         { "$ref": "#/$defs/subworkflowNode" }
       ]
@@ -178,6 +179,51 @@
         }
       },
       "required": ["kind", "task", "items"],
+      "additionalProperties": false
+    },
+    "loopNode": {
+      "type": "object",
+      "properties": {
+        "id": true,
+        "kind": { "const": "loop" },
+        "task": {
+          "description": "Id namespaced de la tarea (o perfil) invocada en cada iteración",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+        },
+        "input": {
+          "description": "Mapping del input de la PRIMERA iteración (reglas `$.` contra el contexto); sin él, el token del predecesor"
+        },
+        "next": {
+          "description": "Shape (`@.`) que construye el input de cada iteración siguiente, resuelto contra { input, output, index } de la anterior; sin él, la siguiente recibe el output anterior tal cual"
+        },
+        "while": {
+          "description": "Condición de continuación, evaluada tras cada iteración contra { input, output, index }: true → otra iteración. La primera iteración siempre corre",
+          "$ref": "#/$defs/condition"
+        },
+        "max_iterations": {
+          "description": "Tope duro de iteraciones (garantiza terminación)",
+          "type": "integer",
+          "minimum": 1
+        },
+        "on_max": {
+          "description": "fail: el nodo falla con LOOP_MAX_ITERATIONS_EXCEEDED si el tope se alcanza con `while` aún verdadera. stop: termina bien con lo acumulado",
+          "enum": ["fail", "stop"],
+          "default": "fail"
+        },
+        "collect": {
+          "description": "last: output de la última iteración. all: array con los outputs de todas, en orden",
+          "enum": ["last", "all"],
+          "default": "last"
+        },
+        "retry": { "$ref": "#/$defs/retryPolicy" },
+        "timeout_ms": {
+          "description": "Tiempo máximo por intento de cada iteración, en milisegundos",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": ["kind", "task", "while", "max_iterations"],
       "additionalProperties": false
     },
     "gatewayNode": {
@@ -312,6 +358,11 @@
           "type": "integer",
           "minimum": 0,
           "default": 500
+        },
+        "jitter": {
+          "description": "Full jitter: la espera real es uniforme en [0, espera calculada]; evita reintentos sincronizados en oleadas",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false

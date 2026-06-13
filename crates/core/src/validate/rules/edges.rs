@@ -7,7 +7,7 @@ use crate::spec::workflow::{EdgeTrigger, WorkflowDefinition};
 use crate::validate::{ValidationCtx, ValidationRule};
 
 /// Una arista con `on:` solo puede salir de nodos que ejecutan tareas
-/// (task, foreach, subworkflow) y nunca puede entrar a un gateway join
+/// (task, foreach, loop, subworkflow) y nunca puede entrar a un gateway join
 /// (el conteo de llegadas del join solo considera el flujo normal).
 pub struct EdgeTriggers;
 
@@ -27,14 +27,17 @@ impl ValidationRule for EdgeTriggers {
                 if edge.on.is_some()
                     && !matches!(
                         node.kind,
-                        NodeKind::Task(_) | NodeKind::Foreach(_) | NodeKind::Subworkflow(_)
+                        NodeKind::Task(_)
+                            | NodeKind::Foreach(_)
+                            | NodeKind::Loop(_)
+                            | NodeKind::Subworkflow(_)
                     )
                 {
                     errors.push(
                         WorkflowError::new(
                             codes::ERROR_EDGE_INVALID_SOURCE,
                             format!(
-                                "La arista {}→{} con `on: {}` debe originarse en un nodo task, foreach o subworkflow",
+                                "La arista {}→{} con `on: {}` debe originarse en un nodo task, foreach, loop o subworkflow",
                                 edge.from,
                                 edge.to,
                                 trigger_name(edge.on)

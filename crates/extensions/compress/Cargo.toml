@@ -1,6 +1,6 @@
 [package]
-name = "workflow-forge-ext-http"
-description = "http extension for workflow-forge: a declarative HTTP/S client task"
+name = "workflow-forge-ext-compress"
+description = "compress extension for workflow-forge: gzip and zip over the $blob convention"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,16 +13,13 @@ categories.workspace = true
 [dependencies]
 workflow-forge-core = { workspace = true }
 async-trait = { workspace = true }
-chrono = { workspace = true }
-futures = { workspace = true }
-reqwest = { workspace = true }
+flate2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-tokio-util = { workspace = true }
 uuid = { workspace = true }
+zip = { workspace = true }
 
 [dev-dependencies]
-async-trait = { workspace = true }
-httpmock = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true }

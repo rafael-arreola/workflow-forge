@@ -6,12 +6,14 @@
 //! módulo ofrece dos atajos para el caso común, donde una tarea es
 //! esencialmente una función `entrada → salida`:
 //!
-//! - [`FnTask`] / [`TaskRegistry::register_fn`]: una closure async sobre JSON
-//!   crudo ([`WorkflowData`]), sin schemas. Para transformaciones triviales.
-//! - [`TypedTask`] / [`TaskRegistry::register_typed`]: una closure async sobre
-//!   tus propios tipos. Los JSON Schema de input/output se **derivan** de los
-//!   tipos vía `schemars`, de modo que el engine los valida como con cualquier
-//!   otra tarea y aparecen en el catálogo sin escribirlos a mano.
+//! - [`FnTask`] / [`register_fn`](crate::task::TaskRegistry::register_fn): una
+//!   closure async sobre JSON crudo ([`WorkflowData`]), sin schemas. Para
+//!   transformaciones triviales.
+//! - [`TypedTask`] / [`register_typed`](crate::task::TaskRegistry::register_typed):
+//!   una closure async sobre tus propios tipos. Los JSON Schema de
+//!   input/output se **derivan** de los tipos vía `schemars`, de modo que el
+//!   engine los valida como con cualquier otra tarea y aparecen en el
+//!   catálogo sin escribirlos a mano.
 //!
 //! Ambas closures reciben un [`TaskCtx`]: una vista de los recursos por
 //! ejecución (blobs, ids de ejecución) que evita tomar prestado el
@@ -109,8 +111,9 @@ impl From<&WorkflowContext> for TaskCtx {
 /// que no encaja produce `TASK_INPUT_INVALID`) y el output se serializa desde
 /// el tipo `Out` (`TASK_OUTPUT_INVALID` si no serializa). Los JSON Schema del
 /// manifiesto se derivan de `In`/`Out` con `schemars`. Normalmente se crea vía
-/// [`TaskRegistry::register_typed`]; usa [`TypedTask::new`] directamente solo
-/// si quieres añadir una descripción antes de registrar.
+/// [`register_typed`](crate::task::TaskRegistry::register_typed); usa
+/// [`TypedTask::new`] directamente solo si quieres añadir una descripción
+/// antes de registrar.
 pub struct TypedTask<In, Out, F> {
     manifest: TaskManifest,
     f: F,
@@ -183,7 +186,8 @@ where
 /// ([`WorkflowData`]), sin schemas declarados.
 ///
 /// El atajo mínimo cuando una tarea solo manipula `Value` y no amerita tipos
-/// ni un struct. Normalmente se crea vía [`TaskRegistry::register_fn`].
+/// ni un struct. Normalmente se crea vía
+/// [`register_fn`](crate::task::TaskRegistry::register_fn).
 pub struct FnTask<F> {
     manifest: TaskManifest,
     f: F,
