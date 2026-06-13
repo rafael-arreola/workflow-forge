@@ -1,16 +1,16 @@
-//! Un pool de conexiones pequeño que reutiliza sesiones SSH autenticadas
-//! entre llamadas de tarea, indexadas por identidad de conexión.
+//! A small connection pool that reuses authenticated SSH sessions
+//! across task calls, indexed by connection identity.
 //!
-//! La parte cara de una operación SFTP es el connect TCP, el handshake SSH y
-//! la autenticación. A volumen alto (p. ej. un `foreach` bajando cientos de
-//! archivos del mismo host), abrir una sesión nueva por llamada domina el
-//! costo. [`Pool`] conserva sesiones autenticadas y las vuelve a entregar;
-//! por llamada solo se abre un canal SFTP barato encima.
+//! The expensive part of an SFTP operation is the TCP connect, SSH handshake, and
+//! authentication. At high volume (e.g. a `foreach` downloading hundreds of
+//! files from the same host), opening a new session per call dominates the
+//! cost. [`Pool`] preserves authenticated sessions and hands them back out;
+//! per call it only opens a cheap SFTP channel on top.
 //!
-//! El pool es genérico sobre un [`Connector`] para que su contabilidad
-//! (reuso, descarte por liveness, tope por llave) sea testeable por unidad
-//! sin un servidor vivo; producción usa el conector respaldado por `ssh2`
-//! cableado en `lib.rs`.
+//! The pool is generic over a [`Connector`] so that its accounting
+//! (reuse, liveness discard, per-key cap) can be unit-tested
+//! without a live server; production uses the `ssh2`-backed connector
+//! wired in `lib.rs`.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -19,20 +19,19 @@ use workflow_forge_core::error::WorkflowError;
 
 use crate::Connection;
 
-/// Abre y verifica la vida de las conexiones del pool. Síncrono: toda
-/// llamada ocurre dentro de `spawn_blocking`.
+/// Opens and verifies the liveness of pool connections. Synchronous: every
+/// call happens inside `spawn_blocking`.
 pub trait Connector: Send + Sync + 'static {
-    /// La conexión pooleada (una sesión SSH autenticada en producción).
+    /// The pooled connection (an authenticated SSH session in production).
     type Conn: Send;
-    /// Abre una conexión nueva.
+    /// Opens a new connection.
     fn connect(&self, conn: &Connection) -> Result<Self::Conn, WorkflowError>;
-    /// ¿La conexión pooleada sigue usable? Las muertas se descartan al
-    /// hacer checkout.
+    /// Is the pooled connection still usable? Dead ones are discarded on
+    /// checkout.
     fn alive(&self, conn: &Self::Conn) -> bool;
 }
 
-/// Pool de conexiones reusables indexado por llave, con tope de ociosas por
-/// llave.
+/// Keyed pool of reusable connections, with an idle cap per key.
 pub struct Pool<C: Connector> {
     connector: C,
     idle: Mutex<HashMap<String, Vec<C::Conn>>>,
@@ -40,8 +39,8 @@ pub struct Pool<C: Connector> {
 }
 
 impl<C: Connector> Pool<C> {
-    /// Un pool sobre `connector` que guarda como máximo `max_idle_per_key`
-    /// conexiones ociosas por identidad de conexión distinta.
+    /// A pool over `connector` that keeps at most `max_idle_per_key`
+    /// idle connections per distinct connection identity.
     pub fn new(connector: C, max_idle_per_key: usize) -> Self {
         Self {
             connector,
@@ -50,9 +49,9 @@ impl<C: Connector> Pool<C> {
         }
     }
 
-    /// Toma una conexión viva para `conn` (identificada por `key`): reusa una
-    /// ociosa (descartando las que fallen la verificación de vida) o abre una
-    /// nueva.
+    /// Takes a live connection for `conn` (identified by `key`): reuses an
+    /// idle one (discarding those that fail the liveness check) or opens a
+    /// new one.
     pub fn checkout(&self, key: &str, conn: &Connection) -> Result<C::Conn, WorkflowError> {
         loop {
             let candidate = {
@@ -61,14 +60,14 @@ impl<C: Connector> Pool<C> {
             };
             match candidate {
                 Some(c) if self.connector.alive(&c) => return Ok(c),
-                Some(_) => continue, // muerta: se descarta y se prueba la siguiente
+                Some(_) => continue, // dead: discarded and try the next one
                 None => return self.connector.connect(conn),
             }
         }
     }
 
-    /// Devuelve una conexión al pool (se descarta si la llave ya está en su
-    /// tope de ociosas). Devuelve solo conexiones en estado limpio.
+    /// Returns a connection to the pool (discarded if the key is already at its
+    /// idle cap). Only return connections in a clean state.
     pub fn checkin(&self, key: &str, conn: C::Conn) {
         let mut idle = self.idle.lock().expect("sftp pool lock poisoned");
         let slot = idle.entry(key.to_string()).or_default();
@@ -117,8 +116,8 @@ mod tests {
     }
 
     fn pool(cap: usize) -> Arc<Pool<FakeConnector>> {
-        // connect() devuelve un id incremental: el test lee "¿reconectó?" del
-        // valor devuelto en vez de un contador aparte.
+        // connect() returns an incremental id: the test reads "did it reconnect?" from the
+        // returned value instead of a separate counter.
         let connector = FakeConnector {
             connects: AtomicUsize::new(0),
             alive: AtomicBool::new(true),
@@ -127,7 +126,7 @@ mod tests {
     }
 
     #[test]
-    fn reusa_una_conexion_viva() {
+    fn reuses_a_live_connection() {
         let pool = pool(4);
         let conn = dummy_connection();
         let key = "k";
@@ -136,14 +135,14 @@ mod tests {
         pool.checkin(key, first);
         assert_eq!(pool.idle_count(key), 1);
 
-        // Reusada: connect() no se llama de nuevo (vuelve el id 0, no un id 1).
+        // Reused: connect() is not called again (returns id 0, not id 1).
         let second = pool.checkout(key, &conn).unwrap();
         assert_eq!(second, 0);
         assert_eq!(pool.idle_count(key), 0);
     }
 
     #[test]
-    fn descarta_conexiones_muertas_al_checkout() {
+    fn discards_dead_connections_on_checkout() {
         let connector = FakeConnector {
             connects: AtomicUsize::new(0),
             alive: AtomicBool::new(true),
@@ -153,18 +152,18 @@ mod tests {
 
         let c = pool.checkout("k", &conn).unwrap(); // id 0
         pool.checkin("k", c);
-        // Marca muertas las ociosas: el siguiente checkout debe abrir una nueva.
+        // Mark idle ones dead: the next checkout must open a new one.
         pool.connector.alive.store(false, Ordering::SeqCst);
         let fresh = pool.checkout("k", &conn).unwrap();
-        assert_eq!(fresh, 1, "debió reconectar, no reusar la muerta");
+        assert_eq!(fresh, 1, "should have reconnected, not reused the dead one");
     }
 
     #[test]
-    fn respeta_el_tope_de_ociosas() {
+    fn respects_the_idle_cap() {
         let pool = pool(2);
         pool.checkin("k", 10);
         pool.checkin("k", 11);
-        pool.checkin("k", 12); // sobre el tope: se descarta
+        pool.checkin("k", 12); // over the cap: discarded
         assert_eq!(pool.idle_count("k"), 2);
     }
 }

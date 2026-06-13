@@ -1,7 +1,7 @@
-//! Observer integrado en memoria y el reporte que produce.
+//! Built-in in-memory observer and the report it produces.
 
+use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -9,7 +9,7 @@ use serde_json::Value;
 use crate::error::WorkflowError;
 use crate::observe::{EventKind, ExecutionEvent, ExecutionObserver};
 
-/// Observer integrado: acumula los eventos de una ejecución en memoria.
+/// Built-in observer: accumulates execution events in memory.
 #[derive(Default)]
 pub struct InMemoryHistory {
     events: Mutex<Vec<ExecutionEvent>>,
@@ -17,34 +17,27 @@ pub struct InMemoryHistory {
 
 impl ExecutionObserver for InMemoryHistory {
     fn on_event(&self, event: &ExecutionEvent) {
-        self.events
-            .lock()
-            .expect("InMemoryHistory lock poisoned")
-            .push(event.clone());
+        self.events.lock().push(event.clone());
     }
 }
 
 impl InMemoryHistory {
-    /// Crea una historia vacía
+    /// Creates an empty history
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Copia de los eventos acumulados, ordenados por `seq`
+    /// Copy of accumulated events, sorted by `seq`
     pub fn events(&self) -> Vec<ExecutionEvent> {
-        let mut events = self
-            .events
-            .lock()
-            .expect("InMemoryHistory lock poisoned")
-            .clone();
+        let mut events = self.events.lock().clone();
         events.sort_by_key(|e| e.seq);
         events
     }
 
-    /// Resumen de la ejecución raíz por nodo, construido de los eventos.
-    /// Los eventos de sub-workflows no se pliegan aquí: el nodo subworkflow
-    /// del padre los resume; usa [`InMemoryHistory::report_for`] para el
-    /// detalle de una ejecución hija.
+    /// Summary of the root execution per node, built from events.
+    /// Sub-workflow events are not folded here: the parent's subworkflow node
+    /// summarizes them; use [`InMemoryHistory::report_for`] for the detail of
+    /// a child execution.
     pub fn report(&self) -> ExecutionReport {
         let events = self.events();
         match events.first().map(|e| e.execution_id.clone()) {
@@ -58,7 +51,7 @@ impl InMemoryHistory {
         }
     }
 
-    /// Resumen de una ejecución específica (raíz o sub-workflow)
+    /// Summary of a specific execution (root or sub-workflow)
     pub fn report_for(&self, execution_id: &str) -> ExecutionReport {
         ExecutionReport::from_events(
             &self
@@ -69,8 +62,8 @@ impl InMemoryHistory {
         )
     }
 
-    /// Ids de las ejecuciones presentes en la historia, en orden de aparición
-    /// (la raíz primero, luego cada sub-workflow conforme arrancó)
+    /// Ids of the executions present in the history, in appearance order
+    /// (the root first, then each sub-workflow as it started)
     pub fn executions(&self) -> Vec<String> {
         let mut seen = Vec::new();
         for event in self.events() {
@@ -82,86 +75,86 @@ impl InMemoryHistory {
     }
 }
 
-/// Estado terminal (o no) de una ejecución según sus eventos.
+/// Terminal (or not) state of an execution based on its events.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionStatus {
-    /// No hay evento terminal todavía
+    /// No terminal event yet
     Running,
-    /// Terminó exitosamente
+    /// Completed successfully
     Completed,
-    /// Terminó con error
+    /// Completed with error
     Failed,
 }
 
-/// Estado de un nodo según sus eventos.
+/// State of a node based on its events.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum NodeStatus {
-    /// Arrancó y no tiene evento terminal
+    /// Started and has no terminal event
     Running,
-    /// Terminó exitosamente
+    /// Completed successfully
     Completed,
-    /// Falló definitivamente
+    /// Failed definitively
     Failed,
-    /// Falló pero el flujo continuó por una arista `on: error`
+    /// Failed but the flow continued through an `on: error` edge
     ErrorRouted,
 }
 
-/// Resumen serializable de una ejecución: status global + timeline por nodo.
+/// Serializable summary of an execution: global status + per-node timeline.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionReport {
-    /// Id de la ejecución resumida
+    /// Id of the summarized execution
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution_id: Option<String>,
-    /// Metadata del workflow (id, nombre, versión)
+    /// Workflow metadata (id, name, version)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workflow: Option<Value>,
-    /// Estado global de la ejecución
+    /// Global execution status
     pub status: ExecutionStatus,
-    /// Duración total en milisegundos, si terminó
+    /// Total duration in milliseconds, if finished
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_ms: Option<u64>,
-    /// Output final, si completó
+    /// Final output, if completed
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<Value>,
-    /// Error final, si falló
+    /// Final error, if failed
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<WorkflowError>,
-    /// Nodos en orden de primer arranque
+    /// Nodes in first-start order
     pub nodes: Vec<NodeReport>,
 }
 
-/// Resumen de un nodo dentro del reporte.
+/// Summary of a node within the report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeReport {
-    /// Id del nodo
+    /// Node id
     pub node_id: String,
-    /// Kind del nodo como aparece en la spec (`task`, `gateway`, …)
+    /// Node kind as it appears in the spec (`task`, `gateway`, ...)
     pub kind: String,
-    /// Estado del nodo según sus eventos
+    /// Node state based on its events
     pub status: NodeStatus,
-    /// Intentos de tarea registrados (0 para nodos que no son task/foreach)
+    /// Recorded task attempts (0 for non-task/foreach nodes)
     pub attempts: u32,
-    /// Duración en milisegundos, si terminó
+    /// Duration in milliseconds, if finished
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_ms: Option<u64>,
-    /// Output del nodo, si completó
+    /// Node output, if completed
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<Value>,
-    /// Error del nodo, si falló
+    /// Node error, if failed
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<WorkflowError>,
-    /// Elementos/iteraciones exitosos (solo foreach y loop)
+    /// Successful elements/iterations (foreach and loop only)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub items_ok: Option<usize>,
-    /// Elementos/iteraciones fallidos (solo foreach y loop)
+    /// Failed elements/iterations (foreach and loop only)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub items_failed: Option<usize>,
 }
 
 impl ExecutionReport {
-    /// Construye el reporte plegando eventos (deben venir ordenados por seq)
+    /// Builds the report by folding events (they must be ordered by seq)
     pub fn from_events(events: &[ExecutionEvent]) -> Self {
         let mut report = ExecutionReport {
             execution_id: None,

@@ -1,5 +1,5 @@
-//! Coherencia de gateways: ramas, labels de aristas y aridad mínima
-//! según el tipo (`exclusive`, `parallel`, `join`).
+//! Gateway coherence: branches, edge labels, and minimum arity
+//! depending on the type (`exclusive`, `parallel`, `join`).
 
 use std::collections::HashSet;
 
@@ -9,14 +9,14 @@ use crate::spec::node::gateway::GatewayKind;
 use crate::spec::workflow::WorkflowDefinition;
 use crate::validate::{ValidationCtx, ValidationRule};
 
-/// Reglas de los tres tipos de gateway:
-/// - `exclusive`: declara branches, cada rama tiene `when` o es `else`
-///   (solo una), branches ↔ labels de aristas salientes son biyectivos y
-///   **sin labels repetidos**: el handler sigue todas las aristas con el
-///   label ganador, así que un duplicado convertiría el exclusive en un
-///   fan-out accidental.
-/// - `parallel`: sin branches y al menos 2 salidas.
-/// - `join`: sin branches y al menos 2 entradas del flujo normal.
+/// Rules for the three gateway types:
+/// - `exclusive`: declares branches, each branch has `when` or is `else`
+///   (only one), branches ↔ outgoing edge labels are bijective and
+///   **without duplicate labels**: the handler follows all edges with the
+///   winning label, so a duplicate would turn the exclusive into an
+///   accidental fan-out.
+/// - `parallel`: no branches and at least 2 outputs.
+/// - `join`: no branches and at least 2 normal-flow inputs.
 pub struct GatewayCoherence;
 
 impl ValidationRule for GatewayCoherence {
@@ -53,7 +53,10 @@ impl ValidationRule for GatewayCoherence {
                         errors.push(
                             WorkflowError::new(
                                 codes::GATEWAY_NO_BRANCHES,
-                                format!("El gateway exclusive '{}' no declara branches", node.id),
+                                format!(
+                                    "Exclusive gateway '{}' does not declare branches",
+                                    node.id
+                                ),
                             )
                             .with_source_task(node.id.to_string()),
                         );
@@ -62,7 +65,7 @@ impl ValidationRule for GatewayCoherence {
                         errors.push(
                             WorkflowError::new(
                                 codes::GATEWAY_MULTIPLE_ELSE,
-                                format!("El gateway '{}' tiene más de una rama else", node.id),
+                                format!("Gateway '{}' has more than one else branch", node.id),
                             )
                             .with_source_task(node.id.to_string()),
                         );
@@ -73,7 +76,7 @@ impl ValidationRule for GatewayCoherence {
                                 WorkflowError::new(
                                     codes::GATEWAY_BRANCH_WITHOUT_WHEN,
                                     format!(
-                                        "Una rama del gateway '{}' no tiene `when` ni es `else`",
+                                        "A branch of gateway '{}' has no `when` and is not `else`",
                                         node.id
                                     ),
                                 )
@@ -85,7 +88,7 @@ impl ValidationRule for GatewayCoherence {
                                 WorkflowError::new(
                                     codes::GATEWAY_BRANCH_WITHOUT_EDGE,
                                     format!(
-                                        "La rama '{}' del gateway '{}' no tiene arista saliente con ese label",
+                                        "Branch '{}' of gateway '{}' has no outgoing edge with that label",
                                         branch.edge, node.id
                                     ),
                                 )
@@ -100,7 +103,7 @@ impl ValidationRule for GatewayCoherence {
                                 WorkflowError::new(
                                     codes::GATEWAY_EDGE_WITHOUT_BRANCH,
                                     format!(
-                                        "La arista {}→{} (label {:?}) no corresponde a ninguna rama del gateway",
+                                        "Edge {}→{} (label {:?}) does not correspond to any gateway branch",
                                         edge.from, edge.to, label
                                     ),
                                 )
@@ -108,8 +111,8 @@ impl ValidationRule for GatewayCoherence {
                             );
                         }
                     }
-                    // Labels repetidos: la rama ganadora seguiría todas las
-                    // aristas con ese label concurrentemente
+                    // Duplicate labels: the winning branch would follow all
+                    // edges with that label concurrently
                     let mut seen: HashSet<&str> = HashSet::new();
                     let mut reported: HashSet<&str> = HashSet::new();
                     for edge in out {
@@ -121,9 +124,9 @@ impl ValidationRule for GatewayCoherence {
                                 WorkflowError::new(
                                     codes::GATEWAY_DUPLICATE_EDGE_LABEL,
                                     format!(
-                                        "El gateway exclusive '{}' tiene más de una arista \
-                                         saliente con el label '{label}'; un exclusive sigue \
-                                         una sola arista (para fan-out usa un gateway parallel)",
+                                        "Exclusive gateway '{}' has more than one outgoing \
+                                         edge with label '{label}'; an exclusive follows a \
+                                         single edge (use a parallel gateway for fan-out)",
                                         node.id
                                     ),
                                 )
@@ -138,8 +141,8 @@ impl ValidationRule for GatewayCoherence {
                                 WorkflowError::new(
                                     codes::GATEWAY_DUPLICATE_EDGE_LABEL,
                                     format!(
-                                        "El gateway exclusive '{}' declara más de una rama \
-                                         hacia el label '{}'",
+                                        "Exclusive gateway '{}' declares more than one branch \
+                                         toward label '{}'",
                                         node.id, branch.edge
                                     ),
                                 )
@@ -153,7 +156,7 @@ impl ValidationRule for GatewayCoherence {
                         errors.push(
                             WorkflowError::new(
                                 codes::GATEWAY_BRANCHES_IGNORED,
-                                format!("El gateway parallel '{}' no acepta branches", node.id),
+                                format!("Parallel gateway '{}' does not accept branches", node.id),
                             )
                             .with_source_task(node.id.to_string()),
                         );
@@ -163,7 +166,7 @@ impl ValidationRule for GatewayCoherence {
                             WorkflowError::new(
                                 codes::PARALLEL_TOO_FEW_OUTPUTS,
                                 format!(
-                                    "El gateway parallel '{}' necesita al menos 2 aristas salientes",
+                                    "Parallel gateway '{}' needs at least 2 outgoing edges",
                                     node.id
                                 ),
                             )
@@ -176,7 +179,7 @@ impl ValidationRule for GatewayCoherence {
                         errors.push(
                             WorkflowError::new(
                                 codes::GATEWAY_BRANCHES_IGNORED,
-                                format!("El gateway join '{}' no acepta branches", node.id),
+                                format!("Join gateway '{}' does not accept branches", node.id),
                             )
                             .with_source_task(node.id.to_string()),
                         );
@@ -186,7 +189,7 @@ impl ValidationRule for GatewayCoherence {
                             WorkflowError::new(
                                 codes::JOIN_TOO_FEW_INPUTS,
                                 format!(
-                                    "El gateway join '{}' necesita al menos 2 aristas entrantes",
+                                    "Join gateway '{}' needs at least 2 incoming edges",
                                     node.id
                                 ),
                             )

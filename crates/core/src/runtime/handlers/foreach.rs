@@ -1,8 +1,11 @@
-//! Nodos `foreach`: iteración de un array invocando una tarea por elemento,
-//! con concurrencia limitada, throttle entre arranques y política de error
-//! por elemento (`fail` corta rápido, `collect` separa éxitos de fallos).
+//! `foreach` nodes: iteration over an array invoking a task per element,
+//! with bounded concurrency, throttle between launches, and per-element
+//! error policy (`fail` cuts short, `collect` separates successes from
+//! failures).
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use parking_lot::Mutex;
 use std::time::{Duration, Instant};
 
 use futures::future::BoxFuture;
@@ -20,8 +23,8 @@ use crate::spec::node::foreach::{ForeachNode, OnItemError};
 use crate::task::Task;
 
 impl WorkflowExecutor {
-    /// Ejecuta un nodo foreach: resuelve `items` y ejecuta la tarea por cada
-    /// elemento con la concurrencia/throttle configurados.
+    /// Executes a foreach node: resolves `items` and executes the task for each
+    /// element with the configured concurrency/throttle.
     pub(crate) async fn run_foreach(
         &self,
         node: &Node,
@@ -31,7 +34,7 @@ impl WorkflowExecutor {
         let task = self
             .registry
             .get(&foreach.task)
-            .expect("validate_tasks garantiza el registro");
+            .expect("validate_tasks guarantees registration");
 
         let items_value = ctx
             .with_state(|s| mapping::resolve(&foreach.items, s))
@@ -40,15 +43,16 @@ impl WorkflowExecutor {
             return Err(WorkflowError::new(
                 codes::FOREACH_ITEMS_NOT_ARRAY,
                 format!(
-                    "El mapping `items` del foreach '{}' no resolvió a un array",
+                    "The `items` mapping of foreach '{}' did not resolve to an array",
                     node.id
                 ),
             )
             .with_source_task(node.id.to_string()));
         };
 
-        // Throttle: separa los ARRANQUES de elementos al menos `throttle_ms`
-        // entre sí, también bajo concurrencia (rate limit hacia el destino)
+        // Throttle: separates element LAUNCHES by at least `throttle_ms`
+        // from each other, even under concurrency (rate limit toward the
+        // target)
         let gate = Arc::new(Mutex::new(Instant::now()));
 
         let futures: Vec<_> = items
@@ -69,8 +73,8 @@ impl WorkflowExecutor {
         let mut buffered = stream::iter(futures).buffered(foreach.concurrency);
 
         match foreach.on_item_error {
-            // Fallo rápido: el primer error corta el stream y cancela los
-            // elementos aún en vuelo (drop del buffered)
+            // Fast fail: the first error cuts the stream and cancels in-flight
+            // elements (drop of the buffered stream)
             OnItemError::Fail => {
                 let mut outputs = Vec::new();
                 while let Some((_, _, result)) = buffered.next().await {
@@ -78,8 +82,9 @@ impl WorkflowExecutor {
                 }
                 Ok(Value::Array(outputs))
             }
-            // Ejecuta todo y separa éxitos de fallos; el nodo no falla...
-            // salvo que un elemento panickee: eso aborta el nodo completo
+            // Runs everything and separates successes from failures; the node
+            // does not fail... unless an element panics: that aborts the whole
+            // node
             OnItemError::Collect => {
                 let mut ok = Vec::new();
                 let mut failed = Vec::new();
@@ -99,10 +104,10 @@ impl WorkflowExecutor {
         }
     }
 
-    /// Ejecuta UN elemento de un foreach: respeta el throttle, aplica la
-    /// política de retry/timeout y emite los eventos del elemento.
-    /// Devuelve un future boxeado con lifetimes explícitos (rustc no logra
-    /// probar `Send` de closures async dentro del executor recursivo).
+    /// Executes ONE element of a foreach: respects the throttle, applies the
+    /// retry/timeout policy, and emits element events.
+    /// Returns a boxed future with explicit lifetimes (rustc cannot prove
+    /// `Send` for async closures inside the recursive executor).
     #[allow(clippy::too_many_arguments)]
     fn foreach_item<'a>(
         &'a self,
@@ -131,7 +136,7 @@ impl WorkflowExecutor {
         let throttle = Duration::from_millis(foreach.throttle_ms);
         if !throttle.is_zero() {
             let wait = {
-                let mut next = gate.lock().expect("foreach gate lock poisoned");
+                let mut next = gate.lock();
                 let now = Instant::now();
                 let start_at = (*next).max(now);
                 *next = start_at + throttle;

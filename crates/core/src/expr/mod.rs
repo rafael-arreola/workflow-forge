@@ -1,21 +1,21 @@
-//! La familia **expr**: resolución de expresiones del lenguaje.
+//! The **expr** family: expression resolution of the language.
 //!
-//! Los workflows declaran datos con tres convenciones de string, todas
-//! resueltas con el mismo motor JSONPath ([`path`]):
+//! Workflows declare data with three string conventions, all
+//! resolved with the same JSONPath engine ([`path`]):
 //!
-//! | Convención | Dónde se usa | Documento fuente |
+//! | Convention | Where used | Source document |
 //! |---|---|---|
-//! | `$.path` ([`mapping`]) | `input` de nodos, `items` de foreach, `output` de end | contexto de ejecución |
-//! | `@.path` ([`shape`]) | `bind`/`output` de perfiles, `data.transform` | un valor local (input/output) |
-//! | `{"$secret": "X"}` | `bind` de perfiles | provider de secretos ([`crate::io::secret`]) |
+//! | `$.path` ([`mapping`]) | node `input`, foreach `items`, end `output` | execution context |
+//! | `@.path` ([`shape`]) | profile `bind`/`output`, `data.transform` | a local value (input/output) |
+//! | `{"$secret": "X"}` | profile `bind` | secret provider ([`crate::io::secret`]) |
 //!
-//! Diferencia semántica clave: un path `$.` que no resuelve es **error**
-//! (`MAPPING_PATH_NOT_FOUND`, casi siempre bug de definición); un path `@.`
-//! que no resuelve produce **`null`** (los shapes rellenan estructuras).
+//! Key semantic difference: a `$.` path that does not resolve is an **error**
+//! (`MAPPING_PATH_NOT_FOUND`, almost always a definition bug); an `@.` path
+//! that does not resolve produces **`null`** (shapes fill structures).
 //!
-//! Las condiciones de la spec se evalúan en [`operators`], que además es el
-//! punto de extensión del vocabulario: un host registra operadores propios
-//! ([`operators::ConditionOperator`]) y la validación los reconoce.
+//! Spec conditions are evaluated in [`operators`], which is also the
+//! vocabulary extension point: a host registers custom operators
+//! ([`operators::ConditionOperator`]) and validation recognizes them.
 
 pub mod mapping;
 pub mod operators;

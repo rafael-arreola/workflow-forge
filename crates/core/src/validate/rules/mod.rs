@@ -1,9 +1,9 @@
-//! Reglas de validación integradas, una unidad por familia de invariante.
+//! Built-in validation rules, one unit per invariant family.
 //!
-//! Cada regla declara los códigos que puede emitir ([`super::ValidationRule::codes`]):
-//! el conjunto de reglas es, a la vez, el catálogo de qué se valida.
-//! El orden de [`BUILTIN`] importa: las reglas de grafo (`graph`) se
-//! auto-desactivan si una regla previa reportó referencias rotas.
+//! Each rule declares the codes it can emit ([`super::ValidationRule::codes`]):
+//! the rule set is, at the same time, the catalog of what is validated.
+//! The [`BUILTIN`] order matters: graph rules (`graph`) disable themselves
+//! if a previous rule reported broken references.
 
 pub mod conditions;
 pub mod edges;
@@ -14,7 +14,7 @@ pub mod structure;
 
 use super::ValidationRule;
 
-/// Reglas integradas, en el orden en que se ejecutan.
+/// Built-in rules, in the order they are executed.
 pub const BUILTIN: &[&dyn ValidationRule] = &[
     &structure::SpecSupported,
     &structure::UniqueNodeIds,
@@ -26,7 +26,7 @@ pub const BUILTIN: &[&dyn ValidationRule] = &[
     &nodes::SubworkflowName,
     &nodes::InlineWorkflowNames,
     &gateway::GatewayCoherence,
-    &conditions::KnownConditionOperators,
+    &conditions::KnownConditionOperators { registry: None },
     &edges::EdgeTriggers,
     &graph::Reachability,
     &graph::Acyclicity,

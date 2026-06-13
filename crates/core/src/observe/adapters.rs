@@ -1,34 +1,33 @@
-//! Adaptadores [`ExecutionObserver`] listos para usar como bitácora durable.
+//! Ready-to-use [`ExecutionObserver`] adapters as a durable log.
 //!
-//! El executor solo conoce el trait [`ExecutionObserver`]; estos son
-//! "baterías incluidas" para que un host no escriba la persistencia desde
-//! cero:
+//! The executor only knows the [`ExecutionObserver`] trait; these are
+//! "batteries included" so a host does not write persistence from scratch:
 //!
-//! - [`TracingObserver`] — emite cada evento por el crate `tracing`, de modo
-//!   que fluye hacia el subscriber que el host ya tenga (stdout, journald,
-//!   OpenTelemetry vía `tracing-opentelemetry`, …).
-//! - [`JsonlObserver`] — anexa cada evento como una línea JSON a cualquier
-//!   writer o archivo. Un audit log append-only, simple y greppeable.
+//! - [`TracingObserver`] — emits each event through the `tracing` crate, so
+//!   it flows to whatever subscriber the host already has (stdout, journald,
+//!   OpenTelemetry via `tracing-opentelemetry`, ...).
+//! - [`JsonlObserver`] — appends each event as a JSON line to any writer or
+//!   file. An append-only audit log, simple and greppable.
 //!
-//! Ambos son síncronos (como exige el trait). [`JsonlObserver`] hace flush en
-//! cada línea para no perder nada ante un crash; para throughput muy alto,
-//! envuelve tu propio observer respaldado por un canal.
+//! Both are synchronous (as required by the trait). [`JsonlObserver`] flushes
+//! on every line to avoid losing data on a crash; for very high throughput,
+//! wrap your own observer backed by a channel.
 
+use parking_lot::Mutex;
 use std::io::Write;
-use std::sync::Mutex;
 
 use super::{ExecutionEvent, ExecutionObserver};
 
-/// Observer que loggea cada evento vía el crate `tracing`.
+/// Observer that logs each event via the `tracing` crate.
 ///
-/// Los fallos (`workflow_failed`, `node_failed`, `task_attempt_failed`) se
-/// emiten a nivel `error`, el resto a `info`, cada uno con `execution_id`,
-/// `seq` y el `type` del evento.
+/// Failures (`workflow_failed`, `node_failed`, `task_attempt_failed`) are
+/// emitted at `error` level, the rest at `info`, each with `execution_id`,
+/// `seq`, and the event `type`.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct TracingObserver;
 
 impl TracingObserver {
-    /// Un observer de tracing nuevo.
+    /// A new tracing observer.
     pub fn new() -> Self {
         Self
     }
@@ -66,16 +65,16 @@ impl ExecutionObserver for TracingObserver {
     }
 }
 
-/// Observer que anexa cada evento como una línea JSON (JSON Lines / `.jsonl`)
-/// a un writer. El evento se serializa completo, así que el log es
-/// reproducible (replayable).
+/// Observer that appends each event as a JSON line (JSON Lines / `.jsonl`)
+/// to a writer. The event is serialized in full, so the log is reproducible
+/// (replayable).
 pub struct JsonlObserver<W: Write + Send> {
     writer: Mutex<W>,
 }
 
 impl<W: Write + Send> JsonlObserver<W> {
-    /// Escribe los eventos a un writer arbitrario (p. ej. un `Vec<u8>` en
-    /// memoria para tests, o un `File`).
+    /// Writes events to an arbitrary writer (e.g. a `Vec<u8>` in memory for
+    /// tests, or a `File`).
     pub fn new(writer: W) -> Self {
         Self {
             writer: Mutex::new(writer),
@@ -84,7 +83,7 @@ impl<W: Write + Send> JsonlObserver<W> {
 }
 
 impl JsonlObserver<std::io::BufWriter<std::fs::File>> {
-    /// Anexa los eventos a un archivo en `path` (se crea si no existe).
+    /// Appends events to a file at `path` (creates it if it doesn't exist).
     pub fn to_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
         let file = std::fs::OpenOptions::new()
             .create(true)
@@ -99,20 +98,14 @@ impl<W: Write + Send> ExecutionObserver for JsonlObserver<W> {
         let mut line = match serde_json::to_vec(event) {
             Ok(line) => line,
             Err(e) => {
-                tracing::error!(error = %e, "JsonlObserver: no se pudo serializar el evento");
+                tracing::error!(error = %e, "JsonlObserver: could not serialize event");
                 return;
             }
         };
         line.push(b'\n');
-        let mut writer = match self.writer.lock() {
-            Ok(w) => w,
-            Err(_) => {
-                tracing::error!("JsonlObserver: writer lock poisoned");
-                return;
-            }
-        };
+        let mut writer = self.writer.lock();
         if let Err(e) = writer.write_all(&line).and_then(|()| writer.flush()) {
-            tracing::error!(error = %e, "JsonlObserver: no se pudo escribir el evento");
+            tracing::error!(error = %e, "JsonlObserver: could not write event");
         }
     }
 }
@@ -134,8 +127,8 @@ mod tests {
     }
 
     #[test]
-    fn jsonl_escribe_una_linea_por_evento() {
-        // Buffer compartido para poder leer lo escrito.
+    fn jsonl_writes_one_line_per_event() {
+        // Shared buffer to be able to read what was written.
         let buf = std::sync::Arc::new(Mutex::new(Vec::<u8>::new()));
         {
             let observer = JsonlObserver::new(SharedBuf(buf.clone()));
@@ -155,21 +148,21 @@ mod tests {
                 },
             ));
         }
-        let written = buf.lock().unwrap();
+        let written = buf.lock();
         let text = String::from_utf8(written.clone()).unwrap();
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(lines.len(), 2);
-        // Cada línea es un evento autocontenido y parseable.
+        // Each line is a self-contained, parseable event.
         let first: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
         assert_eq!(first["type"], "workflow_completed");
         assert_eq!(first["seq"], 0);
     }
 
-    // Un `Write` sobre un buffer compartido, para el test de arriba.
+    // A `Write` over a shared buffer, for the test above.
     struct SharedBuf(std::sync::Arc<Mutex<Vec<u8>>>);
     impl Write for SharedBuf {
         fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(data);
+            self.0.lock().extend_from_slice(data);
             Ok(data.len())
         }
         fn flush(&mut self) -> std::io::Result<()> {

@@ -1,6 +1,6 @@
-//! La tarea derivada de un perfil ([`ProfileTask`]): envuelve a la tarea
-//! base con el `bind`/`output` del perfil. La definición declarativa del
-//! perfil (la sintaxis JSON) es [`crate::spec::profile::TaskProfile`].
+//! The profile-derived task ([`ProfileTask`]): wraps the base task with the
+//! profile's `bind`/`output`. The profile's declarative definition (the JSON
+//! syntax) is [`crate::spec::profile::TaskProfile`].
 
 use std::sync::Arc;
 
@@ -14,20 +14,20 @@ use crate::runtime::context::WorkflowContext;
 use crate::spec::profile::TaskProfile;
 use crate::task::{Task, TaskManifest, WorkflowData, WorkflowResult};
 
-/// Tarea derivada de un perfil: envuelve a la base con el bind/output del
-/// perfil y expone el manifiesto del perfil (no el de la base).
+/// Task derived from a profile: wraps the base with the profile's bind/output
+/// and exposes the profile's manifest (not the base's).
 pub struct ProfileTask {
     manifest: TaskManifest,
     base: Arc<dyn Task>,
     bind: Option<Value>,
     output_shape: Option<Value>,
-    /// Validador del input-schema de la BASE, precompilado: detecta binds que
-    /// producen un input que la base rechazaría (fail-fast con mejor error)
+    /// Precompiled validator for the BASE's input-schema: detects binds that
+    /// produce an input the base would reject (fail-fast with a better error)
     base_input_validator: Option<jsonschema::Validator>,
 }
 
 impl ProfileTask {
-    /// Construye la tarea derivada resolviendo los secretos del `bind`.
+    /// Builds the derived task by resolving secrets from the `bind`.
     pub fn new(
         profile: TaskProfile,
         base: Arc<dyn Task>,
@@ -86,7 +86,7 @@ impl Task for ProfileTask {
             return Err(WorkflowError::new(
                 codes::PROFILE_BIND_INVALID,
                 format!(
-                    "El bind del perfil '{}' produce un input que la tarea base '{}' rechaza: {}",
+                    "Profile '{}' bind produces an input that base task '{}' rejects: {}",
                     self.manifest.id,
                     self.base.task_id(),
                     errors.join("; ")

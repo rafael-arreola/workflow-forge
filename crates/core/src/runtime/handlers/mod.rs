@@ -1,23 +1,22 @@
-//! Semántica de ejecución de cada familia de nodos, un módulo por kind.
+//! Execution semantics for each node family, one module per kind.
 //!
-//! [`crate::spec::node::NodeKind`] es un enum cerrado (el vocabulario lo
-//! define la spec), así que el dispatch vive en `executor::execute_from` y
-//! cada familia implementa su semántica en un `impl WorkflowExecutor`
-//! separado:
+//! [`crate::spec::node::NodeKind`] is a closed enum (the vocabulary is
+//! defined by the spec), so dispatch lives in `executor::execute_from` and
+//! each family implements its semantics in a separate `impl WorkflowExecutor`:
 //!
-//! | Módulo | Kinds | Responsabilidad |
+//! | Module | Kinds | Responsibility |
 //! |---|---|---|
-//! | [`event`] | `start`, `end` | schema del trigger, defaults, output final |
-//! | [`task`] | `task` | resolución de input y ejecución con política |
-//! | [`foreach`] | `foreach` | iteración con concurrencia/throttle por elemento |
-//! | [`loop_node`] | `loop` | iteración acotada con condición de continuación |
-//! | [`gateway`] | `gateway` | exclusive (ramas), parallel (fan-out), join (fan-in) |
-//! | [`subworkflow`] | `subworkflow` | ejecución del workflow hijo como tarea |
+//! | [`event`] | `start`, `end` | trigger schema, defaults, final output |
+//! | [`task`] | `task` | input resolution and execution with policy |
+//! | [`foreach`] | `foreach` | iteration with per-element concurrency/throttle |
+//! | [`loop_node`] | `loop` | bounded iteration with continuation condition |
+//! | [`gateway`] | `gateway` | exclusive (branches), parallel (fan-out), join (fan-in) |
+//! | [`subworkflow`] | `subworkflow` | execution of the child workflow as a task |
 //!
-//! La política de retry/timeout/panic compartida está en
-//! [`crate::runtime::policy`]. Para agregar un kind nuevo (cambio de spec):
-//! variante en `NodeKind`, módulo aquí, brazo en `execute_from`, reglas en
-//! `validate/rules` y, si invoca tareas, reuso de `execute_with_policy`.
+//! The shared retry/timeout/panic policy is in
+//! [`crate::runtime::policy`]. To add a new kind (spec change):
+//! variant in `NodeKind`, module here, arm in `execute_from`, rules in
+//! `validate/rules` and, if it invokes tasks, reuse of `execute_with_policy`.
 
 pub(crate) mod event;
 pub(crate) mod foreach;

@@ -1,4 +1,4 @@
-//! Nodos `task`: invocación de una tarea registrada con input mapeado.
+//! `task` nodes: invocation of a registered task with mapped input.
 
 use std::sync::Arc;
 
@@ -13,8 +13,8 @@ use crate::spec::node::Node;
 use crate::spec::node::task::TaskNode;
 
 impl WorkflowExecutor {
-    /// Ejecuta un nodo task: resuelve su input, aplica timeout y reintentos.
-    /// El resultado lo cierra `after_task_result` (ruteo de error incluido).
+    /// Executes a task node: resolves its input, applies timeout and retries.
+    /// The result is finalized by `after_task_result` (error routing included).
     pub(crate) async fn run_task(
         &self,
         node: &Node,
@@ -25,7 +25,7 @@ impl WorkflowExecutor {
         let task = self
             .registry
             .get(&task_node.task)
-            .expect("validate_tasks garantiza el registro");
+            .expect("validate_tasks guarantees registration");
 
         let input = match &task_node.input {
             Some(mapping_def) => ctx

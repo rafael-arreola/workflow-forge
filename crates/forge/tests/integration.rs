@@ -2,7 +2,7 @@ use serde_json::json;
 use workflow_forge::prelude::*;
 
 #[test]
-fn default_registry_incluye_las_extensiones_habilitadas() {
+fn default_registry_includes_enabled_extensions() {
     let catalog = workflow_forge::default_registry().catalog();
     let ids: Vec<&str> = catalog.iter().map(|m| m.id.0.as_str()).collect();
 
@@ -15,19 +15,19 @@ fn default_registry_incluye_las_extensiones_habilitadas() {
         "util.log",
         "util.noop",
     ] {
-        assert!(ids.contains(&expected), "falta {expected} en {ids:?}");
+        assert!(ids.contains(&expected), "missing {expected} in {ids:?}");
     }
     #[cfg(feature = "tabular")]
     for expected in ["tabular.parse", "tabular.write"] {
-        assert!(ids.contains(&expected), "falta {expected} en {ids:?}");
+        assert!(ids.contains(&expected), "missing {expected} in {ids:?}");
     }
 }
 
-/// El patrón "request construido como dato" del ejemplo 6 de EXAMPLES.md:
-/// ramas opcionales construyen el request HTTP completo y un único nodo
-/// `submit` SIN input lo ejecuta recibiéndolo como token.
+/// The "request built as data" pattern from example 6 of EXAMPLES.md:
+/// optional branches build the full HTTP request and a single
+/// `submit` node WITHOUT input executes it, receiving it as the token.
 #[tokio::test]
-async fn ramas_opcionales_convergen_en_un_submit_sin_input() {
+async fn optional_branches_converge_in_a_submit_without_input() {
     use httpmock::prelude::*;
 
     let server = MockServer::start_async().await;
@@ -115,44 +115,44 @@ async fn ramas_opcionales_convergen_en_un_submit_sin_input() {
 
     assert_eq!(result.0, json!({ "invoice_id": "inv-42" }));
     lookup.assert_async().await;
-    terms.assert_async().await; // la rama enterprise SÍ corrió
-    billing.assert_async().await; // y el submit envió el body construido
+    terms.assert_async().await; // the enterprise branch DID run
+    billing.assert_async().await; // and the submit sent the built body
 }
 
 #[tokio::test]
-async fn workflow_cruzando_extensiones() {
+async fn workflow_across_extensions() {
     let workflow: WorkflowDefinition = serde_json::from_value(json!({
         "name": "cross", "version": "0.1.0",
         "nodes": [
             { "id": "start", "kind": "start" },
-            { "id": "saluda", "kind": "task", "task": "data.template",
-              "input": { "template": "Hola {who}", "values": "$.trigger" } },
-            { "id": "audita", "kind": "task", "task": "util.log",
-              "input": { "message": "$.nodes.saluda.output", "value": "$.nodes.saluda.output" } },
+            { "id": "greet", "kind": "task", "task": "data.template",
+              "input": { "template": "Hello {who}", "values": "$.trigger" } },
+            { "id": "audit", "kind": "task", "task": "util.log",
+              "input": { "message": "$.nodes.greet.output", "value": "$.nodes.greet.output" } },
             { "id": "end", "kind": "end" }
         ],
         "edges": [
-            { "from": "start", "to": "saluda" },
-            { "from": "saluda", "to": "audita" },
-            { "from": "audita", "to": "end" }
+            { "from": "start", "to": "greet" },
+            { "from": "greet", "to": "audit" },
+            { "from": "audit", "to": "end" }
         ]
     }))
     .unwrap();
 
     let executor = WorkflowExecutor::new(workflow, workflow_forge::default_registry()).unwrap();
     let result = executor
-        .run(WorkflowData(json!({ "who": "mundo" })))
+        .run(WorkflowData(json!({ "who": "world" })))
         .await
         .unwrap();
-    assert_eq!(result.0, json!("Hola mundo"));
+    assert_eq!(result.0, json!("Hello world"));
 }
 
-/// El caso de uso que motivó los perfiles: el JSON de un cliente llega en un
-/// formato incompatible, un nodo `data.transform` lo reconvierte campo a campo
-/// al schema del perfil, y el perfil (un `http.request` preconfigurado con
-/// URL/auth/método horneados y schemas propios) ejecuta la integración.
+/// The use case that motivated profiles: a client's JSON arrives in an
+/// incompatible format, a `data.transform` node remaps it field by field
+/// to the profile's schema, and the profile (an `http.request` preconfigured
+/// with baked-in URL/auth/method and its own schemas) executes the integration.
 #[tokio::test]
-async fn integracion_cliente_via_perfil_http_preconfigurado() {
+async fn client_integration_via_preconfigured_http_profile() {
     use httpmock::prelude::*;
     use std::collections::HashMap;
     use workflow_forge::core::io::secret::SecretProvider;
@@ -165,11 +165,11 @@ async fn integracion_cliente_via_perfil_http_preconfigurado() {
     }
 
     let server = MockServer::start_async().await;
-    let crear_envio = server
+    let create_shipment = server
         .mock_async(|when, then| {
             when.method(POST)
                 .path("/shipments")
-                .header("authorization", "Bearer tok-secreto")
+                .header("authorization", "Bearer secret-tok")
                 .json_body(json!({ "sku": "ABC-1", "qty": 3, "customer_id": "c-77" }));
             then.status(201)
                 .header("content-type", "application/json")
@@ -178,11 +178,11 @@ async fn integracion_cliente_via_perfil_http_preconfigurado() {
         .await;
 
     let workflow: WorkflowDefinition = serde_json::from_value(json!({
-        "name": "alta-de-envio", "version": "0.1.0",
+        "name": "create-shipment", "version": "0.1.0",
         "tasks": [{
-            "id": "miapi.crear_envio",
+            "id": "myapi.create_shipment",
             "extends": "http.request",
-            "description": "Crea un envío en mi API logística",
+            "description": "Creates a shipment in my logistics API",
             "input_schema": {
                 "type": "object",
                 "required": ["sku", "qty", "customer_id"],
@@ -196,7 +196,7 @@ async fn integracion_cliente_via_perfil_http_preconfigurado() {
             "bind": {
                 "url": format!("{}/shipments", server.base_url()),
                 "method": "POST",
-                "auth": { "type": "bearer", "token": { "$secret": "MIAPI_TOKEN" } },
+                "auth": { "type": "bearer", "token": { "$secret": "MYAPI_TOKEN" } },
                 "fail_on_error_status": true,
                 "body": "@"
             },
@@ -204,60 +204,60 @@ async fn integracion_cliente_via_perfil_http_preconfigurado() {
         }],
         "nodes": [
             { "id": "start", "kind": "start" },
-            // El parser: del formato del cliente al schema del perfil
-            { "id": "adaptar", "kind": "task", "task": "data.transform",
+            // The parser: from client format to profile schema
+            { "id": "adapt", "kind": "task", "task": "data.transform",
               "input": {
                   "source": "$.trigger",
                   "shape": {
-                      "sku": "@.producto.codigo",
-                      "qty": "@.producto.unidades",
-                      "customer_id": "@.cliente_ref"
+                      "sku": "@.product.code",
+                      "qty": "@.product.units",
+                      "customer_id": "@.client_ref"
                   }
               }},
-            { "id": "crear", "kind": "task", "task": "miapi.crear_envio",
+            { "id": "create", "kind": "task", "task": "myapi.create_shipment",
               "retry": { "max": 2, "initial_ms": 10 } },
             { "id": "end", "kind": "end" }
         ],
         "edges": [
-            { "from": "start", "to": "adaptar" },
-            { "from": "adaptar", "to": "crear" },
-            { "from": "crear", "to": "end" }
+            { "from": "start", "to": "adapt" },
+            { "from": "adapt", "to": "create" },
+            { "from": "create", "to": "end" }
         ]
     }))
     .unwrap();
 
     let secrets = MapSecrets(HashMap::from([(
-        "MIAPI_TOKEN".to_string(),
-        "tok-secreto".to_string(),
+        "MYAPI_TOKEN".to_string(),
+        "secret-tok".to_string(),
     )]));
     let executor =
         WorkflowExecutor::new_with_secrets(workflow, workflow_forge::default_registry(), &secrets)
             .map_err(|errors| format!("{errors:?}"))
             .unwrap();
 
-    // El JSON del cliente, en SU formato, no en el del perfil
+    // The client's JSON, in THEIR format, not the profile's
     let result = executor
         .run(WorkflowData(json!({
-            "cliente_ref": "c-77",
-            "producto": { "codigo": "ABC-1", "unidades": 3 }
+            "client_ref": "c-77",
+            "product": { "code": "ABC-1", "units": 3 }
         })))
         .await
         .unwrap();
 
-    crear_envio.assert_async().await;
+    create_shipment.assert_async().await;
     assert_eq!(result.0, json!({ "tracking_id": "trk-001", "eta_days": 2 }));
 }
 
-/// Integración por lotes: el cliente manda N filas en su formato, `data.map`
-/// las adapta, `foreach` invoca el perfil http por cada una con `collect`
-/// (una fila rota no aborta el lote) y el observer entrega el reporte.
+/// Batch integration: the client sends N rows in their format, `data.map`
+/// adapts them, `foreach` invokes the http profile for each one with `collect`
+/// (one broken row does not abort the batch) and the observer delivers the report.
 #[tokio::test]
-async fn lote_de_cliente_via_foreach_y_perfil_con_reporte() {
+async fn client_batch_via_foreach_and_profile_with_report() {
     use httpmock::prelude::*;
     use std::sync::Arc;
 
     let server = MockServer::start_async().await;
-    let alta = server
+    let create = server
         .mock_async(|when, then| {
             when.method(POST).path("/shipments");
             then.status(201)
@@ -267,9 +267,9 @@ async fn lote_de_cliente_via_foreach_y_perfil_con_reporte() {
         .await;
 
     let workflow: WorkflowDefinition = serde_json::from_value(json!({
-        "name": "alta-de-envios-lote", "version": "0.1.0",
+        "name": "batch-shipments", "version": "0.1.0",
         "tasks": [{
-            "id": "miapi.crear_envio",
+            "id": "myapi.create_shipment",
             "extends": "http.request",
             "input_schema": {
                 "type": "object",
@@ -289,22 +289,22 @@ async fn lote_de_cliente_via_foreach_y_perfil_con_reporte() {
         }],
         "nodes": [
             { "id": "start", "kind": "start" },
-            { "id": "adaptar", "kind": "task", "task": "data.map",
+            { "id": "adapt", "kind": "task", "task": "data.map",
               "input": {
-                  "items": "$.trigger.filas",
-                  "shape": { "sku": "@.codigo", "qty": "@.unidades" }
+                  "items": "$.trigger.rows",
+                  "shape": { "sku": "@.code", "qty": "@.units" }
               }},
-            { "id": "lote", "kind": "foreach",
-              "task": "miapi.crear_envio",
-              "items": "$.nodes.adaptar.output",
+            { "id": "batch", "kind": "foreach",
+              "task": "myapi.create_shipment",
+              "items": "$.nodes.adapt.output",
               "concurrency": 2,
               "on_item_error": "collect" },
             { "id": "end", "kind": "end" }
         ],
         "edges": [
-            { "from": "start", "to": "adaptar" },
-            { "from": "adaptar", "to": "lote" },
-            { "from": "lote", "to": "end" }
+            { "from": "start", "to": "adapt" },
+            { "from": "adapt", "to": "batch" },
+            { "from": "batch", "to": "end" }
         ]
     }))
     .unwrap();
@@ -315,18 +315,18 @@ async fn lote_de_cliente_via_foreach_y_perfil_con_reporte() {
         .unwrap()
         .with_observer(Arc::clone(&history) as Arc<dyn ExecutionObserver>);
 
-    // Tres filas del cliente; la segunda viene rota (qty 0 viola el schema)
+    // Three client rows; the second one is broken (qty 0 violates the schema)
     let result = executor
-        .run(WorkflowData(json!({ "filas": [
-            { "codigo": "A-1", "unidades": 2 },
-            { "codigo": "B-2", "unidades": 0 },
-            { "codigo": "C-3", "unidades": 5 }
+        .run(WorkflowData(json!({ "rows": [
+            { "code": "A-1", "units": 2 },
+            { "code": "B-2", "units": 0 },
+            { "code": "C-3", "units": 5 }
         ]})))
         .await
         .unwrap();
 
-    // Solo las 2 filas válidas llegaron a la API; la rota quedó en failed
-    assert_eq!(alta.calls_async().await, 2);
+    // Only the 2 valid rows reached the API; the broken one ended up in failed
+    assert_eq!(create.calls_async().await, 2);
     assert_eq!(
         result.0["ok"],
         json!([{ "tracking_id": "trk" }, { "tracking_id": "trk" }])
@@ -336,49 +336,49 @@ async fn lote_de_cliente_via_foreach_y_perfil_con_reporte() {
     assert_eq!(failed[0]["index"], json!(1));
     assert_eq!(failed[0]["error"]["code"], json!("TASK_INPUT_INVALID"));
 
-    // El reporte responde "¿qué pasó con el lote?"
+    // The report answers "what happened with the batch?"
     let report = history.report();
-    let node = report.nodes.iter().find(|n| n.node_id == "lote").unwrap();
+    let node = report.nodes.iter().find(|n| n.node_id == "batch").unwrap();
     assert_eq!(node.kind, "foreach");
     assert_eq!(node.items_ok, Some(2));
     assert_eq!(node.items_failed, Some(1));
 }
 
-/// Ciclo completo de archivos sin pasar por el contexto JSON: descargar un
-/// reporte binario de la API de un cliente (`response_body: blob`) y subirlo
-/// multipart a otra API, todo por streaming vía el BlobStore de la ejecución.
+/// Full file lifecycle without passing through the JSON context: download a
+/// binary report from a client API (`response_body: blob`) and upload it as
+/// multipart to another API, all via streaming through the execution's BlobStore.
 #[tokio::test]
-async fn descargar_reporte_y_subirlo_multipart() {
+async fn download_report_and_upload_multipart() {
     use httpmock::prelude::*;
 
-    let origen = MockServer::start_async().await;
-    let destino = MockServer::start_async().await;
+    let source = MockServer::start_async().await;
+    let target = MockServer::start_async().await;
 
-    let contenido = "fecha,sku,unidades\n2026-06-10,A-1,3\n2026-06-10,B-2,7\n";
-    let descarga = origen
+    let content = "date,sku,units\n2026-06-10,A-1,3\n2026-06-10,B-2,7\n";
+    let download = source
         .mock_async(|when, then| {
             when.method(GET)
-                .path("/reportes/diario")
-                .header("authorization", "Bearer tok-cliente");
+                .path("/reports/daily")
+                .header("authorization", "Bearer client-tok");
             then.status(200)
                 .header("content-type", "text/csv")
                 .header(
                     "content-disposition",
-                    "attachment; filename=\"ventas-diarias.csv\"",
+                    "attachment; filename=\"daily-sales.csv\"",
                 )
-                .body(contenido);
+                .body(content);
         })
         .await;
-    let subida = destino
+    let upload = target
         .mock_async(|when, then| {
             when.method(POST)
                 .path("/ingest")
                 .header_includes("content-type", "multipart/form-data")
-                .body_includes("name=\"origen\"")
-                .body_includes("cliente-acme")
-                .body_includes("name=\"archivo\"")
-                .body_includes("filename=\"ventas-diarias.csv\"")
-                .body_includes(contenido);
+                .body_includes("name=\"source\"")
+                .body_includes("acme-client")
+                .body_includes("name=\"file\"")
+                .body_includes("filename=\"daily-sales.csv\"")
+                .body_includes(content);
             then.status(202)
                 .header("content-type", "application/json")
                 .json_body(json!({ "ingest_id": "ing-9" }));
@@ -386,24 +386,24 @@ async fn descargar_reporte_y_subirlo_multipart() {
         .await;
 
     let workflow: WorkflowDefinition = serde_json::from_value(json!({
-        "name": "sync-reporte-diario", "version": "0.1.0",
+        "name": "sync-daily-report", "version": "0.1.0",
         "nodes": [
             { "id": "start", "kind": "start" },
-            { "id": "descarga", "kind": "task", "task": "http.request",
+            { "id": "download", "kind": "task", "task": "http.request",
               "input": {
-                  "url": format!("{}/reportes/diario", origen.base_url()),
-                  "auth": { "type": "bearer", "token": "tok-cliente" },
+                  "url": format!("{}/reports/daily", source.base_url()),
+                  "auth": { "type": "bearer", "token": "client-tok" },
                   "response_body": "blob",
                   "fail_on_error_status": true
               } },
-            { "id": "sube", "kind": "task", "task": "http.request",
+            { "id": "upload", "kind": "task", "task": "http.request",
               "input": {
-                  "url": format!("{}/ingest", destino.base_url()),
+                  "url": format!("{}/ingest", target.base_url()),
                   "method": "POST",
                   "multipart": {
-                      "origen": "cliente-acme",
-                      "archivo": {
-                          "blob": "$.nodes.descarga.output.body",
+                      "source": "acme-client",
+                      "file": {
+                          "blob": "$.nodes.download.output.body",
                           "content_type": "text/csv"
                       }
                   },
@@ -412,9 +412,9 @@ async fn descargar_reporte_y_subirlo_multipart() {
             { "id": "end", "kind": "end" }
         ],
         "edges": [
-            { "from": "start", "to": "descarga" },
-            { "from": "descarga", "to": "sube" },
-            { "from": "sube", "to": "end" }
+            { "from": "start", "to": "download" },
+            { "from": "download", "to": "upload" },
+            { "from": "upload", "to": "end" }
         ]
     }))
     .unwrap();
@@ -422,26 +422,26 @@ async fn descargar_reporte_y_subirlo_multipart() {
     let executor = WorkflowExecutor::new(workflow, workflow_forge::default_registry()).unwrap();
     let result = executor.run(WorkflowData(json!({}))).await.unwrap();
 
-    descarga.assert_async().await;
-    subida.assert_async().await;
+    download.assert_async().await;
+    upload.assert_async().await;
     assert_eq!(result.0["status"], 202);
     assert_eq!(result.0["body"], json!({ "ingest_id": "ing-9" }));
 }
 
-/// El patrón de reuso entre clientes: un sub-workflow compartido
-/// ("normalizar y enviar") registrado una vez en el `WorkflowRegistry`,
-/// invocado desde el workflow de cada cliente con su propio mapping.
-/// Ejercita `kind: subworkflow` + `data.cast` + http, de punta a punta.
+/// The reuse pattern across clients: a shared sub-workflow
+/// ("normalize and send") registered once in the `WorkflowRegistry`,
+/// invoked from each client's workflow with its own mapping.
+/// Exercises `kind: subworkflow` + `data.cast` + http, end to end.
 #[tokio::test]
-async fn subworkflow_compartido_normaliza_con_cast_y_envia() {
+async fn shared_subworkflow_normalizes_with_cast_and_sends() {
     use httpmock::prelude::*;
     use std::sync::Arc;
 
     let server = MockServer::start_async().await;
-    let crear_orden = server
+    let create_order = server
         .mock_async(|when, then| {
             when.method(POST).path("/orders").json_body(json!({
-                "fecha": "2026-06-10",
+                "date": "2026-06-10",
                 "total": 1234.56,
                 "sku": "ABC-1"
             }));
@@ -451,76 +451,76 @@ async fn subworkflow_compartido_normaliza_con_cast_y_envia() {
         })
         .await;
 
-    // El bloque reusable: normaliza los campos sucios y hace el POST
-    let comun: WorkflowDefinition = serde_json::from_value(json!({
-        "name": "normalizar-y-enviar", "version": "1.0.0",
+    // The reusable block: normalizes dirty fields and does the POST
+    let shared: WorkflowDefinition = serde_json::from_value(json!({
+        "name": "normalize-and-send", "version": "1.0.0",
         "nodes": [
             { "id": "start", "kind": "start" },
-            { "id": "normaliza", "kind": "task", "task": "data.cast",
+            { "id": "normalize", "kind": "task", "task": "data.cast",
               "input": {
                   "source": "$.trigger",
                   "fields": {
-                      "fecha": [{ "op": "date", "from": "%d/%m/%Y" }],
+                      "date": [{ "op": "date", "from": "%d/%m/%Y" }],
                       "total": [{ "op": "number", "decimal": ",", "thousands": "." }],
                       "sku": [{ "op": "trim" }, { "op": "upper" }]
                   }
               } },
-            { "id": "envia", "kind": "task", "task": "http.request",
+            { "id": "send", "kind": "task", "task": "http.request",
               "input": {
                   "url": format!("{}/orders", server.base_url()),
                   "method": "POST",
-                  "body": "$.nodes.normaliza.output",
+                  "body": "$.nodes.normalize.output",
                   "fail_on_error_status": true
               } },
             { "id": "end", "kind": "end",
-              "output": "$.nodes.envia.output.body" }
+              "output": "$.nodes.send.output.body" }
         ],
         "edges": [
-            { "from": "start", "to": "normaliza" },
-            { "from": "normaliza", "to": "envia" },
-            { "from": "envia", "to": "end" }
+            { "from": "start", "to": "normalize" },
+            { "from": "normalize", "to": "send" },
+            { "from": "send", "to": "end" }
         ]
     }))
     .unwrap();
     let workflows = Arc::new(WorkflowRegistry::new());
-    workflows.register(comun).unwrap();
+    workflows.register(shared).unwrap();
 
-    // El workflow del cliente: solo adapta su formato y delega
-    let cliente: WorkflowDefinition = serde_json::from_value(json!({
-        "name": "cliente-acme", "version": "0.1.0",
+    // The client's workflow: only adapts its format and delegates
+    let client: WorkflowDefinition = serde_json::from_value(json!({
+        "name": "acme-client", "version": "0.1.0",
         "nodes": [
             { "id": "start", "kind": "start" },
-            { "id": "procesa", "kind": "subworkflow", "workflow": "normalizar-y-enviar",
+            { "id": "process", "kind": "subworkflow", "workflow": "normalize-and-send",
               "input": {
-                  "fecha": "$.trigger.fecha_pedido",
-                  "total": "$.trigger.importe",
-                  "sku": "$.trigger.articulo"
+                  "date": "$.trigger.order_date",
+                  "total": "$.trigger.amount",
+                  "sku": "$.trigger.item"
               } },
             { "id": "end", "kind": "end" }
         ],
         "edges": [
-            { "from": "start", "to": "procesa" },
-            { "from": "procesa", "to": "end" }
+            { "from": "start", "to": "process" },
+            { "from": "process", "to": "end" }
         ]
     }))
     .unwrap();
 
-    let executor = WorkflowExecutor::builder(cliente, workflow_forge::default_registry())
+    let executor = WorkflowExecutor::builder(client, workflow_forge::default_registry())
         .workflows(workflows)
         .build()
         .map_err(|errors| format!("{errors:?}"))
         .unwrap();
 
-    // El payload del cliente, en su formato sucio
+    // The client's payload, in their dirty format
     let result = executor
         .run(WorkflowData(json!({
-            "fecha_pedido": "10/06/2026",
-            "importe": "1.234,56",
-            "articulo": "  abc-1 "
+            "order_date": "10/06/2026",
+            "amount": "1,234.56",
+            "item": "  abc-1 "
         })))
         .await
         .unwrap();
 
-    crear_orden.assert_async().await;
+    create_order.assert_async().await;
     assert_eq!(result.0, json!({ "order_id": "ord-5" }));
 }

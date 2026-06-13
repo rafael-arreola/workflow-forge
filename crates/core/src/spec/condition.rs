@@ -1,38 +1,38 @@
-//! Sintaxis del mini-DSL de condiciones de la spec (solo tipos y serde).
+//! Syntax of the spec's condition mini-DSL (types and serde only).
 //!
-//! Una condición es un objeto JSON validable con JSON Schema: una
-//! comparación sobre un path JSONPath, o una composición lógica (`and`,
-//! `or`, `not`). La **evaluación** vive en [`crate::expr::operators`], junto
-//! con el registro de operadores custom.
+//! A condition is a JSON object validatable with JSON Schema: a
+//! comparison over a JSONPath path, or a logical composition (`and`,
+//! `or`, `not`). **Evaluation** lives in [`crate::expr::operators`], along
+//! with the custom operator registry.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// Condición del mini-DSL declarativo de la spec.
+/// Condition from the spec's declarative mini-DSL.
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
 pub enum Condition {
-    /// Conjunción: todas las condiciones deben cumplirse
+    /// Conjunction: all conditions must hold
     And {
-        /// Condiciones que deben cumplirse todas
+        /// Conditions that must all hold
         and: Vec<Condition>,
     },
-    /// Disyunción: al menos una condición debe cumplirse
+    /// Disjunction: at least one condition must hold
     Or {
-        /// Condiciones de las que al menos una debe cumplirse
+        /// Conditions of which at least one must hold
         or: Vec<Condition>,
     },
-    /// Negación
+    /// Negation
     Not {
-        /// Condición a negar
+        /// Condition to negate
         not: Box<Condition>,
     },
-    /// Comparación sobre un path del contexto
+    /// Comparison over a context path
     Compare(Comparison),
 }
 
-// Deserialize manual: el derive untagged produce errores inservibles
-// ("data did not match any variant"); aquí señalamos qué llave falta o sobra.
+// Manual Deserialize: the untagged derive produces useless errors
+// ("data did not match any variant"); here we point out which key is missing or extra.
 impl<'de> Deserialize<'de> for Condition {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -42,7 +42,7 @@ impl<'de> Deserialize<'de> for Condition {
 
         let value = Value::deserialize(deserializer)?;
         let Value::Object(map) = &value else {
-            return Err(D::Error::custom("una condición debe ser un objeto JSON"));
+            return Err(D::Error::custom("a condition must be a JSON object"));
         };
 
         let logical = ["and", "or", "not"]
@@ -51,45 +51,45 @@ impl<'de> Deserialize<'de> for Condition {
         if let Some(key) = logical {
             if map.len() != 1 {
                 return Err(D::Error::custom(format!(
-                    "una condición '{key}' no admite llaves adicionales"
+                    "a '{key}' condition does not allow extra keys"
                 )));
             }
-            let inner = map.get(*key).expect("llave comprobada").clone();
+            let inner = map.get(*key).expect("key already checked").clone();
             return match *key {
                 "and" => serde_json::from_value(inner)
                     .map(|and| Condition::And { and })
-                    .map_err(|e| D::Error::custom(format!("en 'and': {e}"))),
+                    .map_err(|e| D::Error::custom(format!("in 'and': {e}"))),
                 "or" => serde_json::from_value(inner)
                     .map(|or| Condition::Or { or })
-                    .map_err(|e| D::Error::custom(format!("en 'or': {e}"))),
+                    .map_err(|e| D::Error::custom(format!("in 'or': {e}"))),
                 _ => serde_json::from_value(inner)
                     .map(|not| Condition::Not { not: Box::new(not) })
-                    .map_err(|e| D::Error::custom(format!("en 'not': {e}"))),
+                    .map_err(|e| D::Error::custom(format!("in 'not': {e}"))),
             };
         }
 
         if map.contains_key("path") {
             return serde_json::from_value(value.clone())
                 .map(Condition::Compare)
-                .map_err(|e| D::Error::custom(format!("comparación inválida: {e}")));
+                .map_err(|e| D::Error::custom(format!("invalid comparison: {e}")));
         }
 
         let keys: Vec<&str> = map.keys().map(String::as_str).collect();
         Err(D::Error::custom(format!(
-            "condición inválida: se esperaba 'and', 'or', 'not' o una comparación con 'path'; \
-             llaves encontradas: [{}]",
+            "invalid condition: expected 'and', 'or', 'not' or a comparison with 'path'; \
+             found keys: [{}]",
             keys.join(", ")
         )))
     }
 }
 
-/// Comparación entre el valor resuelto de un path JSONPath y un operando.
-/// En JSON: `{ "path": "$.x", "<operador>": <operando> }`.
+/// Comparison between the resolved value of a JSONPath path and an operand.
+/// In JSON: `{ "path": "$.x", "<operator>": <operand> }`.
 #[derive(Debug, Clone)]
 pub struct Comparison {
-    /// Path JSONPath evaluado contra el contexto de ejecución
+    /// JSONPath path evaluated against the execution context
     pub path: String,
-    /// Operador y operando de la comparación
+    /// Operator and operand of the comparison
     pub op: CompareOp,
 }
 
@@ -115,85 +115,85 @@ impl<'de> Deserialize<'de> for Comparison {
 
         let value = Value::deserialize(deserializer)?;
         let Value::Object(mut map) = value else {
-            return Err(D::Error::custom("una comparación debe ser un objeto JSON"));
+            return Err(D::Error::custom("a comparison must be a JSON object"));
         };
         let path = match map.remove("path") {
             Some(Value::String(path)) => path,
-            Some(_) => return Err(D::Error::custom("'path' debe ser un string JSONPath")),
-            None => return Err(D::Error::custom("una comparación requiere 'path'")),
+            Some(_) => return Err(D::Error::custom("'path' must be a JSONPath string")),
+            None => return Err(D::Error::custom("a comparison requires 'path'")),
         };
         if map.len() != 1 {
             let keys: Vec<&str> = map.keys().map(String::as_str).collect();
             return Err(D::Error::custom(format!(
-                "una comparación requiere exactamente un operador junto a 'path'; \
-                 llaves encontradas: [{}]",
+                "a comparison requires exactly one operator alongside 'path'; \
+                 found keys: [{}]",
                 keys.join(", ")
             )));
         }
-        let (key, operand) = map.into_iter().next().expect("len comprobado");
+        let (key, operand) = map.into_iter().next().expect("len already checked");
         let op = CompareOp::from_key_operand(key, operand).map_err(D::Error::custom)?;
         Ok(Comparison { path, op })
     }
 }
 
-/// Operadores de comparación. Los 13 de la spec 1.0 son vocabulario cerrado;
-/// cualquier otra llave deserializa como [`CompareOp::Custom`] y se resuelve
-/// contra el registro de operadores
-/// ([`crate::expr::operators::OperatorRegistry`]) al evaluar.
+/// Comparison operators. The 13 from spec 1.0 are a closed vocabulary;
+/// any other key deserializes as [`CompareOp::Custom`] and resolves
+/// against the operator registry
+/// ([`crate::expr::operators::OperatorRegistry`]) at evaluation time.
 ///
-/// Un path que no resuelve no es error: `exists` da `false` y el resto de
-/// operadores built-in dan `false`.
+/// A path that does not resolve is not an error: `exists` yields `false` and the rest of
+/// the built-in operators yield `false`.
 #[derive(Debug, Clone)]
 pub enum CompareOp {
-    /// Igualdad estricta de valores JSON
+    /// Strict equality of JSON values
     Eq(Value),
-    /// Desigualdad (un path ausente da `false`, no `true`)
+    /// Inequality (a missing path yields `false`, not `true`)
     Ne(Value),
-    /// Mayor que (números entre sí, strings entre sí)
+    /// Greater than (numbers among themselves, strings among themselves)
     Gt(Value),
-    /// Mayor o igual que
+    /// Greater than or equal
     Gte(Value),
-    /// Menor que
+    /// Less than
     Lt(Value),
-    /// Menor o igual que
+    /// Less than or equal
     Lte(Value),
-    /// El valor del path está dentro de la lista
+    /// The path value is within the list
     In(Vec<Value>),
-    /// El valor del path (array o string) contiene al operando
+    /// The path value (array or string) contains the operand
     Contains(Value),
-    /// El path resuelve (true) o no resuelve (false)
+    /// The path resolves (true) or does not resolve (false)
     Exists(bool),
-    /// El valor del path es `null` (true) o no lo es (false)
+    /// The path value is `null` (true) or is not (false)
     IsNull(bool),
-    /// El valor del path (string) empieza con el prefijo
+    /// The path value (string) starts with the prefix
     StartsWith(String),
-    /// El valor del path (string) termina con el sufijo
+    /// The path value (string) ends with the suffix
     EndsWith(String),
-    /// El valor del path (string) cumple la expresión regular
+    /// The path value (string) matches the regular expression
     Matches(String),
-    /// Operador fuera de la spec: se resuelve contra el registro de
-    /// operadores en la evaluación (extensión del vocabulario por el host)
+    /// Operator outside the spec: resolved against the operator
+    /// registry at evaluation time (host vocabulary extension)
     Custom {
-        /// Llave del operador en el JSON
+        /// Operator key in the JSON
         key: String,
-        /// Operando declarado
+        /// Declared operand
         operand: Value,
     },
 }
 
 impl CompareOp {
-    /// Construye el operador desde la llave y el operando del JSON.
-    /// Llaves desconocidas producen [`CompareOp::Custom`].
+    /// Builds the operator from the JSON key and operand.
+    /// Unknown keys produce [`CompareOp::Custom`].
     pub fn from_key_operand(key: String, operand: Value) -> Result<Self, String> {
         fn expect_bool(key: &str, operand: Value) -> Result<bool, String> {
             operand
                 .as_bool()
-                .ok_or_else(|| format!("'{key}' espera un booleano"))
+                .ok_or_else(|| format!("'{key}' expects a boolean"))
         }
         fn expect_string(key: &str, operand: Value) -> Result<String, String> {
             match operand {
                 Value::String(s) => Ok(s),
-                _ => Err(format!("'{key}' espera un string")),
+                _ => Err(format!("'{key}' expects a string")),
             }
         }
 
@@ -206,7 +206,7 @@ impl CompareOp {
             "lte" => CompareOp::Lte(operand),
             "in" => match operand {
                 Value::Array(items) => CompareOp::In(items),
-                _ => return Err("'in' espera una lista de valores".to_string()),
+                _ => return Err("'in' expects a list of values".to_string()),
             },
             "contains" => CompareOp::Contains(operand),
             "exists" => CompareOp::Exists(expect_bool("exists", operand)?),
@@ -218,7 +218,7 @@ impl CompareOp {
         })
     }
 
-    /// Llave del operador tal como aparece en el JSON
+    /// Operator key as it appears in JSON
     pub fn key(&self) -> &str {
         match self {
             CompareOp::Eq(_) => "eq",
@@ -238,7 +238,7 @@ impl CompareOp {
         }
     }
 
-    /// Operando como `Value` (para serialización y tooling)
+    /// Operand as `Value` (for serialization and tooling)
     pub fn operand(&self) -> Value {
         match self {
             CompareOp::Eq(v)
@@ -283,11 +283,11 @@ mod tests {
         let cond: Condition =
             serde_json::from_value(json!({ "path": "$.x", "between": [1, 10] })).unwrap();
         let Condition::Compare(cmp) = &cond else {
-            panic!("se esperaba comparación");
+            panic!("expected comparison");
         };
         assert_eq!(cmp.op.key(), "between");
         assert_eq!(cmp.op.operand(), json!([1, 10]));
-        // roundtrip estable también para custom
+        // roundtrip is also stable for custom
         assert_eq!(
             serde_json::to_value(&cond).unwrap(),
             json!({ "path": "$.x", "between": [1, 10] })
@@ -299,8 +299,8 @@ mod tests {
         let err = serde_json::from_value::<Condition>(json!({ "foo": 1 }))
             .unwrap_err()
             .to_string();
-        assert!(err.contains("'and', 'or', 'not'"), "mensaje: {err}");
-        assert!(err.contains("foo"), "mensaje: {err}");
+        assert!(err.contains("'and', 'or', 'not'"), "message: {err}");
+        assert!(err.contains("foo"), "message: {err}");
 
         let err = serde_json::from_value::<Condition>(json!({
             "and": [{ "path": "$.x", "eq": 1 }],
@@ -308,22 +308,19 @@ mod tests {
         }))
         .unwrap_err()
         .to_string();
-        assert!(
-            err.contains("no admite llaves adicionales"),
-            "mensaje: {err}"
-        );
+        assert!(err.contains("does not allow extra keys"), "message: {err}");
 
         let err = serde_json::from_value::<Condition>(json!({
             "path": "$.x", "eq": 1, "gt": 2
         }))
         .unwrap_err()
         .to_string();
-        assert!(err.contains("exactamente un operador"), "mensaje: {err}");
+        assert!(err.contains("exactly one operator"), "message: {err}");
 
         let err = serde_json::from_value::<Condition>(json!({ "path": "$.x" }))
             .unwrap_err()
             .to_string();
-        assert!(err.contains("exactamente un operador"), "mensaje: {err}");
+        assert!(err.contains("exactly one operator"), "message: {err}");
     }
 
     #[test]
@@ -331,16 +328,16 @@ mod tests {
         let err = serde_json::from_value::<Condition>(json!({ "path": "$.x", "in": 5 }))
             .unwrap_err()
             .to_string();
-        assert!(err.contains("espera una lista"), "mensaje: {err}");
+        assert!(err.contains("expects a list"), "message: {err}");
 
         let err = serde_json::from_value::<Condition>(json!({ "path": "$.x", "exists": "si" }))
             .unwrap_err()
             .to_string();
-        assert!(err.contains("espera un booleano"), "mensaje: {err}");
+        assert!(err.contains("expects a boolean"), "message: {err}");
 
         let err = serde_json::from_value::<Condition>(json!({ "path": "$.x", "matches": 1 }))
             .unwrap_err()
             .to_string();
-        assert!(err.contains("espera un string"), "mensaje: {err}");
+        assert!(err.contains("expects a string"), "message: {err}");
     }
 }

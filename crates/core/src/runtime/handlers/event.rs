@@ -1,4 +1,4 @@
-//! Nodos `start` y `end`: la frontera de entrada/salida del workflow.
+//! `start` and `end` nodes: the input/output boundary of the workflow.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -15,8 +15,8 @@ use crate::spec::node::NodeId;
 use crate::spec::node::event::{EndNode, StartNode};
 
 impl WorkflowExecutor {
-    /// Ejecuta el nodo `start`: valida el trigger contra el schema (si hay),
-    /// fusiona los `defaults` y continúa por las aristas salientes.
+    /// Executes the `start` node: validates the trigger against the schema (if
+    /// present), merges the `defaults`, and continues through the outgoing edges.
     pub(crate) async fn run_start(
         &self,
         node_id: &NodeId,
@@ -30,7 +30,7 @@ impl WorkflowExecutor {
             validate_compiled(validator, &carried).map_err(|e| {
                 WorkflowError::new(
                     codes::SCHEMA_VALIDATION_FAILED,
-                    format!("El trigger no cumple el schema del start: {e}"),
+                    format!("Trigger does not match the start schema: {e}"),
                 )
                 .with_source_task(node_id.to_string())
             })?;
@@ -68,9 +68,9 @@ impl WorkflowExecutor {
         .await
     }
 
-    /// Ejecuta un nodo `end`: resuelve el mapping de output (o usa el token
-    /// del predecesor), valida contra el schema y registra el resultado
-    /// terminal. La rama se detiene aquí.
+    /// Executes an `end` node: resolves the output mapping (or uses the
+    /// predecessor's token), validates against the schema, and records the
+    /// terminal result. The branch stops here.
     pub(crate) async fn run_end(
         &self,
         node_id: &NodeId,
@@ -90,7 +90,7 @@ impl WorkflowExecutor {
             validate_compiled(validator, &result).map_err(|e| {
                 WorkflowError::new(
                     codes::OUTPUT_SCHEMA_VALIDATION_FAILED,
-                    format!("El resultado no cumple el schema del end: {e}"),
+                    format!("Result does not match the end schema: {e}"),
                 )
                 .with_source_task(node_id.to_string())
             })?;
@@ -104,11 +104,7 @@ impl WorkflowExecutor {
                 duration_ms: node_started.elapsed().as_millis() as u64,
             },
         );
-        state
-            .ends
-            .lock()
-            .expect("RunState lock poisoned")
-            .push((node_id.clone(), result));
+        state.ends.lock().push((node_id.clone(), result));
         Ok(())
     }
 }

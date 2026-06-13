@@ -1,17 +1,18 @@
-//! Extensión `compress` de workflow-forge: gzip y zip sobre la convención
-//! `$blob`. El caso típico de integración por archivos: los partners mandan
-//! `.csv.gz` o `.zip` por SFTP y hay que abrirlos (o producirlos) en el flujo.
+//! workflow-forge `compress` extension: gzip and zip over the `$blob`
+//! convention. The typical file-based integration case: partners send
+//! `.csv.gz` or `.zip` via SFTP and they need to be opened (or produced) in the
+//! flow.
 //!
-//! | Tarea | Contrato |
+//! | Task | Contract |
 //! |-------|----------|
-//! | `compress.gzip` | `{ file: $blob, name? }` → `{ file: $blob }` (comprime un blob) |
-//! | `compress.gunzip` | `{ file: $blob, name? }` → `{ file: $blob }` (descomprime un `.gz`) |
+//! | `compress.gzip` | `{ file: $blob, name? }` → `{ file: $blob }` (compresses a blob) |
+//! | `compress.gunzip` | `{ file: $blob, name? }` → `{ file: $blob }` (decompresses a `.gz`) |
 //! | `compress.zip` | `{ entries: [{ name, file: $blob }], name? }` → `{ file: $blob }` |
 //! | `compress.unzip` | `{ file: $blob }` → `{ entries: [{ name, file: $blob }] }` |
 //!
-//! Todo se hace por streaming a través de archivos temporales (memoria
-//! acotada aunque el archivo sea grande); la compresión usa deflate puro en
-//! Rust (sin dependencias C, igual que el resto del workspace con rustls).
+//! Everything is done via streaming through temporary files (bounded
+//! memory even for large files); compression uses pure deflate in
+//! Rust (no C dependencies, consistent with the rest of the workspace using rustls).
 
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -27,7 +28,7 @@ use workflow_forge_core::task::TaskRegistry;
 use workflow_forge_core::task::{Task, TaskManifest};
 use workflow_forge_core::task::{WorkflowData, WorkflowResult};
 
-/// Registra todas las tareas de la extensión en el registry
+/// Registers all extension tasks in the registry
 pub fn register(registry: &TaskRegistry) {
     registry.register(GzipTask::default());
     registry.register(GunzipTask::default());
@@ -35,18 +36,18 @@ pub fn register(registry: &TaskRegistry) {
     registry.register(UnzipTask::default());
 }
 
-/// Códigos de error que esta extensión puede emitir. Mismo contrato que
-/// [`workflow_forge_core::error::codes`]: constantes estables, nunca cambian
-/// de valor. Los errores de blobs reusan los códigos del core.
+/// Error codes this extension can emit. Same contract as
+/// [`workflow_forge_core::error::codes`]: stable constants, never change
+/// value. Blob errors reuse the core codes.
 pub mod codes {
-    /// El input de una tarea `compress.*` no deserializa contra su contrato.
+    /// The input of a `compress.*` task does not deserialize against its contract.
     pub const COMPRESS_INPUT_INVALID: &str = "COMPRESS_INPUT_INVALID";
-    /// Fallo de compresión/descompresión o de I/O del archivo temporal.
+    /// Compression/decompression failure or temporary file I/O error.
     pub const COMPRESS_ERROR: &str = "COMPRESS_ERROR";
 }
 
 fn schema(value: Value) -> workflow_forge_core::schemars::Schema {
-    serde_json::from_value(value).expect("schema estático válido")
+    serde_json::from_value(value).expect("valid static schema")
 }
 
 fn compress_error(e: impl std::fmt::Display) -> WorkflowError {
@@ -54,18 +55,15 @@ fn compress_error(e: impl std::fmt::Display) -> WorkflowError {
 }
 
 fn input_invalid(e: impl std::fmt::Display) -> WorkflowError {
-    WorkflowError::new(
-        codes::COMPRESS_INPUT_INVALID,
-        format!("input inválido: {e}"),
-    )
+    WorkflowError::new(codes::COMPRESS_INPUT_INVALID, format!("invalid input: {e}"))
 }
 
-/// Ruta temporal única para el resultado intermedio de una operación
+/// Unique temporary path for the intermediate result of an operation
 fn temp_path(tag: &str) -> PathBuf {
     std::env::temp_dir().join(format!("wf-{tag}-{}", uuid::Uuid::now_v7()))
 }
 
-/// Schema JSON reutilizable de un blob de entrada/salida
+/// Reusable JSON schema for an input/output blob
 fn blob_schema() -> Value {
     json!({ "type": "object", "required": ["$blob"] })
 }
@@ -89,13 +87,13 @@ impl Default for GzipTask {
     fn default() -> Self {
         let mut manifest = TaskManifest::new("compress.gzip");
         manifest.description =
-            Some("Comprime un blob con gzip y devuelve la referencia al `.gz`".into());
+            Some("Compresses a blob with gzip and returns the `.gz` reference".into());
         manifest.input_schema = Some(schema(json!({
             "type": "object",
             "required": ["file"],
             "properties": {
                 "file": blob_schema(),
-                "name": { "type": "string", "description": "Nombre del blob resultante (default: nombre original + .gz)" }
+                "name": { "type": "string", "description": "Name of the resulting blob (default: original name + .gz)" }
             }
         })));
         manifest.output_schema = Some(schema(json!({
@@ -153,13 +151,13 @@ impl Default for GunzipTask {
     fn default() -> Self {
         let mut manifest = TaskManifest::new("compress.gunzip");
         manifest.description =
-            Some("Descomprime un blob gzip (`.gz`) y devuelve la referencia al original".into());
+            Some("Decompresses a gzip blob (`.gz`) and returns the original reference".into());
         manifest.input_schema = Some(schema(json!({
             "type": "object",
             "required": ["file"],
             "properties": {
                 "file": blob_schema(),
-                "name": { "type": "string", "description": "Nombre del blob resultante (default: nombre original sin .gz)" }
+                "name": { "type": "string", "description": "Name of the resulting blob (default: original name without .gz)" }
             }
         })));
         manifest.output_schema = Some(schema(json!({
@@ -216,7 +214,7 @@ impl Task for GunzipTask {
 
 #[derive(Deserialize)]
 struct ZipEntry {
-    /// Ruta/nombre de la entrada dentro del archivo
+    /// Path/name of the entry within the archive
     name: String,
     file: BlobRef,
 }
@@ -235,9 +233,8 @@ pub struct ZipTask {
 impl Default for ZipTask {
     fn default() -> Self {
         let mut manifest = TaskManifest::new("compress.zip");
-        manifest.description = Some(
-            "Empaqueta varios blobs en un archivo zip (deflate) y devuelve su referencia".into(),
-        );
+        manifest.description =
+            Some("Packs multiple blobs into a zip file (deflate) and returns its reference".into());
         manifest.input_schema = Some(schema(json!({
             "type": "object",
             "required": ["entries"],
@@ -249,12 +246,12 @@ impl Default for ZipTask {
                         "type": "object",
                         "required": ["name", "file"],
                         "properties": {
-                            "name": { "type": "string", "description": "Ruta de la entrada dentro del zip" },
+                            "name": { "type": "string", "description": "Entry path within the zip" },
                             "file": blob_schema()
                         }
                     }
                 },
-                "name": { "type": "string", "description": "Nombre del zip resultante (default: archive.zip)" }
+                "name": { "type": "string", "description": "Name of the resulting zip (default: archive.zip)" }
             }
         })));
         manifest.output_schema = Some(schema(json!({
@@ -288,8 +285,8 @@ impl Task for ZipTask {
 
     async fn execute(&self, ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult {
         let parsed: ZipInput = serde_json::from_value(input.0).map_err(input_invalid)?;
-        // Las rutas locales se resuelven aquí (síncrono y barato); el trabajo
-        // pesado de comprimir va a spawn_blocking
+        // Local paths are resolved here (synchronous and cheap); the heavy
+        // compression work goes to spawn_blocking
         let entries: Vec<(String, PathBuf)> = parsed
             .entries
             .iter()
@@ -324,8 +321,8 @@ impl Default for UnzipTask {
     fn default() -> Self {
         let mut manifest = TaskManifest::new("compress.unzip");
         manifest.description = Some(
-            "Extrae las entradas de un archivo zip; cada una se registra como un \
-             blob y se devuelve `{ name, file }`"
+            "Extracts entries from a zip file; each is registered as a \
+             blob and returned as `{ name, file }`"
                 .into(),
         );
         manifest.input_schema = Some(schema(json!({
@@ -354,8 +351,8 @@ impl Default for UnzipTask {
     }
 }
 
-/// Extrae cada entrada (archivo, no directorio) a un temporal y devuelve los
-/// pares `(nombre dentro del zip, ruta temporal)`.
+/// Extracts each entry (file, not directory) to a temp file and returns the
+/// `(name within the zip, temp path)` pairs.
 fn unzip_to_temps(src: &Path) -> Result<Vec<(String, PathBuf)>, WorkflowError> {
     let file = File::open(src).map_err(compress_error)?;
     let mut archive = zip::ZipArchive::new(file).map_err(compress_error)?;
@@ -365,8 +362,8 @@ fn unzip_to_temps(src: &Path) -> Result<Vec<(String, PathBuf)>, WorkflowError> {
         if entry.is_dir() {
             continue;
         }
-        // `name()` puede traer rutas con `..`; se usa solo como etiqueta, no
-        // como ruta de escritura (el destino es un temporal con id propio)
+        // `name()` may contain paths with `..`; it is used only as a label, not
+        // as a write path (the destination is a temp file with its own id)
         let name = entry.name().to_string();
         let temp = temp_path("unzip");
         let mut out = File::create(&temp).map_err(compress_error)?;
@@ -388,8 +385,8 @@ impl Task for UnzipTask {
 
         let produced = run_blocking(move || unzip_to_temps(&src)).await?;
 
-        // Importar cada temporal al BlobStore; los temporales se limpian todos
-        // al final, haya o no error a mitad
+        // Import each temp file into the BlobStore; all temps are cleaned up
+        // at the end, whether or not there was an error partway through
         let mut entries = Vec::with_capacity(produced.len());
         let mut outcome = Ok(());
         for (name, temp) in &produced {
@@ -413,11 +410,11 @@ impl Task for UnzipTask {
 }
 
 // ---------------------------------------------------------------------------
-// Soporte
+// Support
 // ---------------------------------------------------------------------------
 
-/// Corre trabajo bloqueante (compresión/IO) fuera del runtime async,
-/// aplanando el `JoinError` de tokio a un `WorkflowError`.
+/// Runs blocking work (compression/IO) off the async runtime,
+/// flattening tokio's `JoinError` into a `WorkflowError`.
 async fn run_blocking<T, F>(f: F) -> Result<T, WorkflowError>
 where
     F: FnOnce() -> Result<T, WorkflowError> + Send + 'static,
@@ -425,5 +422,5 @@ where
 {
     tokio::task::spawn_blocking(f)
         .await
-        .map_err(|e| compress_error(format!("la operación se interrumpió: {e}")))?
+        .map_err(|e| compress_error(format!("operation was interrupted: {e}")))?
 }

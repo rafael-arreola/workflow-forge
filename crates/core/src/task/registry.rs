@@ -1,7 +1,9 @@
 //! El registro de tareas: el catálogo vivo de todo lo ejecutable.
 
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+
+use parking_lot::RwLock;
 
 use std::future::Future;
 
@@ -47,7 +49,7 @@ impl TaskRegistry {
     /// entre registries). Si ya existe una con el mismo id, la sobrescribe.
     pub fn register_arc(&self, task: Arc<dyn Task>) {
         let key = task.task_id().clone();
-        let mut map = self.tasks.write().expect("TaskRegistry lock poisoned");
+        let mut map = self.tasks.write();
         map.insert(key, task);
     }
 
@@ -141,7 +143,7 @@ impl TaskRegistry {
     /// comparten, pero los registros posteriores no afectan al original.
     /// Es la base de los perfiles inline por workflow.
     pub fn scoped(&self) -> TaskRegistry {
-        let map = self.tasks.read().expect("TaskRegistry lock poisoned");
+        let map = self.tasks.read();
         TaskRegistry {
             tasks: Arc::new(RwLock::new(map.clone())),
         }
@@ -149,20 +151,20 @@ impl TaskRegistry {
 
     /// Obtiene una tarea por su tipo. Devuelve `None` si no está registrada.
     pub fn get(&self, task_id: &TaskId) -> Option<Arc<dyn Task>> {
-        let map = self.tasks.read().expect("TaskRegistry lock poisoned");
+        let map = self.tasks.read();
         map.get(task_id).cloned()
     }
 
     /// Lista todos los tipos de tarea registrados
     pub fn list(&self) -> Vec<TaskId> {
-        let map = self.tasks.read().expect("TaskRegistry lock poisoned");
+        let map = self.tasks.read();
         map.keys().cloned().collect()
     }
 
     /// Exporta el catálogo de manifiestos de todas las tareas registradas.
     /// Serializable a JSON: es la base de tooling, documentación y editores.
     pub fn catalog(&self) -> Vec<TaskManifest> {
-        let map = self.tasks.read().expect("TaskRegistry lock poisoned");
+        let map = self.tasks.read();
         let mut catalog: Vec<TaskManifest> =
             map.values().map(|task| task.manifest().clone()).collect();
         catalog.sort_by(|a, b| a.id.0.cmp(&b.id.0));
@@ -171,7 +173,7 @@ impl TaskRegistry {
 
     /// Verifica si un tipo de tarea está registrado
     pub fn contains(&self, task_id: &TaskId) -> bool {
-        let map = self.tasks.read().expect("TaskRegistry lock poisoned");
+        let map = self.tasks.read();
         map.contains_key(task_id)
     }
 }
@@ -181,5 +183,15 @@ impl Clone for TaskRegistry {
         Self {
             tasks: Arc::clone(&self.tasks),
         }
+    }
+}
+
+impl<T: Task> FromIterator<T> for TaskRegistry {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let registry = TaskRegistry::new();
+        for task in iter {
+            registry.register(task);
+        }
+        registry
     }
 }

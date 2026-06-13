@@ -1,4 +1,4 @@
-//! Reglas de aristas con disparador (`on: error` / `on: panic`).
+//! Rules for edges with a trigger (`on: error` / `on: panic`).
 
 use crate::error::{WorkflowError, codes};
 use crate::spec::node::NodeKind;
@@ -6,9 +6,9 @@ use crate::spec::node::gateway::GatewayKind;
 use crate::spec::workflow::{EdgeTrigger, WorkflowDefinition};
 use crate::validate::{ValidationCtx, ValidationRule};
 
-/// Una arista con `on:` solo puede salir de nodos que ejecutan tareas
-/// (task, foreach, loop, subworkflow) y nunca puede entrar a un gateway join
-/// (el conteo de llegadas del join solo considera el flujo normal).
+/// An edge with `on:` may only originate from nodes that execute tasks
+/// (task, foreach, loop, subworkflow) and may never target a gateway join
+/// (the join's arrival count only considers the normal flow).
 pub struct EdgeTriggers;
 
 impl ValidationRule for EdgeTriggers {
@@ -37,7 +37,7 @@ impl ValidationRule for EdgeTriggers {
                         WorkflowError::new(
                             codes::ERROR_EDGE_INVALID_SOURCE,
                             format!(
-                                "La arista {}→{} con `on: {}` debe originarse en un nodo task, foreach, loop o subworkflow",
+                                "Edge {}→{} with `on: {}` must originate from a task, foreach, loop, or subworkflow node",
                                 edge.from,
                                 edge.to,
                                 trigger_name(edge.on)
@@ -59,7 +59,7 @@ impl ValidationRule for EdgeTriggers {
                         WorkflowError::new(
                             codes::ERROR_EDGE_TO_JOIN,
                             format!(
-                                "La arista {}→{} con `on: {}` no puede apuntar a un gateway join",
+                                "Edge {}→{} with `on: {}` cannot target a gateway join",
                                 edge.from,
                                 edge.to,
                                 trigger_name(edge.on)

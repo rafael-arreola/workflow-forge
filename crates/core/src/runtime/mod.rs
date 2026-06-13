@@ -1,16 +1,16 @@
-//! La familia **runtime**: ejecución de workflows.
+//! The **runtime** family: workflow execution.
 //!
-//! - [`executor`]: el orquestador. Construye con validación + compilación
-//!   (schemas, índice del grafo, sub-workflows) y recorre el grafo
-//!   run-to-completion. La semántica por kind de nodo vive en `handlers`
-//!   (un módulo por familia) y la política de retry/timeout/panic en
+//! - [`executor`]: the orchestrator. Builds with validation + compilation
+//!   (schemas, graph index, sub-workflows) and traverses the graph
+//!   run-to-completion. The per-node-kind semantics lives in `handlers`
+//!   (one module per family) and the retry/timeout/panic policy in
 //!   `policy`.
-//! - [`context`]: el documento de estado de una ejecución (`$.trigger`,
-//!   `$.nodes.<id>.output`, `$.workflow`) sobre el que se resuelven
-//!   mappings y condiciones.
-//! - [`registry`]: workflows reusables como sub-workflows, por nombre.
-//! - `graph` / `schemas` (privados): índices y validadores precompilados
-//!   al construir el executor.
+//! - [`context`]: the state document of an execution (`$.trigger`,
+//!   `$.nodes.<id>.output`, `$.workflow`) against which mappings and
+//!   conditions are resolved.
+//! - [`registry`]: reusable workflows as sub-workflows, by name.
+//! - `graph` / `schemas` (private): precompiled indices and validators
+//!   built when constructing the executor.
 
 pub mod context;
 pub mod executor;

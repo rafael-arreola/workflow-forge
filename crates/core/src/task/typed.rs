@@ -1,39 +1,38 @@
-//! Tareas tipadas y por closure: el camino de baja fricción para extender.
+//! Typed and closure-based tasks: the low-friction path for extending.
 //!
-//! La unidad de extensión del engine es la tarea ([`Task`]). Implementar el
-//! trait a mano (struct + `manifest` + `execute`) es el camino completo y
-//! sigue disponible para casos con estado o acceso total al contexto; este
-//! módulo ofrece dos atajos para el caso común, donde una tarea es
-//! esencialmente una función `entrada → salida`:
+//! The engine's extension unit is the task ([`Task`]). Implementing the trait
+//! by hand (struct + `manifest` + `execute`) is the full path and remains
+//! available for cases with state or full context access; this module offers
+//! two shortcuts for the common case, where a task is essentially an
+//! `input → output` function:
 //!
-//! - [`FnTask`] / [`register_fn`](crate::task::TaskRegistry::register_fn): una
-//!   closure async sobre JSON crudo ([`WorkflowData`]), sin schemas. Para
-//!   transformaciones triviales.
+//! - [`FnTask`] / [`register_fn`](crate::task::TaskRegistry::register_fn): an
+//!   async closure over raw JSON ([`WorkflowData`]), without schemas. For
+//!   trivial transformations.
 //! - [`TypedTask`] / [`register_typed`](crate::task::TaskRegistry::register_typed):
-//!   una closure async sobre tus propios tipos. Los JSON Schema de
-//!   input/output se **derivan** de los tipos vía `schemars`, de modo que el
-//!   engine los valida como con cualquier otra tarea y aparecen en el
-//!   catálogo sin escribirlos a mano.
+//!   an async closure over your own types. The input/output JSON Schemas are
+//!   **derived** from the types via `schemars`, so the engine validates them
+//!   like any other task and they appear in the catalog without writing them
+//!   by hand.
 //!
-//! Ambas closures reciben un [`TaskCtx`]: una vista de los recursos por
-//! ejecución (blobs, ids de ejecución) que evita tomar prestado el
-//! [`WorkflowContext`] completo y mantiene la inferencia de tipos limpia. Si
-//! una tarea necesita leer el documento de estado entero, implementa [`Task`]
-//! directamente.
+//! Both closures receive a [`TaskCtx`]: a view of per-execution resources
+//! (blobs, execution ids) that avoids borrowing the full [`WorkflowContext`]
+//! and keeps type inference clean. If a task needs to read the entire state
+//! document, implement [`Task`] directly.
 //!
 //! ```no_run
 //! # use workflow_forge_core::task::TaskRegistry;
 //! # use serde::{Deserialize, Serialize};
 //! # use schemars::JsonSchema;
 //! #[derive(Deserialize, JsonSchema)]
-//! struct CrearEnvioIn { sku: String, qty: u32 }
+//! struct CreateShipmentIn { sku: String, qty: u32 }
 //!
 //! #[derive(Serialize, JsonSchema)]
-//! struct CrearEnvioOut { tracking: String }
+//! struct CreateShipmentOut { tracking: String }
 //!
 //! let registry = TaskRegistry::new();
-//! registry.register_typed("acme.crear_envio", |_ctx, input: CrearEnvioIn| async move {
-//!     Ok(CrearEnvioOut { tracking: format!("{}-{}", input.sku, input.qty) })
+//! registry.register_typed("acme.create_shipment", |_ctx, input: CreateShipmentIn| async move {
+//!     Ok(CreateShipmentOut { tracking: format!("{}-{}", input.sku, input.qty) })
 //! });
 //! ```
 
@@ -51,15 +50,15 @@ use crate::io::blob::BlobStore;
 use crate::runtime::context::WorkflowContext;
 use crate::task::{Task, TaskId, TaskManifest, WorkflowData, WorkflowResult};
 
-/// Vista de los recursos por ejecución disponibles para una tarea creada por
-/// closure ([`FnTask`] / [`TypedTask`]).
+/// View of per-execution resources available to a closure-created task
+/// ([`FnTask`] / [`TypedTask`]).
 ///
-/// Es un puñado de handles baratos de clonar (los blobs son un `Arc`, los ids
-/// son cadenas) tomados del [`WorkflowContext`]. Se entrega por valor para que
-/// el futuro de la closure sea `'static` y la inferencia de la closure no tope
-/// con lifetimes. Para acceso completo al documento de estado de la ejecución,
-/// implementa [`Task`] directamente y usa el `&WorkflowContext` que recibe
-/// `execute`.
+/// It is a handful of cheap-to-clone handles (blobs are an `Arc`, ids are
+/// strings) taken from the [`WorkflowContext`]. It is delivered by value so
+/// the closure's future is `'static` and closure inference does not hit
+/// lifetime issues. For full access to the execution state document,
+/// implement [`Task`] directly and use the `&WorkflowContext` that `execute`
+/// receives.
 #[derive(Clone)]
 pub struct TaskCtx {
     execution_id: String,
@@ -68,24 +67,24 @@ pub struct TaskCtx {
 }
 
 impl TaskCtx {
-    /// Identificador único de la ejecución actual (UUID v7).
+    /// Unique identifier of the current execution (UUID v7).
     pub fn execution_id(&self) -> &str {
         &self.execution_id
     }
 
-    /// Id de la ejecución padre, si esta corre dentro de un sub-workflow.
+    /// Parent execution id, if this runs inside a sub-workflow.
     pub fn parent_execution_id(&self) -> Option<&str> {
         self.parent_execution_id.as_deref()
     }
 
-    /// Almacenamiento de blobs de la ejecución (convención `$blob`).
+    /// Blob storage for the execution (`$blob` convention).
     pub fn blobs(&self) -> &Arc<dyn BlobStore> {
         &self.blobs
     }
 
-    /// Clave de idempotencia estable derivada de `value` (ver
-    /// [`crate::idempotency`]). El mismo payload siempre produce la misma
-    /// clave; pásala al sistema destino para que deduplique bajo reintento.
+    /// Stable idempotency key derived from `value` (see
+    /// [`crate::idempotency`]). The same payload always produces the same
+    /// key; pass it to the target system so it deduplicates under retry.
     pub fn idempotency_key(&self, value: &serde_json::Value) -> String {
         crate::idempotency::key_for(value)
     }
@@ -102,18 +101,18 @@ impl From<&WorkflowContext> for TaskCtx {
 }
 
 // ---------------------------------------------------------------------------
-// TypedTask: closure async sobre tipos propios, schemas derivados
+// TypedTask: async closure over custom types, derived schemas
 // ---------------------------------------------------------------------------
 
-/// Tarea construida a partir de una closure async sobre tipos propios.
+/// Task built from an async closure over custom types.
 ///
-/// El input se deserializa al tipo `In` antes de invocar la closure (un input
-/// que no encaja produce `TASK_INPUT_INVALID`) y el output se serializa desde
-/// el tipo `Out` (`TASK_OUTPUT_INVALID` si no serializa). Los JSON Schema del
-/// manifiesto se derivan de `In`/`Out` con `schemars`. Normalmente se crea vía
-/// [`register_typed`](crate::task::TaskRegistry::register_typed); usa
-/// [`TypedTask::new`] directamente solo si quieres añadir una descripción
-/// antes de registrar.
+/// The input is deserialized to type `In` before invoking the closure (an
+/// input that doesn't fit produces `TASK_INPUT_INVALID`) and the output is
+/// serialized from type `Out` (`TASK_OUTPUT_INVALID` if it doesn't serialize).
+/// The manifest's JSON Schemas are derived from `In`/`Out` via `schemars`.
+/// Normally created via [`register_typed`](crate::task::TaskRegistry::register_typed);
+/// use [`TypedTask::new`] directly only if you want to add a description
+/// before registering.
 pub struct TypedTask<In, Out, F> {
     manifest: TaskManifest,
     f: F,
@@ -127,7 +126,8 @@ where
     F: Fn(TaskCtx, In) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Result<Out, WorkflowError>> + Send + 'static,
 {
-    /// Crea la tarea derivando los schemas de input/output de los tipos.
+    /// Creates the task by deriving input/output schemas from the types.
+    #[must_use]
     pub fn new(id: impl Into<TaskId>, f: F) -> Self {
         let mut manifest = TaskManifest::new(id);
         manifest.input_schema = Some(schemars::schema_for!(In));
@@ -139,7 +139,8 @@ where
         }
     }
 
-    /// Añade la descripción legible del manifiesto.
+    /// Adds a human-readable description to the manifest.
+    #[must_use]
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.manifest.description = Some(description.into());
         self
@@ -162,7 +163,7 @@ where
         let typed: In = serde_json::from_value(input.0).map_err(|e| {
             WorkflowError::new(
                 codes::TASK_INPUT_INVALID,
-                format!("el input no coincide con el tipo esperado: {e}"),
+                format!("input does not match the expected type: {e}"),
             )
             .with_source_task(self.manifest.id.0.clone())
         })?;
@@ -170,7 +171,7 @@ where
         let value = serde_json::to_value(out).map_err(|e| {
             WorkflowError::new(
                 codes::TASK_OUTPUT_INVALID,
-                format!("el output no es serializable a JSON: {e}"),
+                format!("output is not serializable to JSON: {e}"),
             )
             .with_source_task(self.manifest.id.0.clone())
         })?;
@@ -179,14 +180,14 @@ where
 }
 
 // ---------------------------------------------------------------------------
-// FnTask: closure async sobre JSON crudo, sin schemas
+// FnTask: async closure over raw JSON, no schemas
 // ---------------------------------------------------------------------------
 
-/// Tarea construida a partir de una closure async sobre JSON crudo
-/// ([`WorkflowData`]), sin schemas declarados.
+/// Task built from an async closure over raw JSON ([`WorkflowData`]), without
+/// declared schemas.
 ///
-/// El atajo mínimo cuando una tarea solo manipula `Value` y no amerita tipos
-/// ni un struct. Normalmente se crea vía
+/// The minimal shortcut when a task only manipulates `Value` and doesn't
+/// warrant types or a struct. Normally created via
 /// [`register_fn`](crate::task::TaskRegistry::register_fn).
 pub struct FnTask<F> {
     manifest: TaskManifest,
@@ -198,7 +199,8 @@ where
     F: Fn(TaskCtx, WorkflowData) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = WorkflowResult> + Send + 'static,
 {
-    /// Crea la tarea con un manifiesto mínimo (solo id, sin schemas).
+    /// Creates the task with a minimal manifest (only id, no schemas).
+    #[must_use]
     pub fn new(id: impl Into<TaskId>, f: F) -> Self {
         Self {
             manifest: TaskManifest::new(id),
@@ -206,7 +208,8 @@ where
         }
     }
 
-    /// Añade la descripción legible del manifiesto.
+    /// Adds a human-readable description to the manifest.
+    #[must_use]
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.manifest.description = Some(description.into());
         self
@@ -259,7 +262,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn typed_task_deriva_schemas_y_ejecuta() {
+    async fn typed_task_derives_schemas_and_executes() {
         let registry = TaskRegistry::new();
         registry.register_typed("math.sum", |_ctx, input: SumIn| async move {
             Ok(SumOut {
@@ -267,8 +270,8 @@ mod tests {
             })
         });
 
-        let task = registry.get(&"math.sum".into()).expect("registrada");
-        // El manifiesto trae los schemas derivados de los tipos.
+        let task = registry.get(&"math.sum".into()).expect("registered");
+        // The manifest carries the schemas derived from the types.
         assert!(task.manifest().input_schema.is_some());
         assert!(task.manifest().output_schema.is_some());
 
@@ -280,7 +283,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn typed_task_input_invalido_da_codigo() {
+    async fn typed_task_invalid_input_gives_code() {
         let registry = TaskRegistry::new();
         registry.register_typed("math.sum", |_ctx, input: SumIn| async move {
             Ok(SumOut {
@@ -290,25 +293,25 @@ mod tests {
         let task = registry.get(&"math.sum".into()).unwrap();
 
         let err = task
-            .execute(&ctx(), WorkflowData(json!({ "a": "no-es-numero" })))
+            .execute(&ctx(), WorkflowData(json!({ "a": "not-a-number" })))
             .await
-            .expect_err("debe fallar");
+            .expect_err("must fail");
         assert_eq!(err.code, codes::TASK_INPUT_INVALID);
         assert_eq!(err.source_task.as_deref(), Some("math.sum"));
     }
 
     #[tokio::test]
-    async fn fn_task_sobre_json_crudo() {
+    async fn fn_task_over_raw_json() {
         let registry = TaskRegistry::new();
         registry.register_fn("util.echo", |_ctx, input| async move { Ok(input) });
         let task = registry.get(&"util.echo".into()).unwrap();
-        // Sin schemas declarados.
+        // No declared schemas.
         assert!(task.manifest().input_schema.is_none());
 
         let out = task
-            .execute(&ctx(), WorkflowData(json!({ "hola": "mundo" })))
+            .execute(&ctx(), WorkflowData(json!({ "hello": "world" })))
             .await
             .unwrap();
-        assert_eq!(out.0, json!({ "hola": "mundo" }));
+        assert_eq!(out.0, json!({ "hello": "world" }));
     }
 }

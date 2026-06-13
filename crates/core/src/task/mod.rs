@@ -1,13 +1,13 @@
-//! La familia **task**: el contrato de extensión del engine.
+//! The **task** family: the engine's extension contract.
 //!
-//! Todo lo ejecutable dentro de un workflow es una tarea: una implementación
-//! del trait [`Task`] que publica su contrato ([`TaskManifest`]) y vive en
-//! un [`TaskRegistry`]. Las extensiones (crates `workflow-forge-ext-*`)
-//! existen para registrar tareas; el engine no conoce ninguna de antemano.
+//! Everything executable within a workflow is a task: an implementation of
+//! the [`Task`] trait that publishes its contract ([`TaskManifest`]) and lives
+//! in a [`TaskRegistry`]. Extensions (`workflow-forge-ext-*` crates) exist to
+//! register tasks; the engine knows none in advance.
 //!
-//! Los perfiles ([`ProfileTask`]) son tareas derivadas: especializan una
-//! tarea base registrada con configuración horneada y schemas propios, y
-//! una vez registrados son indistinguibles de cualquier otra tarea.
+//! Profiles ([`ProfileTask`]) are derived tasks: they specialize a registered
+//! base task with baked-in configuration and their own schemas, and once
+//! registered they are indistinguishable from any other task.
 
 pub mod profile;
 pub mod registry;
@@ -23,8 +23,8 @@ use serde::{Deserialize, Serialize};
 use crate::error::WorkflowError;
 use crate::runtime::context::WorkflowContext;
 
-/// Datos que circulan entre nodos durante la ejecución de un workflow.
-/// Envoltorio sobre `serde_json::Value` con conversiones implícitas.
+/// Data that flows between nodes during workflow execution.
+/// Wrapper around `serde_json::Value` with implicit conversions.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WorkflowData(pub serde_json::Value);
 
@@ -54,10 +54,45 @@ impl From<&WorkflowData> for serde_json::Value {
     }
 }
 
-/// Resultado de la ejecución de una tarea: datos exitosos o error estructurado
+/// Result of a task execution: successful data or structured error
 pub type WorkflowResult = Result<WorkflowData, WorkflowError>;
 
-/// Identificador namespaced de una tarea (ej. `"http.request"`).
+impl WorkflowData {
+    /// Returns the inner value as a string slice, if it is a JSON string.
+    pub fn as_str(&self) -> Option<&str> {
+        self.0.as_str()
+    }
+    /// Returns the inner value as i64, if it is a JSON integer fitting that range.
+    pub fn as_i64(&self) -> Option<i64> {
+        self.0.as_i64()
+    }
+    /// Returns the inner value as u64, if it is a JSON integer fitting that range.
+    pub fn as_u64(&self) -> Option<u64> {
+        self.0.as_u64()
+    }
+    /// Returns the inner value as f64, if it is a JSON number.
+    pub fn as_f64(&self) -> Option<f64> {
+        self.0.as_f64()
+    }
+    /// Returns the inner value as bool, if it is a JSON boolean.
+    pub fn as_bool(&self) -> Option<bool> {
+        self.0.as_bool()
+    }
+    /// Returns a reference to the inner JSON array, if it is one.
+    pub fn as_array(&self) -> Option<&Vec<serde_json::Value>> {
+        self.0.as_array()
+    }
+    /// Returns a reference to the inner JSON object, if it is one.
+    pub fn as_object(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        self.0.as_object()
+    }
+    /// Returns true if the inner value is JSON null.
+    pub fn is_null(&self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Namespaced identifier of a task (e.g. `"http.request"`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TaskId(pub String);
 
@@ -104,26 +139,26 @@ impl<'de> serde::Deserialize<'de> for TaskId {
     }
 }
 
-/// Contrato público de una tarea: el "esquema de extensión" de la spec.
-/// Es serializable, de modo que el catálogo completo de tareas disponibles
-/// puede exportarse como JSON y validarse/documentarse sin el engine.
+/// Public contract of a task: the spec's "extension schema".
+/// It is serializable, so the full catalog of available tasks can be exported
+/// as JSON and validated/documented without the engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskManifest {
-    /// Id namespaced único (ej. `"http.request"`)
+    /// Unique namespaced id (e.g. `"http.request"`)
     pub id: TaskId,
-    /// Descripción legible del propósito de la tarea
+    /// Human-readable description of the task's purpose
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    /// JSON Schema que valida el input de la tarea
+    /// JSON Schema that validates the task's input
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input_schema: Option<schemars::Schema>,
-    /// JSON Schema que valida el output de la tarea
+    /// JSON Schema that validates the task's output
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_schema: Option<schemars::Schema>,
 }
 
 impl TaskManifest {
-    /// Manifiesto mínimo: solo id, sin schemas
+    /// Minimal manifest: only id, no schemas
     pub fn new(id: impl Into<TaskId>) -> Self {
         Self {
             id: id.into(),
@@ -134,18 +169,18 @@ impl TaskManifest {
     }
 }
 
-/// Unidad mínima ejecutable dentro de un workflow.
-/// Cada tarea publica su manifiesto y define su lógica de transformación.
+/// Minimal executable unit within a workflow.
+/// Each task publishes its manifest and defines its transformation logic.
 #[async_trait]
 pub trait Task: Send + Sync + 'static {
-    /// Contrato público de la tarea: id, descripción y schemas de input/output
+    /// Public contract of the task: id, description, and input/output schemas
     fn manifest(&self) -> &TaskManifest;
 
-    /// Transforma los datos de entrada en la salida esperada.
-    /// Recibe el contexto inmutable del workflow y los datos de entrada.
+    /// Transforms input data into the expected output.
+    /// Receives the immutable workflow context and the input data.
     async fn execute(&self, ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult;
 
-    /// Id de la tarea, tomado del manifiesto
+    /// Task id, taken from the manifest
     fn task_id(&self) -> &TaskId {
         &self.manifest().id
     }

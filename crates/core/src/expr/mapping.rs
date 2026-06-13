@@ -1,23 +1,23 @@
-//! Resolución de *mappings* `$.`: la convención de los `input` de nodos,
-//! los `items` de foreach y el `output` de los nodos end, siempre contra el
-//! documento de contexto de la ejecución.
+//! Resolution of *mappings* `$.`: the convention for node `input`,
+//! foreach `items`, and end node `output`, always against the
+//! execution context document.
 
 use serde_json::Value;
 
 use crate::error::{WorkflowError, codes};
 use crate::expr::path::query_first;
 
-/// Resuelve un input mapping contra el documento de contexto.
+/// Resolves an input mapping against the context document.
 ///
-/// Reglas de la spec 1.0:
-/// - Strings que empiezan con `$.` se resuelven como JSONPath contra el contexto.
-/// - `$$.` escapa: produce el literal `$.` sin resolver.
-/// - Objetos y arrays se recorren recursivamente; el resto son literales.
-/// - Un path que no resuelve es error (`MAPPING_PATH_NOT_FOUND`): en un input
-///   es casi siempre un bug de definición. Los valores opcionales se preparan
-///   con un nodo `data.*` previo.
-/// - Los paths son singulares: se toma el primer match. Wildcards no están
-///   soportados en mappings v1.
+/// Spec 1.0 rules:
+/// - Strings starting with `$.` are resolved as JSONPath against the context.
+/// - `$$.` escapes: produces the literal `$.` without resolving.
+/// - Objects and arrays are traversed recursively; the rest are literals.
+/// - A path that does not resolve is an error (`MAPPING_PATH_NOT_FOUND`): in an input
+///   it is almost always a definition bug. Optional values are prepared
+///   with a prior `data.*` node.
+/// - Paths are singular: the first match is taken. Wildcards are not
+///   supported in v1 mappings.
 pub fn resolve(mapping: &Value, context: &Value) -> Result<Value, WorkflowError> {
     match mapping {
         Value::String(s) => resolve_string(s, context),
@@ -47,14 +47,14 @@ fn resolve_string(s: &str, context: &Value) -> Result<Value, WorkflowError> {
         .map_err(|e| {
             WorkflowError::new(
                 codes::INVALID_JSONPATH,
-                format!("Path '{}' inválido en mapping: {}", s, e),
+                format!("Invalid path '{}' in mapping: {}", s, e),
             )
         })?
         .cloned()
         .ok_or_else(|| {
             WorkflowError::new(
                 codes::MAPPING_PATH_NOT_FOUND,
-                format!("El path '{}' no resuelve ningún valor del contexto", s),
+                format!("Path '{}' does not resolve any value from the context", s),
             )
         })
 }

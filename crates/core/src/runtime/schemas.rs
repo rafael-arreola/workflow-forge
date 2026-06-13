@@ -7,14 +7,14 @@ use crate::spec::node::{NodeId, NodeKind};
 use crate::spec::workflow::WorkflowDefinition;
 use crate::task::{TaskId, TaskRegistry};
 
-/// Validadores JSON Schema precompilados al construir el executor.
-/// Los schemas son estáticos por definición: compilarlos en cada ejecución
-/// de nodo (y en cada retry) es trabajo repetido.
+/// Precompiled JSON Schema validators, built when constructing the executor.
+/// Schemas are static by definition: compiling them on every node execution
+/// (and on every retry) is wasted work.
 #[derive(Default)]
 pub(crate) struct CompiledSchemas {
-    /// Validadores de nodos start (trigger) y end (resultado final)
+    /// Validators for start nodes (trigger) and end nodes (final result)
     pub(crate) nodes: HashMap<NodeId, jsonschema::Validator>,
-    /// Validadores (input, output) por tarea referenciada en el workflow
+    /// (input, output) validators per task referenced in the workflow
     pub(crate) tasks:
         HashMap<TaskId, (Option<jsonschema::Validator>, Option<jsonschema::Validator>)>,
 }
@@ -36,7 +36,7 @@ impl CompiledSchemas {
                 Err(e) => {
                     errors.push(WorkflowError::new(
                         codes::INVALID_SCHEMA,
-                        format!("Schema inválido en {where_}: {e}"),
+                        format!("Invalid schema at {where_}: {e}"),
                     ));
                     None
                 }
@@ -49,7 +49,7 @@ impl CompiledSchemas {
                 _ => None,
             };
             if let Some(schema) = schema
-                && let Some(validator) = compile(schema, format!("el nodo '{}'", node.id))
+                && let Some(validator) = compile(schema, format!("node '{}'", node.id))
             {
                 compiled.nodes.insert(node.id.clone(), validator);
             }
@@ -68,11 +68,11 @@ impl CompiledSchemas {
                 let input = manifest
                     .input_schema
                     .as_ref()
-                    .and_then(|s| compile(s, format!("el input de la tarea '{}'", manifest.id)));
+                    .and_then(|s| compile(s, format!("task '{}' input", manifest.id)));
                 let output = manifest
                     .output_schema
                     .as_ref()
-                    .and_then(|s| compile(s, format!("el output de la tarea '{}'", manifest.id)));
+                    .and_then(|s| compile(s, format!("task '{}' output", manifest.id)));
                 compiled.tasks.insert(task_ref.clone(), (input, output));
             }
         }
@@ -85,7 +85,7 @@ impl CompiledSchemas {
     }
 }
 
-/// Valida un `Value` contra un validador precompilado.
+/// Validates a `Value` against a precompiled validator.
 pub(crate) fn validate_compiled(
     validator: &jsonschema::Validator,
     data: &Value,

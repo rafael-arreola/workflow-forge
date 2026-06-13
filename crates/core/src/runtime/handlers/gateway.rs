@@ -1,10 +1,11 @@
-//! Nodos `gateway`: control de flujo estilo BPMN.
+//! `gateway` nodes: BPMN-style flow control.
 //!
-//! - `exclusive`: evalúa sus ramas en orden y sigue solo la arista cuyo
-//!   label corresponde a la primera rama cumplida (o la rama `else`).
-//! - `parallel`: fan-out concurrente por todas las aristas salientes.
-//! - `join`: fan-in; acumula llegadas y continúa cuando llegaron todas las
-//!   ramas del flujo normal, con output `{nodo_origen: output}`.
+//! - `exclusive`: evaluates its branches in order and follows only the edge
+//!   whose label corresponds to the first matching branch (or the `else`
+//!   branch).
+//! - `parallel`: concurrent fan-out through all outgoing edges.
+//! - `join`: fan-in; accumulates arrivals and continues when all normal-flow
+//!   branches have arrived, with output `{origin_node: output}`.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -21,8 +22,9 @@ use crate::spec::node::{Node, NodeId};
 use crate::spec::workflow::FlowEdge;
 
 impl WorkflowExecutor {
-    /// Ejecuta un gateway según su tipo.
+    /// Executes a gateway according to its type.
     #[allow(clippy::too_many_arguments)]
+    #[tracing::instrument(skip(self, node, gateway, carried, ctx, state))]
     pub(crate) async fn run_gateway(
         &self,
         node: &Node,
@@ -43,13 +45,13 @@ impl WorkflowExecutor {
                         WorkflowError::new(
                             codes::NO_BRANCH_MATCHED,
                             format!(
-                                "Ninguna rama del gateway '{node_id}' se cumplió y no hay rama else"
+                                "No branch of gateway '{node_id}' matched and there is no else branch"
                             ),
                         )
                         .with_source_task(node_id.to_string())
                     })?;
 
-                debug!(node_id = %node_id, branch = %winner, "Gateway exclusive resuelto");
+                debug!(node_id = %node_id, branch = %winner, "Exclusive gateway resolved");
                 ctx.set_node_output(node_id, (*carried).clone());
                 self.emit(
                     ctx,
@@ -88,15 +90,15 @@ impl WorkflowExecutor {
                     .index
                     .incoming_count
                     .get(node_id)
-                    .expect("validación exige >=2 entradas");
-                let from = origin.expect("un join siempre tiene predecesor");
+                    .expect("validation requires >= 2 inputs");
+                let from = origin.expect("a join always has a predecessor");
                 let complete = {
-                    let mut joins = state.joins.lock().expect("RunState lock poisoned");
+                    let mut joins = state.joins.lock();
                     let arrivals = joins.entry(node_id.clone()).or_default();
                     arrivals.push((from, carried));
                     if arrivals.len() == expected {
-                        // Se remueve la entrada: lo que quede en el mapa al
-                        // final son joins que nunca completaron
+                        // Remove the entry: whatever remains in the map at the
+                        // end are joins that never completed
                         joins.remove(node_id)
                     } else {
                         None
@@ -104,9 +106,9 @@ impl WorkflowExecutor {
                 };
 
                 match complete {
-                    None => Ok(()), // esta rama termina; la última llegada continúa
+                    None => Ok(()), // this branch ends; the last arrival continues
                     Some(arrivals) => {
-                        // Output determinista: objeto {nodo_origen: output}
+                        // Deterministic output: object {origin_node: output}
                         let output = Value::Object(
                             arrivals
                                 .into_iter()
@@ -142,8 +144,8 @@ impl WorkflowExecutor {
         }
     }
 
-    /// Evalúa las ramas de un gateway exclusive en orden y devuelve el label
-    /// de la primera que se cumple, o la rama else.
+    /// Evaluates the branches of an exclusive gateway in order and returns the
+    /// label of the first matching branch, or the else branch.
     fn pick_branch(
         &self,
         gateway: &GatewayNode,

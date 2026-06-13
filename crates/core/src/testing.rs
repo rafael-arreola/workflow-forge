@@ -1,15 +1,15 @@
-//! Helpers de prueba: tareas mock para ejercitar workflows sin dependencias
-//! vivas.
+//! Test helpers: mock tasks for exercising workflows without live
+//! dependencies.
 //!
-//! Se habilita con el feature `testing`. La idea es un *dry run*: reemplazar
-//! una tarea real (`http.request`, una transferencia SFTP, un perfil de
-//! cliente) por una [`MockTask`] en el [`TaskRegistry`](crate::task::TaskRegistry),
-//! correr el workflow con el executor real y asertar tanto el output
-//! producido como **lo que el workflow habría llamado** — sin red, sin
-//! filesystem, sin secretos.
+//! Enabled via the `testing` feature. The idea is a *dry run*: replace
+//! a real task (`http.request`, an SFTP transfer, a client profile)
+//! with a [`MockTask`] in the [`TaskRegistry`](crate::task::TaskRegistry),
+//! run the workflow with the real executor and assert both the output
+//! produced and **what the workflow would have called** — no network, no
+//! filesystem, no secrets.
 //!
-//! Como la tarea es la unidad de trabajo, mockear una basta para recorrer
-//! cualquier camino del grafo de forma determinista.
+//! Since the task is the unit of work, mocking one is enough to traverse
+//! any graph path deterministically.
 //!
 //! ```
 //! use std::sync::Arc;
@@ -35,7 +35,7 @@
 //!
 //! let registry = Arc::new(TaskRegistry::new());
 //! let mock = MockTask::returning("acme.create_order", json!({ "order_id": "o-1" }));
-//! let calls = mock.call_log();              // toma el handle ANTES de registrar
+//! let calls = mock.call_log();              // grab the handle BEFORE registering
 //! registry.register(mock);
 //!
 //! let executor = WorkflowExecutor::new(workflow, registry).unwrap();
@@ -47,7 +47,9 @@
 //! # });
 //! ```
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use parking_lot::Mutex;
 
 use async_trait::async_trait;
 use serde_json::Value;
@@ -64,9 +66,9 @@ enum Behavior {
     Calls(Box<MockFn>),
 }
 
-/// Una [`Task`] suplente que registra cada input que recibe y produce un
-/// resultado preprogramado. Regístrala bajo el id de la tarea que quieres
-/// reemplazar; el executor la trata exactamente igual que a la real.
+/// A stand-in [`Task`] that records every input it receives and produces a
+/// preprogrammed result. Register it under the id of the task you want to
+/// replace; the executor treats it exactly like the real one.
 pub struct MockTask {
     manifest: TaskManifest,
     behavior: Behavior,
@@ -74,18 +76,18 @@ pub struct MockTask {
 }
 
 impl MockTask {
-    /// Un mock que siempre devuelve `value`.
+    /// A mock that always returns `value`.
     pub fn returning(id: impl Into<TaskId>, value: Value) -> Self {
         Self::with_behavior(id, Behavior::Returns(value))
     }
 
-    /// Un mock que siempre falla con `error` (para ejercitar rutas
-    /// `on: "error"`, reintentos, etc.).
+    /// A mock that always fails with `error` (for exercising
+    /// `on: "error"` paths, retries, etc.).
     pub fn failing(id: impl Into<TaskId>, error: WorkflowError) -> Self {
         Self::with_behavior(id, Behavior::Fails(error))
     }
 
-    /// Un mock que calcula su resultado a partir del input recibido.
+    /// A mock that computes its result from the received input.
     pub fn with_fn<F>(id: impl Into<TaskId>, f: F) -> Self
     where
         F: Fn(Value) -> WorkflowResult + Send + Sync + 'static,
@@ -101,8 +103,8 @@ impl MockTask {
         }
     }
 
-    /// Handle barato y compartible de las llamadas registradas. Clónalo
-    /// **antes** de registrar el mock — el registro mueve la tarea al
+    /// Cheap, sharable handle to the recorded calls. Clone it
+    /// **before** registering the mock — registration moves the task into the
     /// registry.
     pub fn call_log(&self) -> CallLog {
         CallLog {
@@ -118,10 +120,7 @@ impl Task for MockTask {
     }
 
     async fn execute(&self, _ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult {
-        self.calls
-            .lock()
-            .expect("MockTask call log poisoned")
-            .push(input.0.clone());
+        self.calls.lock().push(input.0.clone());
         match &self.behavior {
             Behavior::Returns(value) => Ok(WorkflowData(value.clone())),
             Behavior::Fails(error) => Err(error.clone()),
@@ -130,36 +129,32 @@ impl Task for MockTask {
     }
 }
 
-/// Vista compartible y de solo lectura de los inputs que una [`MockTask`]
-/// recibió, en orden de llamada. Se obtiene de [`MockTask::call_log`].
+/// Sharable, read-only view of the inputs a [`MockTask`]
+/// received, in call order. Obtained from [`MockTask::call_log`].
 #[derive(Clone)]
 pub struct CallLog {
     calls: Arc<Mutex<Vec<Value>>>,
 }
 
 impl CallLog {
-    /// Cuántas veces fue invocado el mock.
+    /// How many times the mock was invoked.
     pub fn count(&self) -> usize {
-        self.calls.lock().expect("CallLog poisoned").len()
+        self.calls.lock().len()
     }
 
-    /// `true` si el mock fue invocado al menos una vez.
+    /// `true` if the mock was invoked at least once.
     pub fn called(&self) -> bool {
         self.count() > 0
     }
 
-    /// Copia de todos los inputs recibidos, en orden de llamada.
+    /// Copy of all received inputs, in call order.
     pub fn inputs(&self) -> Vec<Value> {
-        self.calls.lock().expect("CallLog poisoned").clone()
+        self.calls.lock().clone()
     }
 
-    /// El input de la n-ésima invocación, si ocurrió.
+    /// The input of the n-th invocation, if it occurred.
     pub fn nth(&self, index: usize) -> Option<Value> {
-        self.calls
-            .lock()
-            .expect("CallLog poisoned")
-            .get(index)
-            .cloned()
+        self.calls.lock().get(index).cloned()
     }
 }
 
@@ -189,7 +184,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mock_returning_registra_input_y_output() {
+    async fn mock_returning_records_input_and_output() {
         let registry = Arc::new(TaskRegistry::new());
         let mock = MockTask::returning("ext.call", json!({ "ok": true }));
         let calls = mock.call_log();
@@ -205,21 +200,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mock_failing_recorre_la_ruta_de_error() {
+    async fn mock_failing_traverses_error_path() {
         let registry = Arc::new(TaskRegistry::new());
         registry.register(MockTask::failing(
             "ext.call",
-            WorkflowError::new("BOOM", "fallo simulado"),
+            WorkflowError::new("BOOM", "simulated failure"),
         ));
 
         let executor = WorkflowExecutor::new(workflow_calling("ext.call"), registry).unwrap();
-        // El error rutea al nodo end "ko", así que la ejecución completa igual.
+        // The error routes to the "ko" end node, so execution still completes.
         let out = executor.run(WorkflowData(json!({}))).await.unwrap();
         assert_eq!(out.0["code"], json!("BOOM"));
     }
 
     #[tokio::test]
-    async fn mock_with_fn_transforma_el_input() {
+    async fn mock_with_fn_transforms_input() {
         let registry = Arc::new(TaskRegistry::new());
         registry.register(MockTask::with_fn("ext.call", |input| {
             let n = input["n"].as_i64().unwrap_or(0);

@@ -1,21 +1,21 @@
-//! Resolución de *shapes*: estructuras JSON donde los strings con prefijo `@`
-//! son JSONPath relativos a un documento fuente. Es la convención compartida
-//! por `data.transform`/`data.map` y por el `bind`/`output` de los perfiles
-//! de tarea ([`crate::spec::profile::TaskProfile`]).
+//! Resolution of *shapes*: JSON structures where strings with the `@` prefix
+//! are JSONPath relative to a source document. This is the convention shared
+//! by `data.transform`/`data.map` and by the `bind`/`output` of task
+//! profiles ([`crate::spec::profile::TaskProfile`]).
 //!
-//! Reglas:
-//! - `"@"` → el source completo.
-//! - `"@.a.b"` → JSONPath `$.a.b` sobre el source; un path ausente produce `null`.
-//! - `"@@."` → escape: produce el literal `"@."`.
-//! - Cualquier otro valor (strings sin prefijo, números, bools, null) es literal.
-//! - Objetos y arrays se resuelven recursivamente.
+//! Rules:
+//! - `"@"` → the entire source.
+//! - `"@.a.b"` → JSONPath `$.a.b` over the source; a missing path produces `null`.
+//! - `"@@."` → escape: produces the literal `"@."`.
+//! - Any other value (non-prefixed strings, numbers, bools, null) is a literal.
+//! - Objects and arrays are resolved recursively.
 
 use serde_json::Value;
 
 use crate::error::{WorkflowError, codes};
 use crate::expr::path::query_first;
 
-/// Resuelve recursivamente un `shape` contra el documento `source`.
+/// Recursively resolves a `shape` against the `source` document.
 pub fn apply_shape(shape: &Value, source: &Value) -> Result<Value, WorkflowError> {
     match shape {
         Value::String(s) => {
@@ -32,7 +32,7 @@ pub fn apply_shape(shape: &Value, source: &Value) -> Result<Value, WorkflowError
             let resolved = query_first(source, &path).map_err(|e| {
                 WorkflowError::new(
                     codes::INVALID_JSONPATH,
-                    format!("Path '@.{rest}' inválido en shape: {e}"),
+                    format!("Invalid path '@.{rest}' in shape: {e}"),
                 )
             })?;
             Ok(resolved.cloned().unwrap_or(Value::Null))

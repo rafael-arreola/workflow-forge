@@ -1,7 +1,7 @@
-//! Extensión `tabular` de workflow-forge: CSV y XLSX hacia/desde JSON,
-//! usando la convención `$blob` para los archivos.
+//! workflow-forge `tabular` extension: CSV and XLSX to/from JSON,
+//! using the `$blob` convention for files.
 //!
-//! | Tarea | Contrato |
+//! | Task | Contract |
 //! |-------|----------|
 //! | `tabular.parse` | `{ file: $blob, format?, headers?, delimiter?, sheet?, raw? }` → `{ rows, count }` |
 //! | `tabular.write` | `{ rows, format, name?, headers?, delimiter?, sheet? }` → `{ file: $blob }` |
@@ -17,27 +17,27 @@ use workflow_forge_core::task::TaskRegistry;
 use workflow_forge_core::task::{Task, TaskManifest};
 use workflow_forge_core::task::{WorkflowData, WorkflowResult};
 
-/// Registra todas las tareas de la extensión en el registry
+/// Registers all extension tasks in the registry
 pub fn register(registry: &TaskRegistry) {
     registry.register(ParseTask::default());
     registry.register(WriteTask::default());
 }
 
-/// Códigos de error que esta extensión puede emitir. Mismo contrato que
-/// [`workflow_forge_core::error::codes`]: constantes estables, nunca cambian
-/// de valor. Los errores de blobs reusan los códigos del core.
+/// Error codes this extension can emit. Same contract as
+/// [`workflow_forge_core::error::codes`]: stable constants, never change
+/// value. Blob errors reuse the core codes.
 pub mod codes {
-    /// El input de una tarea `tabular.*` no deserializa contra su contrato.
+    /// The input of a `tabular.*` task does not deserialize against its contract.
     pub const TABULAR_INPUT_INVALID: &str = "TABULAR_INPUT_INVALID";
-    /// No se pudo inferir el formato del blob (sin `format` explícito y la
-    /// extensión del nombre no es `.csv`/`.tsv`/`.xlsx`).
+    /// Could not infer the blob format (no explicit `format` and the
+    /// name extension is not `.csv`/`.tsv`/`.xlsx`).
     pub const TABULAR_FORMAT_UNKNOWN: &str = "TABULAR_FORMAT_UNKNOWN";
-    /// Fallo de parseo o escritura del archivo tabular (CSV o XLSX).
+    /// Failed to parse or write the tabular file (CSV or XLSX).
     pub const TABULAR_ERROR: &str = "TABULAR_ERROR";
 }
 
 fn schema(value: Value) -> workflow_forge_core::schemars::Schema {
-    serde_json::from_value(value).expect("schema estático válido")
+    serde_json::from_value(value).expect("valid static schema")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -47,7 +47,7 @@ enum Format {
     Xlsx,
 }
 
-/// Infiere el formato por la extensión del nombre del blob
+/// Infers the format from the blob name's extension
 fn infer_format(explicit: Option<Format>, blob: &BlobRef) -> Result<Format, WorkflowError> {
     if let Some(format) = explicit {
         return Ok(format);
@@ -61,7 +61,7 @@ fn infer_format(explicit: Option<Format>, blob: &BlobRef) -> Result<Format, Work
         Err(WorkflowError::new(
             codes::TABULAR_FORMAT_UNKNOWN,
             format!(
-                "No se pudo inferir el formato del blob '{}'; especifica `format`",
+                "Could not infer the format of blob '{}'; specify `format`",
                 blob.name.as_deref().unwrap_or(&blob.id)
             ),
         ))
@@ -81,15 +81,15 @@ struct ParseInput {
     file: BlobRef,
     #[serde(default)]
     format: Option<Format>,
-    /// La primera fila son encabezados → filas como objetos
+    /// First row is headers → rows as objects
     #[serde(default = "default_true")]
     headers: bool,
     #[serde(default = "default_delimiter")]
     delimiter: String,
-    /// Hoja a leer (solo xlsx; default: la primera)
+    /// Sheet to read (xlsx only; default: the first one)
     #[serde(default)]
     sheet: Option<String>,
-    /// Desactiva la inferencia de tipos en CSV (todo queda como string)
+    /// Disables type inference in CSV (everything stays as string)
     #[serde(default)]
     raw: bool,
 }
@@ -110,8 +110,8 @@ impl Default for ParseTask {
     fn default() -> Self {
         let mut manifest = TaskManifest::new("tabular.parse");
         manifest.description = Some(
-            "Parsea un blob CSV/XLSX a filas JSON. Con headers, cada fila es un \
-             objeto {columna: valor}; sin headers, un array de celdas"
+            "Parses a CSV/XLSX blob into JSON rows. With headers, each row is an \
+             object {column: value}; without headers, an array of cells"
                 .into(),
         );
         manifest.input_schema = Some(schema(json!({
@@ -138,7 +138,7 @@ impl Default for ParseTask {
     }
 }
 
-/// Inferencia de tipos para celdas CSV: null, bool, entero, float o string
+/// Type inference for CSV cells: null, bool, integer, float, or string
 fn parse_scalar(s: &str) -> Value {
     if s.is_empty() {
         return Value::Null;
@@ -148,7 +148,7 @@ fn parse_scalar(s: &str) -> Value {
         "false" => return Value::Bool(false),
         _ => {}
     }
-    // "007" debe seguir siendo string: solo números sin ceros iniciales
+    // "007" must remain a string: only numbers without leading zeros
     let leading_zero = (s.len() > 1 && s.starts_with('0') && !s.starts_with("0."))
         || (s.len() > 2 && s.starts_with("-0") && !s.starts_with("-0."));
     if !leading_zero {
@@ -235,11 +235,11 @@ fn parse_xlsx(path: &std::path::Path, input: &ParseInput) -> Result<Value, Workf
             .sheet_names()
             .first()
             .cloned()
-            .ok_or_else(|| tabular_error("el archivo xlsx no tiene hojas"))?,
+            .ok_or_else(|| tabular_error("the xlsx file has no sheets"))?,
     };
     let range = workbook
         .worksheet_range(&sheet_name)
-        .map_err(|e| tabular_error(format!("hoja '{sheet_name}': {e}")))?;
+        .map_err(|e| tabular_error(format!("sheet '{sheet_name}': {e}")))?;
 
     let rows: Vec<Vec<Value>> = range
         .rows()
@@ -248,13 +248,13 @@ fn parse_xlsx(path: &std::path::Path, input: &ParseInput) -> Result<Value, Workf
                 .map(|cell| match cell {
                     Data::Empty => Value::Null,
                     Data::Int(i) => json!(i),
-                    // xlsx guarda enteros como float; se normalizan de regreso
+                    // xlsx stores integers as floats; normalize them back
                     Data::Float(f) if f.fract() == 0.0 && f.abs() < (i64::MAX as f64) => {
                         json!(*f as i64)
                     }
                     Data::Float(f) => json!(f),
                     Data::Bool(b) => Value::Bool(*b),
-                    // Fechas Excel: número serial (días desde 1900)
+                    // Excel dates: serial number (days since 1900)
                     Data::DateTime(dt) => json!(dt.as_f64()),
                     Data::String(s) => Value::String(s.clone()),
                     Data::DateTimeIso(s) | Data::DurationIso(s) => Value::String(s.clone()),
@@ -295,10 +295,10 @@ impl Task for ParseTask {
 struct WriteInput {
     rows: Vec<Value>,
     format: Format,
-    /// Nombre del archivo resultante (default según formato)
+    /// Name of the resulting file (default based on format)
     #[serde(default)]
     name: Option<String>,
-    /// Orden explícito de columnas; default: llaves ordenadas de la primera fila
+    /// Explicit column order; default: sorted keys of the first row
     #[serde(default)]
     headers: Option<Vec<String>>,
     #[serde(default = "default_delimiter")]
@@ -315,8 +315,8 @@ impl Default for WriteTask {
     fn default() -> Self {
         let mut manifest = TaskManifest::new("tabular.write");
         manifest.description = Some(
-            "Escribe filas JSON (objetos o arrays) como un blob CSV/XLSX y \
-             devuelve su referencia"
+            "Writes JSON rows (objects or arrays) as a CSV/XLSX blob and \
+             returns its reference"
                 .into(),
         );
         manifest.input_schema = Some(schema(json!({
@@ -340,14 +340,14 @@ impl Default for WriteTask {
     }
 }
 
-/// Columnas a escribir: explícitas o las llaves (ordenadas) de la primera fila
+/// Columns to write: explicit or the (sorted) keys of the first row
 fn resolve_columns(input: &WriteInput) -> Option<Vec<String>> {
     if let Some(headers) = &input.headers {
         return Some(headers.clone());
     }
     match input.rows.first() {
         Some(Value::Object(map)) => Some(map.keys().cloned().collect()),
-        _ => None, // filas como arrays: sin encabezados
+        _ => None, // rows as arrays: no headers
     }
 }
 
@@ -459,22 +459,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn inferencia_de_tipos_csv() {
+    fn csv_type_inference() {
         assert_eq!(parse_scalar(""), Value::Null);
         assert_eq!(parse_scalar("true"), Value::Bool(true));
         assert_eq!(parse_scalar("42"), json!(42));
         assert_eq!(parse_scalar("3.5"), json!(3.5));
-        assert_eq!(parse_scalar("hola"), json!("hola"));
-        assert_eq!(parse_scalar("007"), json!("007")); // se conserva como string
+        assert_eq!(parse_scalar("hello"), json!("hello"));
+        assert_eq!(parse_scalar("007"), json!("007")); // preserved as string
         assert_eq!(parse_scalar("1e3"), json!(1000.0));
     }
 
     #[test]
-    fn filas_con_headers_a_objetos() {
+    fn rows_with_headers_to_objects() {
         let rows = vec![
             vec![json!("a"), json!("b")],
             vec![json!(1), json!(2)],
-            vec![json!(3)], // fila corta → null
+            vec![json!(3)], // short row → null
         ];
         let value = rows_to_value(rows, true).unwrap();
         assert_eq!(value, json!([ { "a": 1, "b": 2 }, { "a": 3, "b": null } ]));

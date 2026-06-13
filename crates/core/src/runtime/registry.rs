@@ -1,39 +1,38 @@
-//! Registro de workflows reusables como sub-workflows, por nombre.
+//! Registry of reusable workflows as sub-workflows, by name.
 
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+
+use parking_lot::RwLock;
 
 use crate::error::{WorkflowError, codes};
 use crate::spec::workflow::WorkflowDefinition;
 
-/// Registro de workflows reusables como sub-workflows, indexados por nombre.
-/// Es el complemento compartido de la sección `workflows` inline de un
-/// documento (la sección inline tiene precedencia al resolver).
+/// Registry of reusable workflows as sub-workflows, indexed by name.
+/// It is the shared complement of a document's inline `workflows` section
+/// (the inline section takes precedence when resolving).
 ///
-/// Thread-safe, igual que [`crate::task::TaskRegistry`].
+/// Thread-safe, just like [`crate::task::TaskRegistry`].
 #[derive(Default)]
 pub struct WorkflowRegistry {
     workflows: RwLock<HashMap<String, Arc<WorkflowDefinition>>>,
 }
 
 impl WorkflowRegistry {
-    /// Crea un registro vacío
+    /// Creates an empty registry
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Registra un workflow por su `name`. Error `WORKFLOW_NAME_CONFLICT`
-    /// si ya existe uno con ese nombre.
+    /// Registers a workflow by its `name`. Error `WORKFLOW_NAME_CONFLICT`
+    /// if one already exists with that name.
     pub fn register(&self, workflow: WorkflowDefinition) -> Result<(), WorkflowError> {
-        let mut map = self
-            .workflows
-            .write()
-            .expect("WorkflowRegistry lock poisoned");
+        let mut map = self.workflows.write();
         if map.contains_key(&workflow.name) {
             return Err(WorkflowError::new(
                 codes::WORKFLOW_NAME_CONFLICT,
                 format!(
-                    "No se puede registrar el workflow '{}': ya existe uno con ese nombre",
+                    "Cannot register workflow '{}': a workflow with that name already exists",
                     workflow.name
                 ),
             ));
@@ -42,30 +41,21 @@ impl WorkflowRegistry {
         Ok(())
     }
 
-    /// Obtiene un workflow por nombre
+    /// Gets a workflow by name
     pub fn get(&self, name: &str) -> Option<Arc<WorkflowDefinition>> {
-        let map = self
-            .workflows
-            .read()
-            .expect("WorkflowRegistry lock poisoned");
+        let map = self.workflows.read();
         map.get(name).cloned()
     }
 
-    /// Verifica si un workflow está registrado
+    /// Checks whether a workflow is registered
     pub fn contains(&self, name: &str) -> bool {
-        let map = self
-            .workflows
-            .read()
-            .expect("WorkflowRegistry lock poisoned");
+        let map = self.workflows.read();
         map.contains_key(name)
     }
 
-    /// Nombres de todos los workflows registrados
+    /// Names of all registered workflows
     pub fn list(&self) -> Vec<String> {
-        let map = self
-            .workflows
-            .read()
-            .expect("WorkflowRegistry lock poisoned");
+        let map = self.workflows.read();
         map.keys().cloned().collect()
     }
 }

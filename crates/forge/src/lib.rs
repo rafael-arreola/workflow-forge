@@ -1,9 +1,9 @@
-//! workflow-forge: motor de workflows declarativos definidos con
+//! workflow-forge: engine for declarative workflows defined with
 //! JSON Schema + JSONPath.
 //!
-//! Esta es la fachada del proyecto: re-exporta el core y registra las
-//! extensiones oficiales según los feature flags habilitados
-//! (`util`, `data`, `http`; todos activos por default).
+//! This is the project facade: re-exports the core and registers the
+//! official extensions according to the enabled feature flags
+//! (`util`, `data`, `http`; all active by default).
 //!
 //! ```no_run
 //! use workflow_forge::prelude::*;
@@ -13,19 +13,19 @@
 //!     "name": "demo", "version": "0.1.0",
 //!     "nodes": [
 //!         { "id": "start", "kind": "start" },
-//!         { "id": "espera", "kind": "task", "task": "util.delay",
+//!         { "id": "wait", "kind": "task", "task": "util.delay",
 //!           "input": { "ms": 100, "value": "$.trigger" } },
 //!         { "id": "end", "kind": "end" }
 //!     ],
 //!     "edges": [
-//!         { "from": "start", "to": "espera" },
-//!         { "from": "espera", "to": "end" }
+//!         { "from": "start", "to": "wait" },
+//!         { "from": "wait", "to": "end" }
 //!     ]
 //! }"#)?;
 //!
 //! let executor = WorkflowExecutor::new(workflow, workflow_forge::default_registry())
 //!     .map_err(|errors| format!("{errors:?}"))?;
-//! let result = executor.run(WorkflowData(serde_json::json!({ "hola": 1 }))).await?;
+//! let result = executor.run(WorkflowData(serde_json::json!({ "hello": 1 }))).await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -37,7 +37,7 @@ pub use workflow_forge_core::idempotency;
 
 use workflow_forge_core::task::TaskRegistry;
 
-/// Tipos de uso cotidiano, listos para importar con un solo `use`
+/// Everyday-use types, ready to import with a single `use`
 pub mod prelude {
     pub use workflow_forge_core::error::WorkflowError;
     pub use workflow_forge_core::io::secret::{EnvSecrets, SecretProvider};
@@ -59,7 +59,7 @@ pub mod prelude {
 #[cfg(feature = "testing")]
 pub use workflow_forge_core::testing;
 
-/// Registra en el registry todas las extensiones habilitadas por features
+/// Registers all feature-enabled extensions in the registry
 pub fn register_extensions(registry: &TaskRegistry) {
     #[cfg(feature = "util")]
     workflow_forge_ext_util::register(registry);
@@ -75,7 +75,7 @@ pub fn register_extensions(registry: &TaskRegistry) {
     workflow_forge_ext_compress::register(registry);
 }
 
-/// Registry nuevo con todas las extensiones habilitadas ya registradas
+/// A new registry with all enabled extensions already registered
 pub fn default_registry() -> Arc<TaskRegistry> {
     let registry = Arc::new(TaskRegistry::new());
     register_extensions(&registry);

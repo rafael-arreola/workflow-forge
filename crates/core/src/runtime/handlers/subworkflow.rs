@@ -1,4 +1,4 @@
-//! Nodos `subworkflow`: ejecución de otro workflow como si fuera una tarea.
+//! `subworkflow` nodes: execution of another workflow as if it were a task.
 
 use std::sync::Arc;
 
@@ -13,10 +13,10 @@ use crate::spec::node::{Node, SubworkflowNode};
 use crate::task::WorkflowData;
 
 impl WorkflowExecutor {
-    /// Ejecuta un nodo subworkflow: resuelve su input, lo entrega como
-    /// trigger del hijo y devuelve el output final del hijo. El error del
-    /// hijo (incluido `TASK_PANIC`) sube tal cual: `after_task_result` lo
-    /// rutea por las aristas `on: error` / `on: panic` del nodo.
+    /// Executes a subworkflow node: resolves its input, delivers it as the
+    /// child's trigger, and returns the child's final output. The child's
+    /// error (including `TASK_PANIC`) bubbles up as-is: `after_task_result`
+    /// routes it through the node's `on: error` / `on: panic` edges.
     pub(crate) async fn run_subworkflow(
         &self,
         node: &Node,
@@ -27,7 +27,7 @@ impl WorkflowExecutor {
         let child = self
             .subworkflows
             .get(&node.id)
-            .expect("resuelto al construir el executor");
+            .expect("resolved when building the executor");
 
         let input = match &sub.input {
             Some(mapping_def) => ctx
@@ -41,7 +41,7 @@ impl WorkflowExecutor {
             node_id = %node.id,
             child = %child.workflow.name,
             child_execution_id = %child_ctx.execution_id(),
-            "Ejecutando sub-workflow"
+            "Executing sub-workflow"
         );
         child
             .run_with_ctx(WorkflowData(input), &child_ctx)

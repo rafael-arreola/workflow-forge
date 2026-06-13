@@ -1,8 +1,10 @@
-//! El contexto de una ejecución: el documento de estado compartido sobre el
-//! que se resuelven mappings y condiciones, más los recursos por ejecución
-//! (blobs, contador de eventos).
+//! The execution context: the shared state document against which mappings
+//! and conditions are resolved, plus per-execution resources (blobs, event
+//! counter).
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+
+use parking_lot::RwLock;
 use std::time::Instant;
 
 use serde_json::{Value, json};
@@ -12,42 +14,42 @@ use crate::io::blob::{BlobStore, BlobStoreFactory, TempDirBlobFactory};
 use crate::spec::node::NodeId;
 use crate::spec::workflow::WorkflowDefinition;
 
-/// Contexto de una ejecución. Contiene el documento de estado sobre el que
-/// se resuelven mappings y condiciones:
+/// Execution context. Holds the state document against which mappings and
+/// conditions are resolved:
 ///
 /// ```text
-/// $.trigger              → input inicial del workflow
-/// $.nodes.<id>.output    → resultado de cada nodo ejecutado
-/// $.workflow             → metadata (id, nombre, versión, execution_id)
+/// $.trigger              → initial workflow input
+/// $.nodes.<id>.output    → result of each executed node
+/// $.workflow             → metadata (id, name, version, execution_id)
 /// ```
 ///
-/// Thread-safe: las ramas paralelas leen y escriben concurrentemente.
+/// Thread-safe: parallel branches read and write concurrently.
 pub struct WorkflowContext {
-    /// Identificador único de la ejecución actual (UUID v7)
+    /// Unique identifier of the current execution (UUID v7)
     execution_id: String,
-    /// Id de la ejecución padre, si esta ejecución es un sub-workflow
+    /// Parent execution id, if this execution is a sub-workflow
     parent_execution_id: Option<String>,
-    /// Instante en que inició la ejecución
+    /// Instant when the execution started
     started_at: Instant,
-    /// Documento de estado de la ejecución
+    /// Execution state document
     state: RwLock<Value>,
-    /// Almacenamiento de blobs (`$blob`) con ciclo de vida de la ejecución
-    /// (los sub-workflows comparten el store de la ejecución raíz)
+    /// Blob storage (`$blob`) with execution lifecycle
+    /// (sub-workflows share the root execution's store)
     blobs: Arc<dyn BlobStore>,
-    /// Contador de eventos de observabilidad. Compartido entre una ejecución
-    /// y sus sub-workflows: el orden total cubre el árbol completo
+    /// Observability event counter. Shared between an execution and its
+    /// sub-workflows: the total order covers the full execution tree
     event_seq: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl WorkflowContext {
-    /// Crea el contexto de una nueva ejecución con su documento de estado
-    /// inicial y el [`TempDirBlobFactory`] por defecto.
+    /// Creates the context for a new execution with its initial state document
+    /// and the default [`TempDirBlobFactory`].
     pub fn new(workflow: &WorkflowDefinition, trigger: Value) -> Self {
         Self::with_blob_factory(workflow, trigger, &TempDirBlobFactory)
     }
 
-    /// Como [`WorkflowContext::new`], con una fábrica de blobs explícita
-    /// (inyectada vía `WorkflowExecutorBuilder::blobs`).
+    /// Like [`WorkflowContext::new`], with an explicit blob factory
+    /// (injected via `WorkflowExecutorBuilder::blobs`).
     pub fn with_blob_factory(
         workflow: &WorkflowDefinition,
         trigger: Value,
@@ -75,10 +77,10 @@ impl WorkflowContext {
         }
     }
 
-    /// Contexto de una ejecución hija (sub-workflow): execution_id propio
-    /// (UUID v7) y documento de estado propio, pero comparte el BlobStore y
-    /// el contador de eventos del padre. Las referencias `$blob` cruzan la
-    /// frontera; el padre limpia los blobs al terminar la ejecución raíz.
+    /// Context for a child execution (sub-workflow): its own execution_id
+    /// (UUID v7) and its own state document, but shares the parent's BlobStore
+    /// and event counter. `$blob` references cross the boundary; the parent
+    /// cleans up blobs when the root execution finishes.
     pub fn child_of(workflow: &WorkflowDefinition, trigger: Value, parent: &Self) -> Self {
         let execution_id = Uuid::now_v7().to_string();
         let state = json!({
@@ -102,57 +104,57 @@ impl WorkflowContext {
         }
     }
 
-    /// Id de la ejecución padre, si esta ejecución es un sub-workflow
+    /// Parent execution id, if this execution is a sub-workflow
     pub fn parent_execution_id(&self) -> Option<&str> {
         self.parent_execution_id.as_deref()
     }
 
-    /// Siguiente número de secuencia de evento (orden total por ejecución)
+    /// Next event sequence number (total order per execution)
     pub fn next_event_seq(&self) -> u64 {
         self.event_seq
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
     }
 
-    /// Identificador único de la ejecución
+    /// Unique identifier of the execution
     pub fn execution_id(&self) -> &str {
         &self.execution_id
     }
 
-    /// Almacenamiento de blobs de esta ejecución (convención `$blob`)
+    /// Blob storage for this execution (`$blob` convention)
     pub fn blobs(&self) -> &Arc<dyn BlobStore> {
         &self.blobs
     }
 
-    /// Tiempo transcurrido desde el inicio de la ejecución
+    /// Time elapsed since the execution started
     pub fn elapsed(&self) -> std::time::Duration {
         self.started_at.elapsed()
     }
 
-    /// Lee el documento de estado bajo el lock, sin clonar
+    /// Reads the state document under the lock, without cloning
     pub fn with_state<R>(&self, f: impl FnOnce(&Value) -> R) -> R {
-        let state = self.state.read().expect("WorkflowContext lock poisoned");
+        let state = self.state.read();
         f(&state)
     }
 
-    /// Copia completa del documento de estado (para debugging/inspección)
+    /// Full copy of the state document (for debugging/inspection)
     pub fn snapshot(&self) -> Value {
         self.with_state(Clone::clone)
     }
 
-    /// Publica el output de un nodo en `$.nodes.<id>.output`
+    /// Publishes a node's output at `$.nodes.<id>.output`
     pub fn set_node_output(&self, node_id: &NodeId, output: Value) {
-        let mut state = self.state.write().expect("WorkflowContext lock poisoned");
+        let mut state = self.state.write();
         state["nodes"][node_id.0.as_str()] = json!({ "output": output });
     }
 
-    /// Output de un nodo ya ejecutado, si existe
+    /// Output of a previously executed node, if any
     pub fn node_output(&self, node_id: &NodeId) -> Option<Value> {
         self.with_state(|state| state["nodes"][node_id.0.as_str()].get("output").cloned())
     }
 
-    /// Publica el error de un nodo en `$.nodes.<id>.error` (rutas on_error)
+    /// Publishes a node's error at `$.nodes.<id>.error` (on_error paths)
     pub fn set_node_error(&self, node_id: &NodeId, error: Value) {
-        let mut state = self.state.write().expect("WorkflowContext lock poisoned");
+        let mut state = self.state.write();
         state["nodes"][node_id.0.as_str()]["error"] = error;
     }
 }
@@ -172,7 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn documento_inicial_y_outputs() {
+    fn initial_document_and_outputs() {
         let ctx = WorkflowContext::new(&workflow(), json!({ "user_id": 7 }));
 
         ctx.with_state(|state| {

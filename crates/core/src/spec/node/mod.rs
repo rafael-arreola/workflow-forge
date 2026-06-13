@@ -1,10 +1,10 @@
-//! Nodos del grafo: el vocabulario de la spec 1.0.
+//! Graph nodes: the spec 1.0 vocabulary.
 //!
-//! [`NodeKind`] es un enum **cerrado a propósito**: el vocabulario de nodos
-//! lo define la spec, no el host. La extensibilidad del engine pasa por las
-//! tareas ([`crate::task::Task`]), no por kinds nuevos. Agregar un kind es
-//! un cambio de spec: variante aquí + handler en `runtime/handlers/` +
-//! reglas en `validate/rules/` (checklist completo en la doc de `lib.rs`).
+//! [`NodeKind`] is a **deliberately closed** enum: the node vocabulary
+//! is defined by the spec, not the host. The engine's extensibility goes through
+//! tasks ([`crate::task::Task`]), not through new kinds. Adding a kind is
+//! a spec change: variant here + handler in `runtime/handlers/` +
+//! rules in `validate/rules/` (full checklist in the `lib.rs` doc).
 
 use serde::{Deserialize, Serialize};
 
@@ -14,7 +14,7 @@ pub mod gateway;
 pub mod loop_node;
 pub mod task;
 
-/// Identificador único de un nodo dentro del grafo del workflow.
+/// Unique identifier of a node within the workflow graph.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct NodeId(pub String);
 
@@ -42,40 +42,40 @@ impl std::fmt::Display for NodeId {
     }
 }
 
-/// Nodo del grafo de workflow. Contiene un identificador y una variante de comportamiento
-/// que se resuelve en tiempo de ejecución.
+/// Workflow graph node. Contains an identifier and a behavior variant
+/// that is resolved at runtime.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Node {
-    /// Identificador único del nodo dentro del workflow
+    /// Unique identifier of the node within the workflow
     pub id: NodeId,
-    /// Tipo de nodo: tarea ejecutable, condicional, bucle, paralelo, etc.
+    /// Node type: executable task, conditional, loop, parallel, etc.
     #[serde(flatten)]
     pub kind: NodeKind,
 }
 
-/// Clasificación de nodos. El campo `"kind"` actúa como discriminador en JSON.
+/// Node classification. The `"kind"` field acts as the discriminator in JSON.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum NodeKind {
-    /// Nodo de arranque del workflow
+    /// Workflow start node
     Start(event::StartNode),
-    /// Nodo de terminación del workflow
+    /// Workflow end node
     End(event::EndNode),
-    /// Nodo de tarea ejecutable
+    /// Executable task node
     Task(task::TaskNode),
-    /// Nodo que itera un array invocando una tarea por elemento
+    /// Node that iterates over an array invoking a task per element
     Foreach(foreach::ForeachNode),
-    /// Nodo que invoca una tarea repetidamente con condición de continuación
-    /// y tope duro de iteraciones
+    /// Node that invokes a task repeatedly with a continuation condition
+    /// and hard iteration cap
     Loop(loop_node::LoopNode),
-    /// Nodo de control de flujo (exclusive/parallel/join)
+    /// Control flow node (exclusive/parallel/join)
     Gateway(gateway::GatewayNode),
-    /// Nodo que ejecuta otro workflow como si fuera una tarea
+    /// Node that executes another workflow as if it were a task
     Subworkflow(SubworkflowNode),
 }
 
 impl NodeKind {
-    /// Nombre del kind como aparece en la spec JSON (el discriminador).
+    /// Kind name as it appears in the spec JSON (the discriminator).
     pub fn name(&self) -> &'static str {
         match self {
             NodeKind::Start(_) => "start",
@@ -89,18 +89,18 @@ impl NodeKind {
     }
 }
 
-/// Nodo que ejecuta otro workflow: el `input` resuelto (o el token del
-/// predecesor) se convierte en el trigger del hijo y el output final del
-/// hijo es el output del nodo. Las tres salidas ruteables aplican: un fallo
-/// del hijo rutea por `on: error` y un panic dentro del hijo por `on: panic`.
+/// Node that executes another workflow: the resolved `input` (or the
+/// predecessor's token) becomes the child's trigger and the child's final output
+/// is the node's output. All three routable outputs apply: a child
+/// failure routes via `on: error` and a panic within the child via `on: panic`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubworkflowNode {
-    /// Nombre del workflow hijo. Se resuelve primero contra la sección
-    /// `workflows` del documento y después contra el `WorkflowRegistry`
-    /// compartido del executor.
+    /// Child workflow name. Resolved first against the document's
+    /// `workflows` section and then against the executor's shared
+    /// `WorkflowRegistry`.
     pub workflow: String,
-    /// Mapping del trigger del hijo (reglas `$.` de los inputs);
-    /// sin `input`, el hijo recibe el output del predecesor
+    /// Mapping of the child's trigger (`$.` rules from the inputs);
+    /// without `input`, the child receives the predecessor's output
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input: Option<serde_json::Value>,
 }

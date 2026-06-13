@@ -1,6 +1,6 @@
-//! Quickstart: renderiza un string desde el trigger con `data.template`.
+//! Quickstart: renders a string from the trigger with `data.template`.
 //!
-//! Ejecutar con:
+//! Run with:
 //!     cargo run -p workflow-forge --example greet
 
 use workflow_forge::prelude::*;

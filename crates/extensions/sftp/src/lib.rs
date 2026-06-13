@@ -1,19 +1,19 @@
-//! Extensión `sftp` de workflow-forge: transferencia de archivos sobre SFTP,
-//! usando la convención `$blob` para el contenido.
+//! workflow-forge `sftp` extension: file transfer over SFTP,
+//! using the `$blob` convention for content.
 //!
-//! | Tarea | Contrato |
+//! | Task | Contract |
 //! |-------|----------|
 //! | `sftp.get` | `{ connection, path }` → `{ file: $blob }` |
 //! | `sftp.put` | `{ connection, file: $blob, path }` → `{ path, size }` |
 //! | `sftp.list` | `{ connection, path }` → `{ entries: [{name, kind, size, modified}] }` |
 //!
 //! `connection`: `{ host, port?, username, auth: {type: "password"|"key", ...},
-//! known_hosts? }`. Si se provee `known_hosts` (ruta a un archivo formato
-//! OpenSSH), la llave del host se verifica y la conexión falla si no coincide;
-//! sin él, la conexión NO verifica la identidad del servidor.
+//! known_hosts? }`. If `known_hosts` is provided (path to an OpenSSH format
+//! file), the host key is verified and the connection fails on mismatch;
+//! without it, the connection does NOT verify the server identity.
 //!
-//! Los archivos se transfieren por streaming hacia/desde el `BlobStore` de la
-//! ejecución: nunca se cargan completos en memoria.
+//! Files are transferred via streaming to/from the execution's `BlobStore`:
+//! they are never fully loaded into memory.
 
 use std::io::Write;
 use std::net::TcpStream;
@@ -34,22 +34,22 @@ use workflow_forge_core::task::{WorkflowData, WorkflowResult};
 mod pool;
 use pool::{Connector, Pool};
 
-/// Pool de sesiones SSH reutilizables entre llamadas (ver [`register_pooled`]).
+/// Pool of reusable SSH sessions across calls (see [`register_pooled`]).
 pub type SftpPool = Pool<Ssh2Connector>;
 
-/// Registra las tareas SFTP que **abren una sesión nueva por llamada**.
-/// Para alto volumen contra los mismos hosts, prefiere [`register_pooled`].
+/// Registers SFTP tasks that **open a new session per call**.
+/// For high volume against the same hosts, prefer [`register_pooled`].
 pub fn register(registry: &TaskRegistry) {
     registry.register(GetTask::default());
     registry.register(PutTask::default());
     registry.register(ListTask::default());
 }
 
-/// Registra las tareas SFTP respaldadas por un [`SftpPool`] compartido, que
-/// **reutiliza sesiones SSH autenticadas** entre llamadas (la parte cara:
-/// TCP + handshake + auth). `max_idle_per_conn` acota cuántas sesiones ociosas
-/// se guardan por identidad de conexión. La vía recomendada cuando un `foreach`
-/// hace muchas transferencias contra el mismo servidor.
+/// Registers SFTP tasks backed by a shared [`SftpPool`], which
+/// **reuses authenticated SSH sessions** across calls (the expensive part:
+/// TCP + handshake + auth). `max_idle_per_conn` bounds how many idle sessions
+/// are kept per connection identity. The recommended approach when a `foreach`
+/// makes many transfers against the same server.
 pub fn register_pooled(registry: &TaskRegistry, max_idle_per_conn: usize) {
     let pool = Arc::new(SftpPool::new(Ssh2Connector, max_idle_per_conn));
     registry.register(GetTask::pooled(pool.clone()));
@@ -58,22 +58,22 @@ pub fn register_pooled(registry: &TaskRegistry, max_idle_per_conn: usize) {
 }
 
 fn schema(value: Value) -> workflow_forge_core::schemars::Schema {
-    serde_json::from_value(value).expect("schema estático válido")
+    serde_json::from_value(value).expect("valid static schema")
 }
 
-/// Códigos de error que esta extensión puede emitir. Mismo contrato que
-/// [`workflow_forge_core::error::codes`]: constantes estables, nunca cambian
-/// de valor. Los errores de blobs reusan los códigos del core.
+/// Error codes this extension can emit. Same contract as
+/// [`workflow_forge_core::error::codes`]: stable constants, never change
+/// value. Blob errors reuse the core codes.
 pub mod codes {
-    /// El input de una tarea `sftp.*` no deserializa contra su contrato.
+    /// The input of an `sftp.*` task does not deserialize against its contract.
     pub const SFTP_INPUT_INVALID: &str = "SFTP_INPUT_INVALID";
-    /// Fallo de conexión, autenticación o transferencia SFTP. Suele ser
-    /// transitorio: candidato natural a `retry`.
+    /// SFTP connection, authentication, or transfer failure. Usually
+    /// transient: a natural candidate for `retry`.
     pub const SFTP_ERROR: &str = "SFTP_ERROR";
-    /// El host no aparece en el archivo `known_hosts` provisto.
+    /// The host does not appear in the provided `known_hosts` file.
     pub const SFTP_HOST_UNKNOWN: &str = "SFTP_HOST_UNKNOWN";
-    /// La llave del host NO coincide con `known_hosts` (posible MITM).
-    /// Nunca debe reintentarse a ciegas.
+    /// The host key does NOT match `known_hosts` (possible MITM).
+    /// Should never be blindly retried.
     pub const SFTP_HOST_KEY_MISMATCH: &str = "SFTP_HOST_KEY_MISMATCH";
 }
 
@@ -82,11 +82,11 @@ fn sftp_error(message: impl std::fmt::Display) -> WorkflowError {
 }
 
 // ---------------------------------------------------------------------------
-// Conexión
+// Connection
 // ---------------------------------------------------------------------------
 
-/// Parámetros de conexión SFTP. Tipo opaco (campos privados): se deserializa
-/// del input de las tareas; aparece en la firma pública del pool.
+/// SFTP connection parameters. Opaque type (private fields): deserialized
+/// from task input; appears in the pool's public signature.
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Connection {
     host: String,
@@ -94,7 +94,7 @@ pub struct Connection {
     port: u16,
     username: String,
     auth: Auth,
-    /// Ruta a un archivo known_hosts (formato OpenSSH) para verificar el host
+    /// Path to a known_hosts file (OpenSSH format) to verify the host
     #[serde(default)]
     known_hosts: Option<PathBuf>,
 }
@@ -110,14 +110,14 @@ enum Auth {
         password: String,
     },
     Key {
-        /// Ruta local a la llave privada
+        /// Local path to the private key
         private_key: PathBuf,
         #[serde(default)]
         passphrase: Option<String>,
     },
 }
 
-/// Schema JSON reutilizable del objeto `connection`
+/// Reusable JSON schema for the `connection` object
 fn connection_schema() -> Value {
     json!({
         "type": "object",
@@ -141,13 +141,13 @@ fn connection_schema() -> Value {
     })
 }
 
-/// Abre una sesión SSH autenticada (sin canal SFTP todavía). Bloqueante:
-/// invocar dentro de spawn_blocking. Es la parte cara (TCP + handshake + auth)
-/// que el pool reutiliza.
+/// Opens an authenticated SSH session (without an SFTP channel yet). Blocking:
+/// invoke inside spawn_blocking. This is the expensive part (TCP + handshake + auth)
+/// that the pool reuses.
 fn connect_session(conn: &Connection) -> Result<ssh2::Session, WorkflowError> {
     let tcp = TcpStream::connect((conn.host.as_str(), conn.port)).map_err(|e| {
         sftp_error(format!(
-            "no se pudo conectar a {}:{}: {e}",
+            "could not connect to {}:{}: {e}",
             conn.host, conn.port
         ))
     })?;
@@ -162,21 +162,21 @@ fn connect_session(conn: &Connection) -> Result<ssh2::Session, WorkflowError> {
     match &conn.auth {
         Auth::Password { password } => session
             .userauth_password(&conn.username, password)
-            .map_err(|e| sftp_error(format!("autenticación por password falló: {e}")))?,
+            .map_err(|e| sftp_error(format!("password authentication failed: {e}")))?,
         Auth::Key {
             private_key,
             passphrase,
         } => session
             .userauth_pubkey_file(&conn.username, None, private_key, passphrase.as_deref())
-            .map_err(|e| sftp_error(format!("autenticación por llave falló: {e}")))?,
+            .map_err(|e| sftp_error(format!("key authentication failed: {e}")))?,
     }
 
     Ok(session)
 }
 
-/// Conector ssh2 del pool: abre sesiones reales y verifica su salud con un
-/// keepalive (una sesión muerta por timeout del servidor se descarta y se
-/// reconecta).
+/// ssh2 pool connector: opens real sessions and checks their health with a
+/// keepalive (a session killed by server timeout is discarded and
+/// reconnected).
 pub struct Ssh2Connector;
 
 impl Connector for Ssh2Connector {
@@ -191,15 +191,16 @@ impl Connector for Ssh2Connector {
     }
 }
 
-/// Identidad estable de una conexión (host/puerto/usuario/auth/known_hosts),
-/// para indexar el pool. Reusa el hash determinista de idempotencia.
+/// Stable identity of a connection (host/port/user/auth/known_hosts),
+/// to index the pool. Reuses the deterministic idempotency hash.
 fn conn_key(conn: &Connection) -> String {
     workflow_forge_core::idempotency::key_for(&serde_json::to_value(conn).unwrap_or(Value::Null))
 }
 
-/// Ejecuta `f` con un canal SFTP, tomando la sesión del pool (reusada) o de un
-/// `connect_session` fresco. La sesión se devuelve al pool **solo si `f` tuvo
-/// éxito** (una sesión que falló a media operación se descarta). Bloqueante.
+/// Executes `f` with an SFTP channel, taking the session from the pool (reused)
+/// or from a fresh `connect_session`. The session is returned to the pool
+/// **only if `f` succeeded** (a session that failed mid-operation is
+/// discarded). Blocking.
 fn with_sftp<R>(
     pool: &Option<Arc<SftpPool>>,
     conn: &Connection,
@@ -229,24 +230,24 @@ fn verify_host_key(
     let mut known_hosts = session.known_hosts().map_err(sftp_error)?;
     known_hosts
         .read_file(known_hosts_path, ssh2::KnownHostFileKind::OpenSSH)
-        .map_err(|e| sftp_error(format!("no se pudo leer known_hosts: {e}")))?;
+        .map_err(|e| sftp_error(format!("could not read known_hosts: {e}")))?;
     let (key, _) = session
         .host_key()
-        .ok_or_else(|| sftp_error("el servidor no presentó llave de host"))?;
+        .ok_or_else(|| sftp_error("server did not present a host key"))?;
     match known_hosts.check_port(&conn.host, conn.port, key) {
         ssh2::CheckResult::Match => Ok(()),
         ssh2::CheckResult::NotFound => Err(WorkflowError::new(
             codes::SFTP_HOST_UNKNOWN,
-            format!("El host '{}' no está en known_hosts", conn.host),
+            format!("Host '{}' is not in known_hosts", conn.host),
         )),
         ssh2::CheckResult::Mismatch => Err(WorkflowError::new(
             codes::SFTP_HOST_KEY_MISMATCH,
             format!(
-                "La llave del host '{}' NO coincide con known_hosts (posible MITM)",
+                "Host key for '{}' does NOT match known_hosts (possible MITM)",
                 conn.host
             ),
         )),
-        ssh2::CheckResult::Failure => Err(sftp_error("la verificación de host falló")),
+        ssh2::CheckResult::Failure => Err(sftp_error("host verification failed")),
     }
 }
 
@@ -257,9 +258,9 @@ fn verify_host_key(
 #[derive(Deserialize)]
 struct GetInput {
     connection: Connection,
-    /// Ruta remota del archivo a descargar
+    /// Remote path of the file to download
     path: String,
-    /// Nombre del blob resultante (default: nombre del archivo remoto)
+    /// Name of the resulting blob (default: remote file name)
     #[serde(default)]
     name: Option<String>,
 }
@@ -273,7 +274,7 @@ impl Default for GetTask {
     fn default() -> Self {
         let mut manifest = TaskManifest::new("sftp.get");
         manifest.description =
-            Some("Descarga un archivo remoto por SFTP y lo registra como $blob".into());
+            Some("Downloads a remote file via SFTP and registers it as a $blob".into());
         manifest.input_schema = Some(schema(json!({
             "type": "object",
             "required": ["connection", "path"],
@@ -296,7 +297,7 @@ impl Default for GetTask {
 }
 
 impl GetTask {
-    /// Variante respaldada por un pool de sesiones compartido.
+    /// Variant backed by a shared session pool.
     pub fn pooled(pool: Arc<SftpPool>) -> Self {
         Self {
             pool: Some(pool),
@@ -323,7 +324,7 @@ impl Task for GetTask {
                 .to_string()
         });
 
-        // Descarga por streaming a un archivo temporal local
+        // Streaming download to a local temporary file
         let temp = std::env::temp_dir().join(format!("wf-sftp-{}", uuid::Uuid::now_v7()));
         let temp_for_blocking = temp.clone();
         let pool = self.pool.clone();
@@ -331,7 +332,7 @@ impl Task for GetTask {
             with_sftp(&pool, &parsed.connection, |sftp| {
                 let mut remote = sftp
                     .open(std::path::Path::new(&parsed.path))
-                    .map_err(|e| sftp_error(format!("no se pudo abrir '{}': {e}", parsed.path)))?;
+                    .map_err(|e| sftp_error(format!("could not open '{}': {e}", parsed.path)))?;
                 let mut local = std::fs::File::create(&temp_for_blocking).map_err(sftp_error)?;
                 std::io::copy(&mut remote, &mut local).map_err(sftp_error)?;
                 local.flush().map_err(sftp_error)?;
@@ -339,7 +340,7 @@ impl Task for GetTask {
             })
         })
         .await
-        .map_err(|e| sftp_error(format!("la descarga se interrumpió: {e}")))
+        .map_err(|e| sftp_error(format!("download was interrupted: {e}")))
         .and_then(|r| r);
 
         if let Err(err) = download {
@@ -360,9 +361,9 @@ impl Task for GetTask {
 #[derive(Deserialize)]
 struct PutInput {
     connection: Connection,
-    /// Blob local a subir
+    /// Local blob to upload
     file: BlobRef,
-    /// Ruta remota destino
+    /// Remote destination path
     path: String,
 }
 
@@ -374,7 +375,7 @@ pub struct PutTask {
 impl Default for PutTask {
     fn default() -> Self {
         let mut manifest = TaskManifest::new("sftp.put");
-        manifest.description = Some("Sube un $blob a una ruta remota por SFTP".into());
+        manifest.description = Some("Uploads a $blob to a remote path via SFTP".into());
         manifest.input_schema = Some(schema(json!({
             "type": "object",
             "required": ["connection", "file", "path"],
@@ -400,7 +401,7 @@ impl Default for PutTask {
 }
 
 impl PutTask {
-    /// Variante respaldada por un pool de sesiones compartido.
+    /// Variant backed by a shared session pool.
     pub fn pooled(pool: Arc<SftpPool>) -> Self {
         Self {
             pool: Some(pool),
@@ -427,14 +428,14 @@ impl Task for PutTask {
                 let mut local = std::fs::File::open(&local_path).map_err(sftp_error)?;
                 let mut remote = sftp
                     .create(std::path::Path::new(&parsed.path))
-                    .map_err(|e| sftp_error(format!("no se pudo crear '{}': {e}", parsed.path)))?;
+                    .map_err(|e| sftp_error(format!("could not create '{}': {e}", parsed.path)))?;
                 let size = std::io::copy(&mut local, &mut remote).map_err(sftp_error)?;
                 remote.flush().map_err(sftp_error)?;
                 Ok(size)
             })
         })
         .await
-        .map_err(|e| sftp_error(format!("la subida se interrumpió: {e}")))
+        .map_err(|e| sftp_error(format!("upload was interrupted: {e}")))
         .and_then(|r| r)?;
 
         Ok(WorkflowData(json!({ "path": remote_path, "size": size })))
@@ -448,7 +449,7 @@ impl Task for PutTask {
 #[derive(Deserialize)]
 struct ListInput {
     connection: Connection,
-    /// Directorio remoto a listar
+    /// Remote directory to list
     path: String,
 }
 
@@ -460,7 +461,7 @@ pub struct ListTask {
 impl Default for ListTask {
     fn default() -> Self {
         let mut manifest = TaskManifest::new("sftp.list");
-        manifest.description = Some("Lista las entradas de un directorio remoto".into());
+        manifest.description = Some("Lists the entries of a remote directory".into());
         manifest.input_schema = Some(schema(json!({
             "type": "object",
             "required": ["connection", "path"],
@@ -496,7 +497,7 @@ impl Default for ListTask {
 }
 
 impl ListTask {
-    /// Variante respaldada por un pool de sesiones compartido.
+    /// Variant backed by a shared session pool.
     pub fn pooled(pool: Arc<SftpPool>) -> Self {
         Self {
             pool: Some(pool),
@@ -520,7 +521,7 @@ impl Task for ListTask {
             with_sftp(&pool, &parsed.connection, |sftp| {
                 let listing = sftp
                     .readdir(std::path::Path::new(&parsed.path))
-                    .map_err(|e| sftp_error(format!("no se pudo listar '{}': {e}", parsed.path)))?;
+                    .map_err(|e| sftp_error(format!("could not list '{}': {e}", parsed.path)))?;
                 Ok(listing
                     .into_iter()
                     .map(|(path, stat)| {
@@ -543,7 +544,7 @@ impl Task for ListTask {
             })
         })
         .await
-        .map_err(|e| sftp_error(format!("el listado se interrumpió: {e}")))
+        .map_err(|e| sftp_error(format!("listing was interrupted: {e}")))
         .and_then(|r| r)?;
 
         Ok(WorkflowData(json!({ "entries": entries })))

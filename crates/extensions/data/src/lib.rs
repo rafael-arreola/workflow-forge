@@ -1,16 +1,16 @@
-//! Extensión `data` de workflow-forge: aquí viven todas las transformaciones
-//! (decisión #14 de la spec: los mappings de nodos no transforman).
+//! workflow-forge `data` extension: home to all transformations
+//! (spec decision #14: node mappings do not transform).
 //!
-//! Un módulo por tarea; para agregar una tarea nueva, crea su módulo y
-//! súmala a [`register`]:
+//! One module per task; to add a new task, create its module and
+//! add it to [`register`]:
 //!
-//! | Tarea | Módulo | Contrato |
+//! | Task | Module | Contract |
 //! |-------|--------|----------|
-//! | `data.transform` | [`transform`] | Reshape de `source` según `shape` (paths `@.` relativos al source) |
-//! | `data.map` | [`map`] | Aplica `shape` a CADA elemento de `items` (paths `@.` relativos al elemento) |
-//! | `data.merge` | [`merge`] | Merge profundo de `objects`; las llaves posteriores ganan |
-//! | `data.template` | [`template`] | Interpola `{path.con.puntos}` de `values` en `template` |
-//! | `data.cast` | [`cast`] | Conversiones declarativas por campo (fechas, números, strings) |
+//! | `data.transform` | [`transform`] | Reshape `source` according to `shape` (paths `@.` relative to source) |
+//! | `data.map` | [`map`] | Apply `shape` to EACH element of `items` (paths `@.` relative to the element) |
+//! | `data.merge` | [`merge`] | Deep merge of `objects`; later keys win |
+//! | `data.template` | [`template`] | Interpolate `{dot.separated.path}` from `values` into `template` |
+//! | `data.cast` | [`cast`] | Declarative per-field conversions (dates, numbers, strings) |
 
 use serde_json::Value;
 
@@ -28,7 +28,7 @@ pub use merge::MergeTask;
 pub use template::TemplateTask;
 pub use transform::TransformTask;
 
-/// Registra todas las tareas de la extensión en el registry
+/// Registers all extension tasks in the registry
 pub fn register(registry: &TaskRegistry) {
     registry.register(TransformTask::default());
     registry.register(MapTask::default());
@@ -37,23 +37,23 @@ pub fn register(registry: &TaskRegistry) {
     registry.register(CastTask::default());
 }
 
-/// Códigos de error que esta extensión puede emitir. Mismo contrato que
-/// [`workflow_forge_core::error::codes`]: constantes estables, nunca cambian
-/// de valor. (`data.transform`, `data.map` y `data.merge` solo emiten los
-/// códigos de expresión del core, como `INVALID_JSONPATH`.)
+/// Error codes this extension can emit. Same contract as
+/// [`workflow_forge_core::error::codes`]: stable constants, never change
+/// value. (`data.transform`, `data.map` and `data.merge` only emit the
+/// core expression codes, such as `INVALID_JSONPATH`.)
 pub mod codes {
-    /// Un placeholder de `data.template` quedó sin cerrar (`{abc` sin `}`).
+    /// An unclosed `data.template` placeholder (`{abc` without `}`).
     pub const TEMPLATE_INVALID: &str = "TEMPLATE_INVALID";
-    /// Un placeholder de `data.template` no existe en `values`.
+    /// A `data.template` placeholder does not exist in `values`.
     pub const TEMPLATE_VALUE_MISSING: &str = "TEMPLATE_VALUE_MISSING";
-    /// El input de `data.cast` no deserializa contra su contrato.
+    /// The input to `data.cast` does not deserialize against its contract.
     pub const CAST_INPUT_INVALID: &str = "CAST_INPUT_INVALID";
-    /// Un valor no se pudo convertir y `on_invalid` es `fail`.
+    /// A value could not be converted and `on_invalid` is `fail`.
     pub const CAST_FIELD_INVALID: &str = "CAST_FIELD_INVALID";
 }
 
-/// Helper compartido: parsea un JSON literal como `schemars::Schema` para
-/// los manifiestos de las tareas.
+/// Shared helper: parses a JSON literal as a `schemars::Schema` for
+/// task manifests.
 pub(crate) fn schema(value: Value) -> workflow_forge_core::schemars::Schema {
-    serde_json::from_value(value).expect("schema estático válido")
+    serde_json::from_value(value).expect("valid static schema")
 }

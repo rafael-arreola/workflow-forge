@@ -1,6 +1,6 @@
-//! Blobs: binarios grandes que viajan por referencia (`$blob`) en vez de
-//! inline en el contexto JSON. [`BlobStore`] es el almacenamiento por
-//! ejecución; [`BlobStoreFactory`] el punto de inyección.
+//! Blobs: large binaries that travel by reference (`$blob`) instead of
+//! inline in the JSON context. [`BlobStore`] is the per-execution storage;
+//! [`BlobStoreFactory`] the injection point.
 
 use std::path::{Path, PathBuf};
 
@@ -9,71 +9,71 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{WorkflowError, codes};
 
-/// Referencia a un binario/archivo grande según la convención `$blob` de la
-/// spec: los blobs no viajan inline en el contexto JSON, viajan por referencia.
+/// Reference to a large binary/file under the spec's `$blob` convention:
+/// blobs do not travel inline in the JSON context, they travel by reference.
 ///
 /// ```json
 /// { "$blob": "01J…", "name": "ventas.csv.gz", "size": 52428800 }
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BlobRef {
-    /// Identificador único del blob dentro de la ejecución
+    /// Unique identifier of the blob within the execution
     #[serde(rename = "$blob")]
     pub id: String,
-    /// Nombre de archivo sugerido
+    /// Suggested file name
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    /// Tamaño en bytes
+    /// Size in bytes
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<u64>,
 }
 
 impl BlobRef {
-    /// Interpreta un valor JSON como referencia a blob, si tiene la forma
+    /// Interprets a JSON value as a blob reference, if it has the right shape
     pub fn from_value(value: &serde_json::Value) -> Option<Self> {
         serde_json::from_value(value.clone()).ok()
     }
 }
 
-/// Almacenamiento de blobs con ciclo de vida atado a una ejecución.
-/// Las extensiones leen/escriben blobs a través del contexto, nunca tocan
-/// el filesystem por su cuenta.
+/// Blob storage with lifecycle tied to an execution.
+/// Extensions read/write blobs through the context; they never touch
+/// the filesystem on their own.
 #[async_trait]
 pub trait BlobStore: Send + Sync + 'static {
-    /// Almacena bytes como un blob nuevo
+    /// Stores bytes as a new blob
     async fn put(&self, data: Vec<u8>, name: Option<String>) -> Result<BlobRef, WorkflowError>;
 
-    /// Lee el contenido completo de un blob
+    /// Reads the full content of a blob
     async fn get(&self, blob: &BlobRef) -> Result<Vec<u8>, WorkflowError>;
 
-    /// Importa un archivo existente copiándolo al store (para productores
-    /// que escriben a disco por streaming antes de registrar el blob)
+    /// Imports an existing file by copying it into the store (for producers
+    /// that write to disk via streaming before registering the blob)
     async fn import_file(
         &self,
         path: &Path,
         name: Option<String>,
     ) -> Result<BlobRef, WorkflowError>;
 
-    /// Ruta local del blob, para consumidores que leen por streaming.
-    /// En v1 todos los blobs son file-backed.
+    /// Local path of the blob, for consumers that read via streaming.
+    /// In v1 all blobs are file-backed.
     fn local_path(&self, blob: &BlobRef) -> Result<PathBuf, WorkflowError>;
 
-    /// Elimina todos los blobs de la ejecución
+    /// Deletes all blobs from the execution
     async fn cleanup(&self) -> Result<(), WorkflowError>;
 }
 
-/// Fábrica de [`BlobStore`]: el punto de inyección del almacenamiento.
+/// [`BlobStore`] factory: the storage injection point.
 ///
-/// El store tiene ciclo de vida por ejecución (se crea con el
-/// `execution_id` y se limpia al terminar la ejecución raíz), por eso lo
-/// inyectable es la fábrica y no una instancia. Se configura con
-/// `WorkflowExecutorBuilder::blobs`; el default es [`TempDirBlobFactory`].
+/// The store has a per-execution lifecycle (created with the
+/// `execution_id` and cleaned up when the root execution ends), which is why
+/// the injectable is the factory and not an instance. Configured via
+/// `WorkflowExecutorBuilder::blobs`; the default is [`TempDirBlobFactory`].
 pub trait BlobStoreFactory: Send + Sync {
-    /// Crea el store de una ejecución nueva.
+    /// Creates the store for a new execution.
     fn create(&self, execution_id: &str) -> std::sync::Arc<dyn BlobStore>;
 }
 
-/// Fábrica por defecto: un [`TempDirBlobStore`] por ejecución.
+/// Default factory: one [`TempDirBlobStore`] per execution.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct TempDirBlobFactory;
 
@@ -83,22 +83,22 @@ impl BlobStoreFactory for TempDirBlobFactory {
     }
 }
 
-/// `BlobStore` v1: un directorio temporal por ejecución, eliminado al
-/// terminar el workflow (y como red de seguridad, al hacer drop).
+/// `BlobStore` v1: a temporary directory per execution, deleted when
+/// the workflow ends (and as a safety net, on drop).
 pub struct TempDirBlobStore {
     dir: PathBuf,
 }
 
 impl TempDirBlobStore {
-    /// Crea el store de una ejecución. El directorio se crea de forma
-    /// perezosa en el primer `put`/`import_file`.
+    /// Creates the store for an execution. The directory is lazily
+    /// created on the first `put`/`import_file`.
     pub fn new(execution_id: &str) -> Self {
         Self {
             dir: std::env::temp_dir().join(format!("workflow-forge-{execution_id}")),
         }
     }
 
-    /// Directorio raíz de los blobs de esta ejecución
+    /// Root directory of this execution's blobs
     pub fn dir(&self) -> &Path {
         &self.dir
     }
@@ -106,16 +106,16 @@ impl TempDirBlobStore {
     async fn ensure_dir(&self) -> Result<(), WorkflowError> {
         tokio::fs::create_dir_all(&self.dir)
             .await
-            .map_err(|e| io_error("no se pudo crear el directorio de blobs", e))
+            .map_err(|e| io_error("could not create blob directory", e))
     }
 
     fn blob_path(&self, id: &str) -> Result<PathBuf, WorkflowError> {
-        // Los ids son UUIDs generados por el store; cualquier otra cosa es
-        // una referencia forjada (p.ej. path traversal)
+        // Ids are UUIDs generated by the store; anything else is
+        // a forged reference (e.g., path traversal)
         if id.is_empty() || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
             return Err(WorkflowError::new(
                 codes::INVALID_BLOB_ID,
-                format!("El id de blob '{id}' no es válido"),
+                format!("Blob id '{id}' is not valid"),
             ));
         }
         Ok(self.dir.join(id))
@@ -131,7 +131,7 @@ impl BlobStore for TempDirBlobStore {
         let path = self.dir.join(&id);
         tokio::fs::write(&path, data)
             .await
-            .map_err(|e| io_error("no se pudo escribir el blob", e))?;
+            .map_err(|e| io_error("could not write blob", e))?;
         Ok(BlobRef {
             id,
             name,
@@ -145,7 +145,7 @@ impl BlobStore for TempDirBlobStore {
             if e.kind() == std::io::ErrorKind::NotFound {
                 blob_not_found(&blob.id)
             } else {
-                io_error("no se pudo leer el blob", e)
+                io_error("could not read blob", e)
             }
         })
     }
@@ -160,7 +160,7 @@ impl BlobStore for TempDirBlobStore {
         let dest = self.dir.join(&id);
         let size = tokio::fs::copy(path, &dest)
             .await
-            .map_err(|e| io_error("no se pudo importar el archivo al store", e))?;
+            .map_err(|e| io_error("could not import file into store", e))?;
         let name = name.or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()));
         Ok(BlobRef {
             id,
@@ -181,13 +181,13 @@ impl BlobStore for TempDirBlobStore {
         match tokio::fs::remove_dir_all(&self.dir).await {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(e) => Err(io_error("no se pudo limpiar el directorio de blobs", e)),
+            Err(e) => Err(io_error("could not clean up blob directory", e)),
         }
     }
 }
 
-// Red de seguridad: si la ejecución termina sin cleanup (p.ej. panic),
-// el directorio temporal no queda huérfano
+// Safety net: if the execution ends without cleanup (e.g., panic),
+// the temporary directory is not left orphaned
 impl Drop for TempDirBlobStore {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.dir);
@@ -203,7 +203,7 @@ fn io_error(message: &str, source: std::io::Error) -> WorkflowError {
 fn blob_not_found(id: &str) -> WorkflowError {
     WorkflowError::new(
         codes::BLOB_NOT_FOUND,
-        format!("El blob '{id}' no existe en esta ejecución"),
+        format!("Blob '{id}' does not exist in this execution"),
     )
 }
 
@@ -227,7 +227,7 @@ mod tests {
         assert_eq!(blob.name.as_deref(), Some("saludo.txt"));
         assert_eq!(blob.size, Some(9));
 
-        // La referencia serializa con la forma de la spec
+        // The reference serializes with the spec shape
         let as_json = serde_json::to_value(&blob).unwrap();
         assert_eq!(as_json["$blob"], json!(blob.id));
         assert_eq!(BlobRef::from_value(&as_json), Some(blob.clone()));
@@ -293,7 +293,7 @@ mod tests {
 
         store.cleanup().await.unwrap();
         assert!(!dir.exists());
-        // idempotente
+        // idempotent
         store.cleanup().await.unwrap();
     }
 }

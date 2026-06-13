@@ -1,14 +1,14 @@
-//! La familia **spec**: el lenguaje de definición de workflows.
+//! The **spec** family: the workflow definition language.
 //!
-//! Contiene exclusivamente los tipos de datos que serializan/deserializan
-//! un documento de workflow (spec 1.0): el grafo ([`WorkflowDefinition`],
-//! [`FlowEdge`]), los nodos ([`Node`], [`NodeKind`] y sus variantes), las
-//! condiciones declarativas ([`Condition`]) y los perfiles de tarea
+//! Contains exclusively the data types that serialize/deserialize
+//! a workflow document (spec 1.0): the graph ([`WorkflowDefinition`],
+//! [`FlowEdge`]), the nodes ([`Node`], [`NodeKind`] and its variants), the
+//! declarative conditions ([`Condition`]), and the task profiles
 //! ([`TaskProfile`]).
 //!
-//! Regla de la familia: **aquí no hay lógica de ejecución ni de validación**,
-//! solo la forma del lenguaje. La semántica vive en `validate` (reglas
-//! estáticas), `expr` (resolución de expresiones) y `runtime` (ejecución).
+//! Family rule: **no execution or validation logic lives here**,
+//! only the shape of the language. The semantics live in `validate` (static
+//! rules), `expr` (expression resolution), and `runtime` (execution).
 
 pub mod condition;
 pub mod node;

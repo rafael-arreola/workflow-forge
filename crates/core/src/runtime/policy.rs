@@ -1,8 +1,8 @@
-//! Política de ejecución de invocaciones de tarea: validación de schemas,
-//! timeout por intento, captura de panics y reintentos con backoff.
+//! Execution policy for task invocations: schema validation,
+//! per-attempt timeout, panic capture, and retries with backoff.
 //!
-//! Es el camino compartido entre nodos `task` y elementos de `foreach`:
-//! cualquier invocación de una extensión pasa por [`WorkflowExecutor::execute_with_policy`].
+//! This is the shared path between `task` nodes and `foreach` elements:
+//! any extension invocation goes through [`WorkflowExecutor::execute_with_policy`].
 
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
@@ -21,15 +21,15 @@ use crate::spec::node::NodeId;
 use crate::spec::node::task::{Backoff, RetryPolicy};
 use crate::task::{Task, TaskId, WorkflowData};
 
-/// Política de ejecución de una invocación de tarea (nodo task o elemento
-/// de foreach): reintentos, timeout y si se emiten eventos de attempt.
+/// Execution policy for a task invocation (task node or foreach element):
+/// retries, timeout, and whether attempt events are emitted.
 pub(crate) struct ExecPolicy<'a> {
     pub(crate) retry: Option<&'a RetryPolicy>,
     pub(crate) timeout_ms: Option<u64>,
     pub(crate) emit_attempts: bool,
 }
 
-/// Convierte el payload de un panic capturado en un `WorkflowError`.
+/// Converts a captured panic payload into a `WorkflowError`.
 pub(crate) fn panic_error(
     task_id: &TaskId,
     payload: Box<dyn std::any::Any + Send>,
@@ -38,15 +38,15 @@ pub(crate) fn panic_error(
         .downcast_ref::<&str>()
         .map(|s| (*s).to_string())
         .or_else(|| payload.downcast_ref::<String>().cloned())
-        .unwrap_or_else(|| "payload no textual".to_string());
+        .unwrap_or_else(|| "non-textual payload".to_string());
     WorkflowError::new(
         codes::TASK_PANIC,
-        format!("La tarea '{task_id}' panickeó: {message}"),
+        format!("Task '{task_id}' panicked: {message}"),
     )
 }
 
-/// Espera entre reintentos según la estrategia de backoff.
-/// `attempt` es el intento que acaba de fallar (1-indexado).
+/// Wait between retries according to the backoff strategy.
+/// `attempt` is the attempt that just failed (1-indexed).
 pub(crate) fn backoff_delay(retry: &RetryPolicy, attempt: u32) -> Duration {
     let base = retry.initial_ms;
     let ms = match retry.backoff {
@@ -57,8 +57,8 @@ pub(crate) fn backoff_delay(retry: &RetryPolicy, attempt: u32) -> Duration {
     Duration::from_millis(ms)
 }
 
-/// Espera real a aplicar: con `jitter`, uniforme en `[0, delay]` (full
-/// jitter); sin él, `delay` tal cual.
+/// Actual wait to apply: with `jitter`, uniform over `[0, delay]` (full
+/// jitter); without it, `delay` as-is.
 pub(crate) fn jittered(delay: Duration, jitter: bool) -> Duration {
     if !jitter || delay.is_zero() {
         return delay;
@@ -66,9 +66,9 @@ pub(crate) fn jittered(delay: Duration, jitter: bool) -> Duration {
     Duration::from_millis(fastrand::u64(0..=delay.as_millis() as u64))
 }
 
-/// Aplica el piso de `retry_after_ms` (pista del error, p. ej. el header HTTP
-/// `Retry-After`) sobre la espera ya calculada: nunca se reintenta antes de
-/// lo que el destino pidió, pero un backoff mayor sí se respeta.
+/// Applies the `retry_after_ms` floor (error hint, e.g. the HTTP header
+/// `Retry-After`) on the already computed wait: never retry sooner than
+/// what the target requested, but a larger backoff is still honored.
 pub(crate) fn delay_with_floor(computed: Duration, retry_after_ms: Option<u64>) -> Duration {
     match retry_after_ms {
         Some(ms) => computed.max(Duration::from_millis(ms)),
@@ -77,8 +77,8 @@ pub(crate) fn delay_with_floor(computed: Duration, retry_after_ms: Option<u64>) 
 }
 
 impl WorkflowExecutor {
-    /// Invoca una tarea con validación de schemas, timeout y reintentos.
-    /// Es el camino compartido entre nodos task y elementos de foreach.
+    /// Invokes a task with schema validation, timeout, and retries.
+    /// This is the shared path between task nodes and foreach elements.
     pub(crate) async fn execute_with_policy(
         &self,
         task: &Arc<dyn Task>,
@@ -99,7 +99,7 @@ impl WorkflowExecutor {
             validate_compiled(validator, &input).map_err(|e| {
                 WorkflowError::new(
                     codes::TASK_INPUT_INVALID,
-                    format!("El input de la tarea '{task_id}' no cumple su schema: {e}"),
+                    format!("Task '{task_id}' input does not match its schema: {e}"),
                 )
                 .with_source_task(node_id.to_string())
             })?;
@@ -118,8 +118,8 @@ impl WorkflowExecutor {
                     },
                 );
             }
-            // AssertUnwindSafe: tras un panic el resultado se descarta y el
-            // estado del engine solo muta vía executor después de un éxito
+            // AssertUnwindSafe: after a panic the result is discarded and the
+            // engine state only mutates via executor after a success
             let execution =
                 AssertUnwindSafe(task.execute(ctx, WorkflowData(input.clone()))).catch_unwind();
             let result = match policy.timeout_ms {
@@ -129,7 +129,7 @@ impl WorkflowExecutor {
                         Ok(Err(payload)) => Err(panic_error(&task_id, payload)),
                         Err(_) => Err(WorkflowError::new(
                             codes::TASK_TIMEOUT,
-                            format!("La tarea '{task_id}' superó el timeout de {ms}ms"),
+                            format!("Task '{task_id}' exceeded the {ms}ms timeout"),
                         )),
                     }
                 }
@@ -146,7 +146,7 @@ impl WorkflowExecutor {
                             WorkflowError::new(
                                 codes::TASK_OUTPUT_INVALID,
                                 format!(
-                                    "El output de la tarea '{task_id}' no cumple su schema: {e}"
+                                    "Task '{task_id}' output does not match its schema: {e}"
                                 ),
                             )
                             .with_source_task(node_id.to_string())
@@ -158,14 +158,14 @@ impl WorkflowExecutor {
                     if err.source_task.is_none() {
                         err.source_task = Some(node_id.to_string());
                     }
-                    // Un panic es un bug, no un fallo transitorio: jamás reintenta
+                    // A panic is a bug, not a transient failure: never retry
                     let retries_left = err.code != codes::TASK_PANIC
                         && policy.retry.is_some_and(|r| attempt <= r.max);
                     let delay = retries_left.then(|| {
-                        let retry = policy.retry.expect("retries_left lo implica");
-                        // El jitter se aplica aquí (no en backoff_delay, que es
-                        // pura) para que el evento reporte la espera real; el
-                        // Retry-After del destino actúa como piso de esa espera
+                        let retry = policy.retry.expect("retries_left implies it");
+                        // Jitter is applied here (not in backoff_delay, which is
+                        // pure) so the event reports the actual wait; the
+                        // target's Retry-After acts as the floor for that wait
                         let computed = jittered(backoff_delay(retry, attempt), retry.jitter);
                         delay_with_floor(computed, err.retry_after_ms)
                     });
@@ -189,7 +189,7 @@ impl WorkflowExecutor {
                         attempt,
                         delay_ms = delay.as_millis() as u64,
                         code = %err.code,
-                        "Tarea falló; reintentando"
+                        "Task failed; retrying"
                     );
                     tokio::time::sleep(delay).await;
                 }
@@ -212,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    fn backoff_exponencial_duplica_por_intento() {
+    fn exponential_backoff_doubles_per_attempt() {
         let policy = retry(Backoff::Exponential, 100);
         assert_eq!(backoff_delay(&policy, 1), Duration::from_millis(100));
         assert_eq!(backoff_delay(&policy, 2), Duration::from_millis(200));
@@ -220,24 +220,24 @@ mod tests {
     }
 
     #[test]
-    fn backoff_lineal_y_fijo() {
-        let lineal = retry(Backoff::Linear, 100);
-        assert_eq!(backoff_delay(&lineal, 3), Duration::from_millis(300));
+    fn linear_and_fixed_backoff() {
+        let linear = retry(Backoff::Linear, 100);
+        assert_eq!(backoff_delay(&linear, 3), Duration::from_millis(300));
 
-        let fijo = retry(Backoff::Fixed, 250);
-        assert_eq!(backoff_delay(&fijo, 1), Duration::from_millis(250));
-        assert_eq!(backoff_delay(&fijo, 9), Duration::from_millis(250));
+        let fixed = retry(Backoff::Fixed, 250);
+        assert_eq!(backoff_delay(&fixed, 1), Duration::from_millis(250));
+        assert_eq!(backoff_delay(&fixed, 9), Duration::from_millis(250));
     }
 
     #[test]
-    fn backoff_no_desborda() {
+    fn backoff_does_not_overflow() {
         let policy = retry(Backoff::Exponential, u64::MAX / 2);
-        // saturating: no panic por overflow en intentos altos
+        // saturating: no panic on overflow at high attempt counts
         let _ = backoff_delay(&policy, 60);
     }
 
     #[test]
-    fn jitter_acota_la_espera_y_sin_el_es_identidad() {
+    fn jitter_bounds_the_wait_and_without_it_is_identity() {
         fastrand::seed(7);
         let delay = Duration::from_millis(1_000);
         for _ in 0..100 {
@@ -248,30 +248,30 @@ mod tests {
     }
 
     #[test]
-    fn el_retry_after_es_piso_no_techo() {
+    fn retry_after_is_floor_not_ceiling() {
         let backoff = Duration::from_millis(100);
-        // Retry-After mayor que el backoff: gana el Retry-After
+        // Retry-After greater than backoff: Retry-After wins
         assert_eq!(
             delay_with_floor(backoff, Some(5_000)),
             Duration::from_millis(5_000)
         );
-        // Retry-After menor: gana el backoff (no aceleramos por debajo)
+        // Retry-After smaller: backoff wins (we don't accelerate below it)
         assert_eq!(delay_with_floor(backoff, Some(10)), backoff);
-        // Sin pista: el backoff tal cual
+        // No hint: backoff as-is
         assert_eq!(delay_with_floor(backoff, None), backoff);
     }
 
     #[test]
-    fn panic_error_extrae_el_mensaje() {
+    fn panic_error_extracts_the_message() {
         let task_id = TaskId::from("test.boom");
-        let err = panic_error(&task_id, Box::new("se rompió"));
+        let err = panic_error(&task_id, Box::new("it broke"));
         assert_eq!(err.code, codes::TASK_PANIC);
-        assert!(err.message.contains("se rompió"));
+        assert!(err.message.contains("it broke"));
 
-        let err = panic_error(&task_id, Box::new(String::from("otro fallo")));
-        assert!(err.message.contains("otro fallo"));
+        let err = panic_error(&task_id, Box::new(String::from("another failure")));
+        assert!(err.message.contains("another failure"));
 
         let err = panic_error(&task_id, Box::new(42_u8));
-        assert!(err.message.contains("payload no textual"));
+        assert!(err.message.contains("non-textual payload"));
     }
 }

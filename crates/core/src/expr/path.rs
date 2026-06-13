@@ -1,47 +1,45 @@
-//! Motor JSONPath compartido por las tres convenciones de expresión
-//! (mappings `$.`, shapes `@.` y condiciones) y cache global de regex.
+//! JSONPath engine shared by the three expression conventions
+//! (mappings `$.`, shapes `@.`, and conditions) and global regex cache.
 //!
-//! Centralizar el acceso a la librería de JSONPath aquí permite cambiar de
-//! implementación (o versión) en un solo lugar y garantiza la misma
-//! semántica de resolución en todo el engine: paths singulares, primer
-//! match gana.
+//! Centralizing access to the JSONPath library here allows switching
+//! implementations (or versions) in one place and guarantees the same
+//! resolution semantics across the entire engine: singular paths, first
+//! match wins.
 
 use jsonpath_rust::JsonPath;
 use serde_json::Value;
 
 use crate::error::{WorkflowError, codes};
 
-/// Resuelve un path JSONPath contra un documento y devuelve el primer
-/// match, o `None` si el path no resuelve. `Err` solo por paths que no
-/// parsean (error de definición, no de datos): el mensaje incluye el
-/// detalle del parser para que el sitio de llamada lo contextualice.
+/// Resolves a JSONPath path against a document and returns the first
+/// match, or `None` if the path does not resolve. `Err` only for paths that
+/// do not parse (definition error, not data error): the message includes the
+/// parser detail so the call site can contextualize it.
 pub fn query_first<'a>(doc: &'a Value, path: &str) -> Result<Option<&'a Value>, String> {
     let matches = doc.query(path).map_err(|e| e.to_string())?;
     Ok(matches.into_iter().next())
 }
 
-/// Compila una regex con cache global del proceso: los workflows evalúan
-/// los mismos patrones estáticos una y otra vez (retries, ejecuciones).
+/// Compiles a regex with process-global cache: workflows evaluate
+/// the same static patterns over and over (retries, executions).
 pub fn cached_regex(pattern: &str) -> Result<regex::Regex, WorkflowError> {
+    use parking_lot::RwLock;
     use std::collections::HashMap;
-    use std::sync::{OnceLock, RwLock};
+    use std::sync::OnceLock;
 
     static CACHE: OnceLock<RwLock<HashMap<String, regex::Regex>>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| RwLock::new(HashMap::new()));
 
-    if let Some(re) = cache.read().expect("regex cache poisoned").get(pattern) {
+    if let Some(re) = cache.read().get(pattern) {
         return Ok(re.clone());
     }
     let re = regex::Regex::new(pattern).map_err(|e| {
         WorkflowError::new(
             codes::INVALID_REGEX,
-            format!("Regex '{}' inválida en condición: {}", pattern, e),
+            format!("Invalid regex '{}' in condition: {}", pattern, e),
         )
     })?;
-    cache
-        .write()
-        .expect("regex cache poisoned")
-        .insert(pattern.to_string(), re.clone());
+    cache.write().insert(pattern.to_string(), re.clone());
     Ok(re)
 }
 

@@ -1,12 +1,14 @@
-//! El orquestador: construcción validada del executor y recorrido del grafo.
+//! The orchestrator: validated executor construction and graph traversal.
 //!
-//! La semántica de cada kind de nodo vive en `runtime::handlers`; la
-//! política de retry/timeout/panic en `runtime::policy` (módulos privados
-//! del crate). Este módulo solo conoce el recorrido: dispatch por kind,
-//! continuación por aristas (normales o de error) y cierre de la ejecución.
+//! The semantics for each node kind lives in `runtime::handlers`; the
+//! retry/timeout/panic policy in `runtime::policy` (crate-private modules).
+//! This module only knows about traversal: dispatch by kind, continuation
+//! through edges (normal or error), and execution finalization.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use parking_lot::Mutex;
 use std::time::{Duration, Instant};
 
 use futures::future::{BoxFuture, try_join_all};
@@ -15,6 +17,7 @@ pub use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use crate::error::{WorkflowError, codes};
+use crate::expr::operators::OperatorRegistry;
 use crate::io::blob::{BlobStoreFactory, TempDirBlobFactory};
 use crate::io::secret::SecretProvider;
 use crate::observe::{EventKind, ExecutionEvent, ExecutionObserver};
@@ -28,38 +31,39 @@ use crate::spec::workflow::{FlowEdge, WorkflowDefinition};
 use crate::task::{TaskRegistry, WorkflowData, WorkflowResult};
 use crate::validate::ValidationRule;
 
-/// Tokens que llegaron a un join, identificados por su nodo de origen.
+/// Tokens that arrived at a join, identified by their origin node.
 pub(crate) type JoinArrivals = Vec<(NodeId, Arc<Value>)>;
 
-/// Límites opcionales de una ejecución. **Por defecto, ilimitada**: sin
-/// `deadline` y sin cancelación. El host decide cuándo y cómo acotar.
+/// Optional limits on an execution. **Unlimited by default**: no
+/// `deadline` and no cancellation. The host decides when and how to bound.
 ///
 /// ```
 /// # use std::time::Duration;
 /// # use workflow_forge_core::runtime::{RunOptions, CancellationToken};
 /// let token = CancellationToken::new();
 /// let options = RunOptions::default()
-///     .deadline(Duration::from_secs(30)) // límite total de la ejecución
-///     .cancel(token.clone());            // cancelación cooperativa externa
-/// // token.cancel(); // desde otra tarea para abortar la ejecución
+///     .deadline(Duration::from_secs(30)) // total execution limit
+///     .cancel(token.clone());            // cooperative external cancellation
+/// // token.cancel(); // from another task to abort the execution
 /// # let _ = options;
 /// ```
+#[must_use]
 #[derive(Default, Clone)]
 pub struct RunOptions {
-    /// Tiempo máximo total de la ejecución. `None` = ilimitado (default).
+    /// Maximum total execution time. `None` = unlimited (default).
     pub deadline: Option<Duration>,
-    /// Token de cancelación cooperativa externa. `None` = sin cancelación.
+    /// Cooperative external cancellation token. `None` = no cancellation.
     pub cancel: Option<CancellationToken>,
 }
 
 impl RunOptions {
-    /// Fija el tiempo máximo total de la ejecución.
+    /// Sets the maximum total execution time.
     pub fn deadline(mut self, deadline: Duration) -> Self {
         self.deadline = Some(deadline);
         self
     }
 
-    /// Asocia un token de cancelación cooperativa.
+    /// Associates a cooperative cancellation token.
     pub fn cancel(mut self, token: CancellationToken) -> Self {
         self.cancel = Some(token);
         self
@@ -70,54 +74,58 @@ fn timeout_error(deadline: Duration) -> WorkflowError {
     WorkflowError::new(
         codes::EXECUTION_TIMEOUT,
         format!(
-            "La ejecución superó el deadline de {} ms",
+            "Execution exceeded the {} ms deadline",
             deadline.as_millis()
         ),
     )
 }
 
 fn cancelled_error() -> WorkflowError {
-    WorkflowError::new(codes::EXECUTION_CANCELLED, "La ejecución fue cancelada")
+    WorkflowError::new(codes::EXECUTION_CANCELLED, "Execution was cancelled")
 }
 
-/// Niveles máximos de anidamiento de sub-workflows (la raíz es el nivel 1)
+/// Maximum nesting depth for sub-workflows (the root is level 1)
 const MAX_SUBWORKFLOW_DEPTH: usize = 8;
 
-/// Estado mutable de una ejecución en curso.
+/// Mutable state of an in-progress execution.
 pub(crate) struct RunState {
-    /// Llegadas acumuladas por cada gateway join aún incompleto
+    /// Accumulated arrivals per still-incomplete gateway join
     pub(crate) joins: Mutex<HashMap<NodeId, JoinArrivals>>,
-    /// Resultados de los nodos end ejecutados
+    /// Results of executed end nodes
     pub(crate) ends: Mutex<Vec<(NodeId, Value)>>,
 }
 
-/// Motor de ejecución de workflows según la spec 1.0: contexto global,
-/// mappings JSONPath, gateways, retry/timeout y rutas de error.
+/// Workflow execution engine per spec 1.0: global context, JSONPath
+/// mappings, gateways, retry/timeout, and error paths.
 pub struct WorkflowExecutor {
     pub(crate) workflow: WorkflowDefinition,
     pub(crate) registry: Arc<TaskRegistry>,
     pub(crate) index: GraphIndex,
     pub(crate) schemas: CompiledSchemas,
     pub(crate) observer: Option<Arc<dyn ExecutionObserver>>,
-    /// Fábrica del almacenamiento de blobs de cada ejecución
+    /// Blob storage factory for each execution
     /// (default: [`TempDirBlobFactory`])
     pub(crate) blobs: Arc<dyn BlobStoreFactory>,
-    /// Executors hijos, uno por nodo `kind: "subworkflow"`, resueltos y
-    /// validados al construir (la construcción falla si un nombre no existe,
-    /// hay un ciclo o se supera la profundidad máxima)
+    /// Child executors, one per `kind: "subworkflow"` node, resolved and
+    /// validated at build time (construction fails if a name does not exist,
+    /// there is a cycle, or the maximum depth is exceeded)
     pub(crate) subworkflows: HashMap<NodeId, WorkflowExecutor>,
+    /// Optional injected operator registry for condition evaluation.
+    #[allow(dead_code)]
+    pub(crate) operator_registry: Option<Arc<OperatorRegistry>>,
 }
 
-/// Construcción de un [`WorkflowExecutor`]: el punto único de inyección de
-/// dependencias del runtime.
+/// Construction of a [`WorkflowExecutor`]: the single injection point for
+/// runtime dependencies.
 ///
-/// | Método | Dependencia | Default |
+/// | Method | Dependency | Default |
 /// |---|---|---|
-/// | [`secrets`](Self::secrets) | [`SecretProvider`] para `{"$secret": "X"}` | variables de entorno |
-/// | [`workflows`](Self::workflows) | [`WorkflowRegistry`] de sub-workflows | ninguno |
-/// | [`blobs`](Self::blobs) | [`BlobStoreFactory`] del almacenamiento `$blob` | directorio temporal |
-/// | [`observer`](Self::observer) | [`ExecutionObserver`] de eventos | ninguno |
-/// | [`rule`](Self::rule) | [`ValidationRule`] adicionales del host | solo las integradas |
+/// | [`secrets`](Self::secrets) | [`SecretProvider`] for `{"$secret": "X"}` | env vars |
+/// | [`workflows`](Self::workflows) | [`WorkflowRegistry`] of sub-workflows | none |
+/// | [`blobs`](Self::blobs) | [`BlobStoreFactory`] for `$blob` storage | temp directory |
+/// | [`observer`](Self::observer) | [`ExecutionObserver`] for events | none |
+/// | [`rule`](Self::rule) | Host [`ValidationRule`] extensions | only built-in |
+#[must_use]
 pub struct WorkflowExecutorBuilder<'s> {
     workflow: WorkflowDefinition,
     registry: Arc<TaskRegistry>,
@@ -126,11 +134,12 @@ pub struct WorkflowExecutorBuilder<'s> {
     blobs: Option<Arc<dyn BlobStoreFactory>>,
     observer: Option<Arc<dyn ExecutionObserver>>,
     rules: Vec<Box<dyn ValidationRule>>,
+    operator_registry: Option<Arc<OperatorRegistry>>,
 }
 
 impl<'s> WorkflowExecutorBuilder<'s> {
-    /// Provider de secretos para los `{"$secret": "X"}` de perfiles inline
-    /// (default: variables de entorno)
+    /// Secret provider for `{"$secret": "X"}` in inline profiles
+    /// (default: env vars)
     pub fn secrets<'n>(self, secrets: &'n dyn SecretProvider) -> WorkflowExecutorBuilder<'n> {
         WorkflowExecutorBuilder {
             workflow: self.workflow,
@@ -140,39 +149,48 @@ impl<'s> WorkflowExecutorBuilder<'s> {
             blobs: self.blobs,
             observer: self.observer,
             rules: self.rules,
+            operator_registry: self.operator_registry,
         }
     }
 
-    /// Registro compartido de sub-workflows. La sección `workflows` inline
-    /// del documento tiene precedencia sobre este registro.
+    /// Shared sub-workflow registry. The document's inline `workflows`
+    /// section takes precedence over this registry.
     pub fn workflows(mut self, workflows: Arc<WorkflowRegistry>) -> Self {
         self.workflows = Some(workflows);
         self
     }
 
-    /// Fábrica del almacenamiento de blobs por ejecución
+    /// Blob storage factory per execution
     /// (default: [`TempDirBlobFactory`])
     pub fn blobs(mut self, blobs: Arc<dyn BlobStoreFactory>) -> Self {
         self.blobs = Some(blobs);
         self
     }
 
-    /// Observer que recibirá los eventos de cada ejecución, incluidas las
-    /// de sub-workflows (equivalente a [`WorkflowExecutor::with_observer`])
+    /// Observer that will receive events from every execution, including
+    /// sub-workflow executions (equivalent to [`WorkflowExecutor::with_observer`])
     pub fn observer(mut self, observer: Arc<dyn ExecutionObserver>) -> Self {
         self.observer = Some(observer);
         self
     }
 
-    /// Agrega una regla de validación del host. Corre después de las
-    /// integradas, también sobre cada sub-workflow (inline o del registro).
+    /// Adds a host validation rule. Runs after the built-in ones, also on
+    /// every sub-workflow (inline or from the registry).
     pub fn rule<R: ValidationRule + 'static>(mut self, rule: R) -> Self {
         self.rules.push(Box::new(rule));
         self
     }
 
-    /// Construye el executor (validación estructural, tareas registradas,
-    /// schemas precompilados y sub-workflows resueltos recursivamente)
+    /// Injects an operator registry for custom condition operators.
+    /// When set, all condition evaluations (gateway branches, loop conditions)
+    /// resolve custom operators against this registry instead of the global one.
+    pub fn operator_registry(mut self, registry: Arc<OperatorRegistry>) -> Self {
+        self.operator_registry = Some(registry);
+        self
+    }
+
+    /// Builds the executor (structural validation, registered tasks,
+    /// precompiled schemas, and recursively resolved sub-workflows)
     pub fn build(self) -> Result<WorkflowExecutor, Vec<WorkflowError>> {
         let mut executor = WorkflowExecutor::build_internal(
             self.workflow,
@@ -180,6 +198,7 @@ impl<'s> WorkflowExecutorBuilder<'s> {
             self.secrets,
             self.workflows.as_deref(),
             &self.rules,
+            self.operator_registry,
             &mut Vec::new(),
         )?;
         if let Some(blobs) = self.blobs {
@@ -193,10 +212,10 @@ impl<'s> WorkflowExecutorBuilder<'s> {
 }
 
 impl WorkflowExecutor {
-    /// Construye un executor validando la estructura del grafo, que toda
-    /// tarea referenciada esté registrada y precompilando los JSON Schemas.
-    /// Los secretos de perfiles inline se resuelven con variables de entorno
-    /// ([`crate::io::secret::EnvSecrets`]); para otro provider usar
+    /// Builds an executor by validating the graph structure, that every
+    /// referenced task is registered, and precompiling JSON Schemas.
+    /// Secrets in inline profiles are resolved from env vars
+    /// ([`crate::io::secret::EnvSecrets`]); for another provider use
     /// [`WorkflowExecutor::new_with_secrets`].
     pub fn new(
         workflow: WorkflowDefinition,
@@ -205,18 +224,26 @@ impl WorkflowExecutor {
         Self::new_with_secrets(workflow, registry, &crate::io::secret::EnvSecrets)
     }
 
-    /// Como [`WorkflowExecutor::new`], con un [`SecretProvider`] explícito
-    /// para los `{"$secret": "X"}` de los perfiles inline del workflow.
+    /// Like [`WorkflowExecutor::new`], with an explicit [`SecretProvider`]
+    /// for `{"$secret": "X"}` in the workflow's inline profiles.
     pub fn new_with_secrets(
         workflow: WorkflowDefinition,
         registry: Arc<TaskRegistry>,
         secrets: &dyn SecretProvider,
     ) -> Result<Self, Vec<WorkflowError>> {
-        Self::build_internal(workflow, registry, secrets, None, &[], &mut Vec::new())
+        Self::build_internal(
+            workflow,
+            registry,
+            secrets,
+            None,
+            &[],
+            None,
+            &mut Vec::new(),
+        )
     }
 
-    /// Constructor con inyección de dependencias (secretos, sub-workflows,
-    /// blobs, observer, reglas). Ver [`WorkflowExecutorBuilder`].
+    /// Constructor with dependency injection (secrets, sub-workflows,
+    /// blobs, observer, rules). See [`WorkflowExecutorBuilder`].
     pub fn builder(
         workflow: WorkflowDefinition,
         registry: Arc<TaskRegistry>,
@@ -229,6 +256,7 @@ impl WorkflowExecutor {
             blobs: None,
             observer: None,
             rules: Vec::new(),
+            operator_registry: None,
         }
     }
 
@@ -238,10 +266,11 @@ impl WorkflowExecutor {
         secrets: &dyn SecretProvider,
         shared: Option<&WorkflowRegistry>,
         rules: &[Box<dyn ValidationRule>],
+        operator_registry: Option<Arc<OperatorRegistry>>,
         ancestry: &mut Vec<String>,
     ) -> Result<Self, Vec<WorkflowError>> {
-        // Los hijos se construyen con el registry original: los perfiles
-        // inline de un documento son locales a ese documento
+        // Children are built with the original registry: inline profiles
+        // from a document are local to that document
         let original_registry = Arc::clone(&registry);
         let registry = Self::registry_with_inline_profiles(&workflow, registry, secrets)?;
 
@@ -256,6 +285,7 @@ impl WorkflowExecutor {
             secrets,
             shared,
             rules,
+            operator_registry.as_ref(),
             ancestry,
         )?;
 
@@ -267,12 +297,13 @@ impl WorkflowExecutor {
             observer: None,
             blobs: Arc::new(TempDirBlobFactory),
             subworkflows,
+            operator_registry,
         })
     }
 
-    /// Si el documento declara perfiles inline (sección `tasks`), los
-    /// registra en una copia scoped del registry: el registry compartido no
-    /// se contamina con definiciones locales del workflow.
+    /// If the document declares inline profiles (`tasks` section), registers
+    /// them in a scoped copy of the registry: the shared registry is not
+    /// polluted with the workflow's local definitions.
     fn registry_with_inline_profiles(
         workflow: &WorkflowDefinition,
         registry: Arc<TaskRegistry>,
@@ -294,17 +325,17 @@ impl WorkflowExecutor {
         }
     }
 
-    /// Resuelve los nodos `kind: "subworkflow"` y construye (y valida)
-    /// recursivamente un executor hijo por cada uno: inline primero, registro
-    /// compartido después. Un nombre inexistente, un ciclo, exceso de
-    /// profundidad o un hijo inválido fallan aquí — en la construcción del
-    /// padre — nunca en runtime.
+    /// Resolves `kind: "subworkflow"` nodes and recursively builds (and
+    /// validates) a child executor for each one: inline first, shared registry
+    /// second. A nonexistent name, a cycle, excessive depth, or an invalid
+    /// child all fail here — at parent build time — never at runtime.
     fn build_subworkflows(
         workflow: &WorkflowDefinition,
         registry: &Arc<TaskRegistry>,
         secrets: &dyn SecretProvider,
         shared: Option<&WorkflowRegistry>,
         rules: &[Box<dyn ValidationRule>],
+        operator_registry: Option<&Arc<OperatorRegistry>>,
         ancestry: &mut Vec<String>,
     ) -> Result<HashMap<NodeId, WorkflowExecutor>, Vec<WorkflowError>> {
         let sub_nodes: Vec<(&NodeId, &SubworkflowNode)> = workflow
@@ -322,8 +353,8 @@ impl WorkflowExecutor {
             return Err(vec![WorkflowError::new(
                 codes::SUBWORKFLOW_DEPTH_EXCEEDED,
                 format!(
-                    "El workflow '{}' anida sub-workflows más allá de la \
-                     profundidad máxima ({MAX_SUBWORKFLOW_DEPTH} niveles)",
+                    "Workflow '{}' nests sub-workflows beyond the \
+                     maximum depth ({MAX_SUBWORKFLOW_DEPTH} levels)",
                     workflow.name
                 ),
             )]);
@@ -338,8 +369,8 @@ impl WorkflowExecutor {
                     WorkflowError::new(
                         codes::SUBWORKFLOW_CYCLE,
                         format!(
-                            "El nodo '{}' referencia el workflow '{}', que ya está \
-                             en la cadena de ejecución ({})",
+                            "Node '{}' references workflow '{}', which is already \
+                             in the execution chain ({})",
                             node_id,
                             sub.workflow,
                             ancestry.join(" → ")
@@ -364,8 +395,8 @@ impl WorkflowExecutor {
                     WorkflowError::new(
                         codes::SUBWORKFLOW_NOT_FOUND,
                         format!(
-                            "El nodo '{}' referencia el workflow '{}', que no está en \
-                             la sección `workflows` del documento ni en el registro",
+                            "Node '{}' references workflow '{}', which is not in the \
+                             document's `workflows` section nor in the registry",
                             node_id, sub.workflow
                         ),
                     )
@@ -379,6 +410,7 @@ impl WorkflowExecutor {
                 secrets,
                 shared,
                 rules,
+                operator_registry.cloned(),
                 ancestry,
             ) {
                 Ok(child) => {
@@ -386,7 +418,7 @@ impl WorkflowExecutor {
                 }
                 Err(child_errors) => {
                     errors.extend(child_errors.into_iter().map(|mut e| {
-                        e.message = format!("en el sub-workflow '{}': {}", sub.workflow, e.message);
+                        e.message = format!("in sub-workflow '{}': {}", sub.workflow, e.message);
                         e
                     }));
                 }
@@ -401,8 +433,9 @@ impl WorkflowExecutor {
         }
     }
 
-    /// Registra un observer que recibirá los eventos de cada ejecución
-    /// ([`crate::observe::ExecutionEvent`]), incluidas las de sub-workflows.
+    /// Registers an observer that will receive events from every execution
+    /// ([`crate::observe::ExecutionEvent`]), including sub-workflow
+    /// executions.
     pub fn with_observer(mut self, observer: Arc<dyn ExecutionObserver>) -> Self {
         self.set_observer(observer);
         self
@@ -415,7 +448,7 @@ impl WorkflowExecutor {
         self.observer = Some(observer);
     }
 
-    /// Emite un evento al observer, si hay uno registrado
+    /// Emits an event to the observer, if one is registered
     pub(crate) fn emit(&self, ctx: &WorkflowContext, kind: EventKind) {
         if let Some(observer) = &self.observer {
             observer.on_event(&ExecutionEvent {
@@ -428,21 +461,22 @@ impl WorkflowExecutor {
         }
     }
 
-    /// Ejecuta el workflow hasta terminar o fallar (run-to-completion),
-    /// **sin límite** de tiempo ni cancelación. Para acotarla, usa
+    /// Executes the workflow until it finishes or fails (run-to-completion),
+    /// **without** time limit or cancellation. To bound it, use
     /// [`run_with`](Self::run_with).
     pub async fn run(&self, trigger: WorkflowData) -> WorkflowResult {
         self.run_with(trigger, RunOptions::default()).await
     }
 
-    /// Como [`run`](Self::run), pero con [`RunOptions`]: un `deadline` total
-    /// y/o un `CancellationToken`. Por defecto las ejecuciones son ilimitadas;
-    /// estos límites son opt-in del host.
+    /// Like [`run`](Self::run), but with [`RunOptions`]: a total `deadline`
+    /// and/or a `CancellationToken`. By default executions are unlimited;
+    /// these limits are opt-in from the host.
     ///
-    /// Al vencer el deadline o cancelarse, la ejecución en curso se abandona
-    /// (sus futuros se descartan: cancelación cooperativa en los `await`) y se
-    /// devuelve `EXECUTION_TIMEOUT` / `EXECUTION_CANCELLED`. Los blobs de la
-    /// ejecución se limpian igual.
+    /// When the deadline expires or cancellation is requested, the in-progress
+    /// execution is abandoned (its futures are discarded: cooperative
+    /// cancellation at the `await` points) and `EXECUTION_TIMEOUT` /
+    /// `EXECUTION_CANCELLED` is returned. The execution's blobs are cleaned up
+    /// regardless.
     pub async fn run_with(&self, trigger: WorkflowData, options: RunOptions) -> WorkflowResult {
         let ctx = WorkflowContext::with_blob_factory(
             &self.workflow,
@@ -450,16 +484,16 @@ impl WorkflowExecutor {
             self.blobs.as_ref(),
         );
         let result = self.run_bounded(trigger, &ctx, &options).await;
-        // Solo la ejecución raíz limpia los blobs: los sub-workflows
-        // comparten este store y sus referencias pueden cruzar la frontera
+        // Only the root execution cleans up blobs: sub-workflows share this
+        // store and their references can cross the boundary
         if let Err(e) = ctx.blobs().cleanup().await {
-            warn!(code = %e.code, message = %e.message, "No se pudieron limpiar los blobs");
+            warn!(code = %e.code, message = %e.message, "Could not clean up blobs");
         }
         result
     }
 
-    /// Corre `run_with_ctx` bajo los límites de `options`. Sin límites, es un
-    /// simple `await`; con ellos, una carrera contra el deadline y el token.
+    /// Runs `run_with_ctx` under the limits of `options`. Without limits, a
+    /// simple `await`; with them, a race against the deadline and the token.
     async fn run_bounded(
         &self,
         trigger: WorkflowData,
@@ -484,16 +518,18 @@ impl WorkflowExecutor {
             }
             (Some(deadline), Some(token)) => {
                 tokio::select! {
+                    biased;
+                    _ = token.cancelled() => Err(cancelled_error()),
                     result = work => result,
                     _ = tokio::time::sleep(deadline) => Err(timeout_error(deadline)),
-                    _ = token.cancelled() => Err(cancelled_error()),
                 }
             }
         }
     }
 
-    /// Cuerpo común de una ejecución (raíz o sub-workflow): eventos de
-    /// inicio/fin alrededor de `run_inner`, sin limpieza de blobs.
+    /// Common body of an execution (root or sub-workflow): start/end events
+    /// around `run_inner`, without blob cleanup.
+    #[tracing::instrument(skip(self, trigger, ctx))]
     pub(crate) async fn run_with_ctx(
         &self,
         trigger: WorkflowData,
@@ -502,7 +538,7 @@ impl WorkflowExecutor {
         info!(
             execution_id = %ctx.execution_id(),
             name = %self.workflow.name,
-            "Iniciando ejecución de workflow"
+            "Starting workflow execution"
         );
         self.emit(
             ctx,
@@ -537,6 +573,7 @@ impl WorkflowExecutor {
         result
     }
 
+    #[tracing::instrument(skip(self, trigger, ctx), fields(workflow = %self.workflow.name))]
     async fn run_inner(&self, trigger: WorkflowData, ctx: &WorkflowContext) -> WorkflowResult {
         let state = RunState {
             joins: Mutex::new(HashMap::new()),
@@ -546,10 +583,11 @@ impl WorkflowExecutor {
         self.execute_from(&self.index.start, Arc::new(trigger.0), None, ctx, &state)
             .await?;
 
-        // Joins que nunca recibieron todas sus ramas (p.ej. un exclusive
-        // desvió el flujo): diagnóstico explícito en vez de un fallo mudo
+        // Joins that never received all their branches (e.g. an exclusive
+        // gateway diverted the flow): explicit diagnosis instead of a silent
+        // failure
         let starved: Vec<String> = {
-            let joins = state.joins.lock().expect("RunState lock poisoned");
+            let joins = state.joins.lock();
             joins
                 .iter()
                 .map(|(id, arrivals)| {
@@ -557,7 +595,7 @@ impl WorkflowExecutor {
                     let arrived: Vec<&str> =
                         arrivals.iter().map(|(from, _)| from.0.as_str()).collect();
                     format!(
-                        "'{}' recibió {}/{} ramas (llegaron: [{}])",
+                        "'{}' received {}/{} branches (arrived: [{}])",
                         id,
                         arrivals.len(),
                         expected,
@@ -567,38 +605,39 @@ impl WorkflowExecutor {
                 .collect()
         };
 
-        let mut ends = state.ends.into_inner().expect("RunState lock poisoned");
+        let mut ends = state.ends.into_inner();
         if ends.is_empty() && !starved.is_empty() {
             return Err(WorkflowError::new(
                 codes::JOIN_INCOMPLETE,
                 format!(
-                    "La ejecución terminó con joins esperando ramas que nunca llegaron: {}. \
-                     Verifica que ningún gateway exclusive desvíe el flujo lejos de un join.",
+                    "Execution finished with joins waiting for branches that never arrived: {}. \
+                     Check that no exclusive gateway diverts the flow away from a join.",
                     starved.join("; ")
                 ),
             ));
         }
         if !starved.is_empty() {
-            warn!(joins = %starved.join("; "), "Joins incompletos al finalizar el workflow");
+            warn!(joins = %starved.join("; "), "Incomplete joins at workflow end");
         }
 
         match ends.len() {
             0 => Err(WorkflowError::new(
                 codes::NO_OUTPUT,
-                "El workflow finalizó sin alcanzar ningún nodo end",
+                "Workflow finished without reaching any end node",
             )),
-            1 => Ok(WorkflowData(ends.pop().expect("len comprobado").1)),
-            // Varios ends alcanzados (ramas paralelas): objeto por id de end
+            1 => Ok(WorkflowData(ends.pop().expect("length already checked").1)),
+            // Multiple ends reached (parallel branches): object keyed by end id
             _ => Ok(WorkflowData(Value::Object(
                 ends.into_iter().map(|(id, v)| (id.0, v)).collect(),
             ))),
         }
     }
 
-    /// Ejecuta un nodo y continúa el recorrido por sus aristas salientes.
-    /// `carried` es el output del predecesor (el "token" que llega al nodo)
-    /// y `origin` el id de ese predecesor (None solo para el start).
-    /// El token viaja como `Arc` para que el fan-out no clone payloads.
+    /// Executes a node and continues traversal through its outgoing edges.
+    /// `carried` is the predecessor's output (the "token" arriving at the node)
+    /// and `origin` is that predecessor's id (None only for start).
+    /// The token travels as `Arc` so fan-out does not clone payloads.
+    #[tracing::instrument(skip(self, carried, ctx, state), fields(node_id = %node_id))]
     pub(crate) fn execute_from<'a>(
         &'a self,
         node_id: &'a NodeId,
@@ -609,10 +648,10 @@ impl WorkflowExecutor {
     ) -> BoxFuture<'a, Result<(), WorkflowError>> {
         Box::pin(async move {
             let node = self.index.node(node_id);
-            debug!(node_id = %node_id, "Ejecutando nodo");
+            debug!(node_id = %node_id, "Executing node");
 
-            // Un join "arranca" varias veces (una por llegada); su evento de
-            // inicio se emite cuando completa, junto al de término
+            // A join "starts" multiple times (once per arrival); its start
+            // event is emitted when it completes, alongside the end event
             let is_join =
                 matches!(&node.kind, NodeKind::Gateway(g) if g.gateway == GatewayKind::Join);
             if !is_join {
@@ -669,8 +708,8 @@ impl WorkflowExecutor {
         })
     }
 
-    /// Continúa el recorrido por un conjunto de aristas. Varias aristas se
-    /// recorren concurrentemente; el primer error cancela las ramas hermanas.
+    /// Continues traversal through a set of edges. Multiple edges are
+    /// traversed concurrently; the first error cancels sibling branches.
     pub(crate) async fn continue_through(
         &self,
         edges: &[FlowEdge],
@@ -698,9 +737,9 @@ impl WorkflowExecutor {
         }
     }
 
-    /// Cierra la ejecución de un nodo que invoca tareas (task, foreach o
-    /// subworkflow): publica output y continúa, o sigue la ruta de error
-    /// (`on: error` / `on: panic`) si existe.
+    /// Finalizes the execution of a task-invoking node (task, foreach, or
+    /// subworkflow): publishes output and continues, or follows the error
+    /// path (`on: error` / `on: panic`) if one exists.
     async fn after_task_result(
         &self,
         node_id: &NodeId,
@@ -729,8 +768,9 @@ impl WorkflowExecutor {
                 .await
             }
             Err(err) => {
-                // Un panic solo rutea por `on: panic` (sin fallback a error:
-                // pudo dejar efectos a medias); el resto rutea por `on: error`
+                // A panic only routes through `on: panic` (no fallback to
+                // error: it may have left partial effects); everything else
+                // routes through `on: error`
                 let route_edges = if err.code == codes::TASK_PANIC {
                     self.index.panic_edges(node_id)
                 } else {
@@ -748,8 +788,8 @@ impl WorkflowExecutor {
                 if !error_routed {
                     return Err(err);
                 }
-                // Ruta alternativa: el error serializado viaja como token
-                warn!(node_id = %node_id, code = %err.code, "Nodo falló; siguiendo ruta alternativa");
+                // Alternate path: the serialized error travels as the token
+                warn!(node_id = %node_id, code = %err.code, "Node failed; following alternate path");
                 let error_value = serde_json::to_value(&err).unwrap_or(Value::Null);
                 ctx.set_node_error(node_id, error_value.clone());
                 self.continue_through(route_edges, Arc::new(error_value), ctx, state)

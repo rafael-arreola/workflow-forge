@@ -1,5 +1,5 @@
-//! Reglas específicas de kinds de nodo (foreach, loop, subworkflow) y de la
-//! sección `workflows` inline.
+//! Rules specific to node kinds (foreach, loop, subworkflow) and the
+//! inline `workflows` section.
 
 use std::collections::HashSet;
 
@@ -8,7 +8,7 @@ use crate::spec::node::NodeKind;
 use crate::spec::workflow::WorkflowDefinition;
 use crate::validate::{ValidationCtx, ValidationRule};
 
-/// Un foreach debe declarar `concurrency >= 1`.
+/// A foreach must declare `concurrency >= 1`.
 pub struct ForeachConcurrency;
 
 impl ValidationRule for ForeachConcurrency {
@@ -30,7 +30,7 @@ impl ValidationRule for ForeachConcurrency {
                     WorkflowError::new(
                         codes::FOREACH_INVALID_CONCURRENCY,
                         format!(
-                            "El foreach '{}' declara concurrency 0; debe ser >= 1",
+                            "Foreach '{}' declares concurrency 0; must be >= 1",
                             node.id
                         ),
                     )
@@ -41,7 +41,7 @@ impl ValidationRule for ForeachConcurrency {
     }
 }
 
-/// Un loop debe declarar `max_iterations >= 1`.
+/// A loop must declare `max_iterations >= 1`.
 pub struct LoopMaxIterations;
 
 impl ValidationRule for LoopMaxIterations {
@@ -63,7 +63,7 @@ impl ValidationRule for LoopMaxIterations {
                     WorkflowError::new(
                         codes::LOOP_INVALID_MAX_ITERATIONS,
                         format!(
-                            "El loop '{}' declara max_iterations 0; debe ser >= 1",
+                            "Loop '{}' declares max_iterations 0; must be >= 1",
                             node.id
                         ),
                     )
@@ -74,7 +74,7 @@ impl ValidationRule for LoopMaxIterations {
     }
 }
 
-/// Un nodo subworkflow debe declarar el nombre del workflow hijo.
+/// A subworkflow node must declare the child workflow name.
 pub struct SubworkflowName;
 
 impl ValidationRule for SubworkflowName {
@@ -96,7 +96,7 @@ impl ValidationRule for SubworkflowName {
                     WorkflowError::new(
                         codes::SUBWORKFLOW_MISSING_NAME,
                         format!(
-                            "El nodo subworkflow '{}' no declara el nombre del workflow hijo",
+                            "Subworkflow node '{}' does not declare the child workflow name",
                             node.id
                         ),
                     )
@@ -107,8 +107,8 @@ impl ValidationRule for SubworkflowName {
     }
 }
 
-/// La sección `workflows` inline no admite nombres repetidos.
-/// (La validación recursiva de cada hijo la hace el pipeline.)
+/// The inline `workflows` section disallows duplicate names.
+/// (Recursive validation of each child is done by the pipeline.)
 pub struct InlineWorkflowNames;
 
 impl ValidationRule for InlineWorkflowNames {
@@ -128,7 +128,7 @@ impl ValidationRule for InlineWorkflowNames {
                 errors.push(WorkflowError::new(
                     codes::SUBWORKFLOW_DUPLICATE_NAME,
                     format!(
-                        "La sección `workflows` declara más de un workflow llamado '{}'",
+                        "The `workflows` section declares more than one workflow named '{}'",
                         child.name
                     ),
                 ));

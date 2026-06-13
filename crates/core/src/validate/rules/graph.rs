@@ -1,8 +1,8 @@
-//! Reglas globales del grafo: alcanzabilidad desde el start y aciclicidad.
+//! Global graph rules: reachability from the start and acyclicity.
 //!
-//! Ambas se auto-desactivan si una regla previa reportó `UNKNOWN_NODE_REF`:
-//! con referencias rotas, los recorridos producirían ruido en vez de
-//! diagnóstico.
+//! Both disable themselves if a previous rule reported `UNKNOWN_NODE_REF`:
+//! with broken references, traversals would produce noise instead of
+//! diagnostics.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -15,8 +15,8 @@ fn refs_are_sane(errors: &[WorkflowError]) -> bool {
     errors.iter().all(|e| e.code != codes::UNKNOWN_NODE_REF)
 }
 
-/// Todo nodo debe ser alcanzable desde el start (BFS por aristas salientes,
-/// incluidas las de error: una ruta `on: error` cuenta como alcanzable).
+/// Every node must be reachable from the start (BFS through outgoing edges,
+/// including error edges: an `on: error` path counts as reachable).
 pub struct Reachability;
 
 impl ValidationRule for Reachability {
@@ -51,7 +51,7 @@ impl ValidationRule for Reachability {
                 errors.push(
                     WorkflowError::new(
                         codes::UNREACHABLE_NODE,
-                        format!("El nodo '{}' no es alcanzable desde el start", node.id),
+                        format!("Node '{}' is not reachable from the start", node.id),
                     )
                     .with_source_task(node.id.to_string()),
                 );
@@ -60,8 +60,8 @@ impl ValidationRule for Reachability {
     }
 }
 
-/// El grafo debe ser acíclico (orden topológico de Kahn: si no se pueden
-/// ordenar todos los nodos, hay ciclo).
+/// The graph must be acyclic (Kahn's topological sort: if not all nodes can
+/// be ordered, there is a cycle).
 pub struct Acyclicity;
 
 impl ValidationRule for Acyclicity {
@@ -81,7 +81,7 @@ impl ValidationRule for Acyclicity {
 
         let mut in_degree: HashMap<&NodeId, usize> = ctx.node_ids().map(|id| (id, 0)).collect();
         for edge in &workflow.edges {
-            *in_degree.get_mut(&edge.to).expect("ref validada") += 1;
+            *in_degree.get_mut(&edge.to).expect("reference validated") += 1;
         }
         let mut queue: VecDeque<&NodeId> = in_degree
             .iter()
@@ -92,7 +92,7 @@ impl ValidationRule for Acyclicity {
         while let Some(id) = queue.pop_front() {
             sorted += 1;
             for edge in ctx.outgoing(id) {
-                let deg = in_degree.get_mut(&edge.to).expect("ref validada");
+                let deg = in_degree.get_mut(&edge.to).expect("reference validated");
                 *deg -= 1;
                 if *deg == 0 {
                     queue.push_back(&edge.to);
@@ -102,7 +102,7 @@ impl ValidationRule for Acyclicity {
         if sorted != ctx.node_count() {
             errors.push(WorkflowError::new(
                 codes::CYCLE_DETECTED,
-                "El grafo contiene ciclos; la spec 1.0 exige un grafo acíclico",
+                "The graph contains cycles; spec 1.0 requires an acyclic graph",
             ));
         }
     }

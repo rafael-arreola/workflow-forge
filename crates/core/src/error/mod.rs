@@ -1,9 +1,9 @@
-//! La familia **error**: el error estructurado del engine y su catálogo.
+//! The **error** family: the engine's structured error and its catalog.
 //!
-//! [`WorkflowError`] es el único tipo de error del crate: viaja serializado
-//! entre nodos (rutas `on: error`), en los eventos de observabilidad y como
-//! resultado de validación. El módulo [`codes`] es el catálogo completo de
-//! códigos que el engine puede emitir.
+//! [`WorkflowError`] is the crate's only error type: it travels serialized
+//! between nodes (`on: error` routes), in observability events, and as
+//! a validation result. The [`codes`] module is the full catalog of
+//! codes the engine can emit.
 
 pub mod codes;
 
@@ -11,37 +11,37 @@ use serde::{Deserialize, Serialize};
 
 use crate::task::WorkflowData;
 
-/// Error estructurado que una tarea puede devolver durante la ejecución.
-/// Incluye trazabilidad hasta la tarea origen y soporta encadenamiento.
+/// Structured error that a task can return during execution.
+/// Includes traceability to the originating task and supports chaining.
 #[derive(Debug, Serialize, Deserialize, thiserror::Error)]
 pub struct WorkflowError {
-    /// Código único que identifica el tipo de error (ver [`codes`])
+    /// Unique code identifying the error type (see [`codes`])
     pub code: String,
-    /// Mensaje descriptivo para el operador o desarrollador
+    /// Descriptive message for the operator or developer
     pub message: String,
-    /// Identificador de la tarea que originó el error
+    /// Identifier of the task that originated the error
     #[serde(default)]
     pub source_task: Option<String>,
-    /// Datos que originaron el error (boxed para mantener el error barato de mover)
+    /// Data that originated the error (boxed to keep the error cheap to move)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub payload: Option<Box<WorkflowData>>,
-    /// Datos parciales generados antes del fallo
+    /// Partial data generated before the failure
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub response: Option<Box<WorkflowData>>,
-    /// Pista para la política de reintentos: espera **al menos** estos
-    /// milisegundos antes del siguiente intento. La fija la tarea cuando el
-    /// destino indica cuándo reintentar (p. ej. el header HTTP `Retry-After`);
-    /// el engine toma `max(backoff, retry_after_ms)`. Sin reintentos
-    /// configurados en el nodo no tiene efecto.
+    /// Hint for the retry policy: wait **at least** these
+    /// milliseconds before the next attempt. Set by the task when the
+    /// destination indicates when to retry (e.g., the HTTP `Retry-After` header);
+    /// the engine uses `max(backoff, retry_after_ms)`. Without retries
+    /// configured on the node, it has no effect.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub retry_after_ms: Option<u64>,
-    /// Causa raíz (error interno del sistema)
+    /// Root cause (internal system error)
     #[serde(skip)]
     pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
 }
 
 impl WorkflowError {
-    /// Crea un error con código y mensaje; el resto de campos en `None`
+    /// Creates an error with code and message; the rest of the fields are `None`
     pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             code: code.into(),
@@ -54,21 +54,21 @@ impl WorkflowError {
         }
     }
 
-    /// Asigna la tarea/nodo de origen
+    /// Assigns the originating task/node
     pub fn with_source_task(mut self, source_task: impl Into<String>) -> Self {
         self.source_task = Some(source_task.into());
         self
     }
 
-    /// Fija la pista [`retry_after_ms`](Self::retry_after_ms): el engine
-    /// esperará al menos este tiempo antes de reintentar.
+    /// Sets the [`retry_after_ms`](Self::retry_after_ms) hint: the engine
+    /// will wait at least this time before retrying.
     pub fn with_retry_after_ms(mut self, ms: u64) -> Self {
         self.retry_after_ms = Some(ms);
         self
     }
 }
 
-// Clone manual: `source` no es Clone, se omite en la copia
+// Manual Clone: `source` is not Clone, it is omitted in the copy
 impl Clone for WorkflowError {
     fn clone(&self) -> Self {
         Self {

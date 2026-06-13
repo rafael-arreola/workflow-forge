@@ -1,39 +1,39 @@
 //! # workflow-forge-core
 //!
-//! El engine de ejecución de workflows según la spec 1.0, organizado en
-//! familias con responsabilidades cerradas:
+//! The workflow execution engine per spec 1.0, organized in
+//! families with closed responsibilities:
 //!
 //! ```text
-//! spec      el lenguaje: tipos serde del documento (nodos, aristas,
-//!           condiciones, perfiles). Datos puros, sin lógica.
+//! spec      the language: serde types of the document (nodes, edges,
+//!           conditions, profiles). Pure data, no logic.
 //!   ↓
-//! validate  reglas estáticas sobre la definición (acumulan errores)
+//! validate  static rules over the definition (accumulates errors)
 //!   ↓
-//! runtime   ejecución: executor, contexto de estado, registro de
-//!           sub-workflows, índices precompilados
+//! runtime   execution: executor, state context, sub-workflow
+//!           registration, precompiled indices
 //!
-//! expr      resolución de expresiones ($.mapping, @.shape)
-//! task      el contrato de extensión: trait Task, manifiestos, registry,
-//!           perfiles
-//! io        recursos del host: blobs ($blob) y secretos ($secret)
-//! observe   eventos de ejecución, historia en memoria, reportes
-//! error     WorkflowError + catálogo de códigos (error::codes)
+//! expr      expression resolution ($.mapping, @.shape)
+//! task      the extension contract: Task trait, manifests, registry,
+//!           profiles
+//! io        host resources: blobs ($blob) and secrets ($secret)
+//! observe   execution events, in-memory history, reports
+//! error     WorkflowError + error code catalog (error::codes)
 //! ```
 //!
-//! ## ¿Dónde agrego…?
+//! ## Where do I add…?
 //!
-//! | Quiero agregar | Dónde |
+//! | I want to add | Where |
 //! |---|---|
-//! | una tarea (atajo) | una closure async: [`register_typed`](task::TaskRegistry::register_typed) (tipada, schemas derivados) o [`register_fn`](task::TaskRegistry::register_fn) (JSON crudo) |
-//! | una tarea (control total) | implementa [`task::Task`] (struct con estado/dependencias) y regístrala en el [`task::TaskRegistry`] |
-//! | un perfil de tarea | [`spec::TaskProfile`] + `register_profile` (o sección `tasks` inline del documento) |
-//! | un operador de condición | implementa [`expr::operators::ConditionOperator`] y regístralo en [`expr::operators::global`] |
-//! | una regla de validación | implementa [`validate::ValidationRule`]; integrada → [`validate::rules`], del host → `builder().rule(...)` |
-//! | otro almacenamiento de blobs | implementa [`io::BlobStore`] + [`io::BlobStoreFactory`] → `builder().blobs(...)` |
-//! | otro provider de secretos | implementa [`io::SecretProvider`] → `builder().secrets(...)` |
-//! | un kind de nodo (cambio de spec) | variante en [`spec::node::NodeKind`] + handler en `runtime::handlers` + reglas en [`validate::rules`] |
-//! | un código de error | constante documentada en [`error::codes`] |
-//! | un evento de observabilidad | variante en [`observe::EventKind`] |
+//! | a task (shortcut) | an async closure: [`register_typed`](task::TaskRegistry::register_typed) (typed, derived schemas) or [`register_fn`](task::TaskRegistry::register_fn) (raw JSON) |
+//! | a task (full control) | implement [`task::Task`] (struct with state/dependencies) and register it in the [`task::TaskRegistry`] |
+//! | a task profile | [`spec::TaskProfile`] + `register_profile` (or inline `tasks` section of the document) |
+//! | a condition operator | implement [`expr::operators::ConditionOperator`] and register it in [`expr::operators::global`] |
+//! | a validation rule | implement [`validate::ValidationRule`]; built-in → [`validate::rules`], host → `builder().rule(...)` |
+//! | another blob storage | implement [`io::BlobStore`] + [`io::BlobStoreFactory`] → `builder().blobs(...)` |
+//! | another secret provider | implement [`io::SecretProvider`] → `builder().secrets(...)` |
+//! | a node kind (spec change) | variant in [`spec::node::NodeKind`] + handler in `runtime::handlers` + rules in [`validate::rules`] |
+//! | an error code | documented constant in [`error::codes`] |
+//! | an observability event | variant in [`observe::EventKind`] |
 
 #![warn(missing_docs)]
 
@@ -49,12 +49,12 @@ pub mod task;
 pub mod testing;
 pub mod validate;
 
-// Re-export para que las extensiones construyan schemas sin depender
-// directamente de schemars
+// Re-export so that extensions can build schemas without depending
+// directly on schemars
 pub use schemars;
 
-/// Lo necesario para escribir y ejecutar workflows: el contrato de tareas,
-/// el executor y los tipos que cruzan la frontera del engine.
+/// Everything needed to write and execute workflows: the task contract,
+/// the executor, and the types that cross the engine boundary.
 pub mod prelude {
     pub use crate::error::WorkflowError;
     pub use crate::observe::{ExecutionObserver, InMemoryHistory};
@@ -68,5 +68,5 @@ pub mod prelude {
     };
 }
 
-/// Versión del crate workflow-forge-core
+/// Version of the workflow-forge-core crate
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

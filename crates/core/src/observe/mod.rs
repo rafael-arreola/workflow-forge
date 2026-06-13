@@ -1,16 +1,17 @@
-//! La familia **observe**: observabilidad de ejecuciones.
+//! The **observe** family: execution observability.
 //!
-//! El executor emite eventos tipados y serializables a un
-//! [`ExecutionObserver`] registrado con `WorkflowExecutor::with_observer`.
-//! El host decide qué hacer con ellos (memoria, base de datos, OTLP, …).
+//! The executor emits typed, serializable events to an
+//! [`ExecutionObserver`] registered via `WorkflowExecutor::with_observer`.
+//! The host decides what to do with them (memory, database, OTLP, ...).
 //!
-//! Los eventos son el contrato de observabilidad de la spec: serializan a
-//! JSON estable (`type` discriminador snake_case) y están diseñados para ser,
-//! a futuro, el journal de un executor durable (event sourcing) sin rediseño.
+//! Events are the spec's observability contract: they serialize to stable
+//! JSON (`type` discriminator in snake_case) and are designed to eventually
+//! become the journal of a durable executor (event sourcing) without a
+//! redesign.
 //!
-//! [`InMemoryHistory`] es el observer integrado: acumula los eventos de una
-//! ejecución y produce un [`ExecutionReport`] — la respuesta embebida a
-//! "¿qué pasó con la ejecución X?".
+//! [`InMemoryHistory`] is the built-in observer: it accumulates the events
+//! of an execution and produces an [`ExecutionReport`] — the embedded
+//! answer to "what happened with execution X?".
 
 pub mod adapters;
 pub mod history;
@@ -23,54 +24,54 @@ use serde_json::Value;
 
 use crate::error::WorkflowError;
 
-/// Receptor de eventos de ejecución.
+/// Receiver of execution events.
 ///
-/// `on_event` se invoca de forma síncrona desde el executor y NO debe
-/// bloquear: un host que persiste lento debe bufferizar (canal/spawn).
+/// `on_event` is invoked synchronously by the executor and MUST NOT block:
+/// a host with slow persistence should buffer (channel/spawn).
 pub trait ExecutionObserver: Send + Sync {
-    /// Recibe cada evento emitido por el executor, en orden de emisión.
+    /// Receives each event emitted by the executor, in emission order.
     fn on_event(&self, event: &ExecutionEvent);
 }
 
-/// Evento de ejecución: metadata común + variante específica.
+/// Execution event: common metadata + specific variant.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionEvent {
-    /// Id de la ejecución que emitió el evento
+    /// Id of the execution that emitted the event
     pub execution_id: String,
-    /// Id de la ejecución padre si el evento viene de un sub-workflow
+    /// Parent execution id if the event comes from a sub-workflow
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_execution_id: Option<String>,
-    /// Orden total de emisión dentro de la ejecución (las ramas paralelas
-    /// emiten concurrentemente; `seq` las ordena de forma estable). Los
-    /// sub-workflows comparten el contador del padre: `seq` ordena el árbol
-    /// completo de ejecuciones
+    /// Total emission order within the execution (parallel branches emit
+    /// concurrently; `seq` orders them stably). Sub-workflows share the
+    /// parent's counter: `seq` orders the full execution tree
     pub seq: u64,
-    /// Milisegundos transcurridos desde el inicio de la ejecución
+    /// Milliseconds elapsed since the execution started
     pub elapsed_ms: u64,
-    /// Variante específica del evento (`type` en JSON)
+    /// Specific event variant (`type` in JSON)
     #[serde(flatten)]
     pub kind: EventKind,
 }
 
-/// Variantes de evento. El campo `type` discrimina en JSON.
+/// Event variants. The `type` field discriminates in JSON.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-#[allow(missing_docs)] // los campos repiten node_id/output/error; la variante documenta
+#[allow(missing_docs)] // fields repeat node_id/output/error; the variant documents itself
 pub enum EventKind {
-    /// La ejecución arrancó (raíz o sub-workflow)
+    /// The execution started (root or sub-workflow)
     WorkflowStarted { workflow: Value, trigger: Value },
-    /// Un nodo comenzó a ejecutarse (los joins lo emiten al completar)
+    /// A node began executing (joins emit this when they complete)
     NodeStarted { node_id: String, kind: String },
-    /// Un intento de tarea arrancó (nodos task; los foreach no emiten attempts)
+    /// A task attempt started (task nodes; foreach does not emit attempts)
     TaskAttemptStarted {
         node_id: String,
         attempt: u32,
-        /// Input resuelto de la tarea; solo en el primer intento (los
-        /// reintentos reciben el mismo input)
+        /// Resolved task input; only on the first attempt (retries receive
+        /// the same input)
         #[serde(default, skip_serializing_if = "Option::is_none")]
         input: Option<Value>,
     },
-    /// Un intento de tarea falló; `will_retry` indica si habrá otro
+    /// A task attempt failed; `will_retry` indicates whether another will
+    /// follow
     TaskAttemptFailed {
         node_id: String,
         attempt: u32,
@@ -79,47 +80,47 @@ pub enum EventKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         next_delay_ms: Option<u64>,
     },
-    /// Un nodo terminó exitosamente y publicó su output
+    /// A node completed successfully and published its output
     NodeCompleted {
         node_id: String,
         output: Value,
         duration_ms: u64,
     },
-    /// Un nodo falló definitivamente (reintentos agotados)
+    /// A node failed definitively (retries exhausted)
     NodeFailed {
         node_id: String,
         error: WorkflowError,
-        /// `true` si el flujo continuó por una arista `on: error`
+        /// `true` if the flow continued through an `on: error` edge
         error_routed: bool,
     },
-    /// Un elemento de un foreach terminó exitosamente
+    /// A foreach element completed successfully
     ForeachItemCompleted {
         node_id: String,
         index: usize,
         output: Value,
     },
-    /// Un elemento de un foreach falló definitivamente
+    /// A foreach element failed definitively
     ForeachItemFailed {
         node_id: String,
         index: usize,
         error: WorkflowError,
     },
-    /// Una iteración de un loop terminó exitosamente
+    /// A loop iteration completed successfully
     LoopIterationCompleted {
         node_id: String,
         index: usize,
         output: Value,
     },
-    /// Una iteración de un loop falló definitivamente (reintentos agotados);
-    /// el nodo loop completo falla con este error
+    /// A loop iteration failed definitively (retries exhausted);
+    /// the whole loop node fails with this error
     LoopIterationFailed {
         node_id: String,
         index: usize,
         error: WorkflowError,
     },
-    /// La ejecución completó con output final
+    /// The execution completed with final output
     WorkflowCompleted { output: Value, duration_ms: u64 },
-    /// La ejecución falló
+    /// The execution failed
     WorkflowFailed {
         error: WorkflowError,
         duration_ms: u64,
@@ -127,7 +128,7 @@ pub enum EventKind {
 }
 
 impl EventKind {
-    /// Id del nodo al que refiere el evento, si aplica
+    /// Id of the node the event refers to, if applicable
     pub fn node_id(&self) -> Option<&str> {
         match self {
             EventKind::NodeStarted { node_id, .. }

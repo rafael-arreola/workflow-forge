@@ -1,21 +1,21 @@
-//! Resolución de secretos en documentos JSON: los objetos `{"$secret": "X"}`
-//! se reemplazan por el valor que entregue un [`SecretProvider`]. Evita
-//! credenciales hardcodeadas en definiciones que se comparten o versionan
-//! (perfiles de tarea, principalmente).
+//! Secret resolution in JSON documents: `{"$secret": "X"}` objects
+//! are replaced by the value returned by a [`SecretProvider`]. Prevents
+//! hardcoded credentials in definitions that are shared or versioned
+//! (task profiles, primarily).
 
 use serde_json::Value;
 
 use crate::error::{WorkflowError, codes};
 
-/// Fuente de secretos por nombre. La implementación por default es
-/// [`EnvSecrets`] (variables de entorno); un host puede inyectar la suya
+/// Secret source by name. The default implementation is
+/// [`EnvSecrets`] (environment variables); a host can inject its own
 /// (vault, KMS, etc.).
 pub trait SecretProvider: Send + Sync {
-    /// Valor del secreto `name`, si el provider lo conoce.
+    /// Value of the secret `name`, if the provider knows it.
     fn get(&self, name: &str) -> Option<String>;
 }
 
-/// Resuelve secretos desde las variables de entorno del proceso.
+/// Resolves secrets from the process environment variables.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct EnvSecrets;
 
@@ -25,9 +25,9 @@ impl SecretProvider for EnvSecrets {
     }
 }
 
-/// Reemplaza recursivamente todo objeto `{"$secret": "NOMBRE"}` (llave única)
-/// por el valor del provider. Un secreto no disponible es error
-/// `SECRET_NOT_FOUND`.
+/// Recursively replaces every `{"$secret": "NAME"}` object (single key)
+/// with the provider's value. An unavailable secret is a
+/// `SECRET_NOT_FOUND` error.
 pub fn resolve_secrets(
     value: &mut Value,
     provider: &dyn SecretProvider,
@@ -40,7 +40,7 @@ pub fn resolve_secrets(
                 let secret = provider.get(name).ok_or_else(|| {
                     WorkflowError::new(
                         codes::SECRET_NOT_FOUND,
-                        format!("El secreto '{name}' no está disponible en el provider"),
+                        format!("Secret '{name}' is not available in the provider"),
                     )
                 })?;
                 *value = Value::String(secret);

@@ -3,13 +3,12 @@ use std::collections::HashMap;
 use crate::spec::node::{Node, NodeId, NodeKind};
 use crate::spec::workflow::{FlowEdge, WorkflowDefinition};
 
-/// Índices precalculados sobre la definición, compartidos por todas las
-/// reglas de validación: evita que cada regla reconstruya los mapas de
-/// adyacencia.
+/// Precomputed indices on the definition, shared by all validation rules:
+/// avoids each rule rebuilding the adjacency maps.
 ///
-/// Los índices se construyen tal cual está el documento, sin asumir que es
-/// válido: una arista puede referenciar nodos inexistentes y aun así
-/// aparece en `outgoing`/`incoming` (la regla de referencias la reporta).
+/// The indices are built from the document as-is, without assuming it is
+/// valid: an edge may reference nonexistent nodes and still appear in
+/// `outgoing`/`incoming` (the reference rule reports it).
 pub struct ValidationCtx<'w> {
     nodes: HashMap<&'w NodeId, &'w Node>,
     outgoing: HashMap<&'w NodeId, Vec<&'w FlowEdge>>,
@@ -18,7 +17,7 @@ pub struct ValidationCtx<'w> {
 }
 
 impl<'w> ValidationCtx<'w> {
-    /// Construye los índices de un documento.
+    /// Builds the indices for a document.
     pub fn build(workflow: &'w WorkflowDefinition) -> Self {
         let nodes: HashMap<&NodeId, &Node> = workflow.nodes.iter().map(|n| (&n.id, n)).collect();
 
@@ -43,32 +42,32 @@ impl<'w> ValidationCtx<'w> {
         }
     }
 
-    /// `true` si existe un nodo con ese id
+    /// `true` if a node with that id exists
     pub fn has_node(&self, id: &NodeId) -> bool {
         self.nodes.contains_key(id)
     }
 
-    /// Cantidad de nodos del documento
+    /// Number of nodes in the document
     pub fn node_count(&self) -> usize {
         self.nodes.len()
     }
 
-    /// Ids de todos los nodos
+    /// Ids of all nodes
     pub fn node_ids(&self) -> impl Iterator<Item = &'w NodeId> + '_ {
         self.nodes.keys().copied()
     }
 
-    /// Aristas salientes de un nodo (flujo normal y de error, sin filtrar)
+    /// Outgoing edges of a node (normal and error flow, unfiltered)
     pub fn outgoing(&self, id: &NodeId) -> &[&'w FlowEdge] {
         self.outgoing.get(id).map(Vec::as_slice).unwrap_or(&[])
     }
 
-    /// Aristas entrantes de un nodo (flujo normal y de error, sin filtrar)
+    /// Incoming edges of a node (normal and error flow, unfiltered)
     pub fn incoming(&self, id: &NodeId) -> &[&'w FlowEdge] {
         self.incoming.get(id).map(Vec::as_slice).unwrap_or(&[])
     }
 
-    /// Nodos `start` declarados (la spec exige exactamente uno)
+    /// Declared `start` nodes (the spec requires exactly one)
     pub fn starts(&self) -> &[&'w Node] {
         &self.starts
     }

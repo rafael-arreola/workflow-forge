@@ -1,12 +1,12 @@
-//! Extensión `util` de workflow-forge: tareas de soporte para pruebas,
-//! ejemplos y debugging de workflows.
+//! workflow-forge `util` extension: support tasks for testing,
+//! examples, and workflow debugging.
 //!
-//! | Tarea | Contrato |
+//! | Task | Contract |
 //! |-------|----------|
-//! | `util.noop` | Devuelve su input tal cual |
-//! | `util.log` | Loggea `message` con `level` y devuelve `value` (o null) |
-//! | `util.delay` | Espera `ms` milisegundos y devuelve `value` (o null) |
-//! | `util.idempotency_key` | Clave estable derivada de `value` → `{ key }` |
+//! | `util.noop` | Returns its input unchanged |
+//! | `util.log` | Logs `message` with `level` and returns `value` (or null) |
+//! | `util.delay` | Waits `ms` milliseconds and returns `value` (or null) |
+//! | `util.idempotency_key` | Stable key derived from `value` → `{ key }` |
 
 use async_trait::async_trait;
 use serde_json::{Value, json};
@@ -17,7 +17,7 @@ use workflow_forge_core::task::TaskRegistry;
 use workflow_forge_core::task::{Task, TaskManifest};
 use workflow_forge_core::task::{WorkflowData, WorkflowResult};
 
-/// Registra todas las tareas de la extensión en el registry
+/// Registers all extension tasks in the registry
 pub fn register(registry: &TaskRegistry) {
     registry.register(NoopTask::default());
     registry.register(LogTask::default());
@@ -26,7 +26,7 @@ pub fn register(registry: &TaskRegistry) {
 }
 
 fn schema(value: Value) -> workflow_forge_core::schemars::Schema {
-    serde_json::from_value(value).expect("schema estático válido")
+    serde_json::from_value(value).expect("valid static schema")
 }
 
 // ---------------------------------------------------------------------------
@@ -40,7 +40,7 @@ pub struct NoopTask {
 impl Default for NoopTask {
     fn default() -> Self {
         let mut manifest = TaskManifest::new("util.noop");
-        manifest.description = Some("Devuelve su input sin modificarlo".into());
+        manifest.description = Some("Returns its input unchanged".into());
         Self { manifest }
     }
 }
@@ -68,14 +68,14 @@ impl Default for LogTask {
     fn default() -> Self {
         let mut manifest = TaskManifest::new("util.log");
         manifest.description =
-            Some("Loggea `message` con el nivel indicado y devuelve `value`".into());
+            Some("Logs `message` at the given level and returns `value`".into());
         manifest.input_schema = Some(schema(json!({
             "type": "object",
             "required": ["message"],
             "properties": {
                 "level": { "enum": ["debug", "info", "warn", "error"], "default": "info" },
-                "message": { "description": "Valor a loggear (cualquier JSON)" },
-                "value": { "description": "Token que la tarea devuelve como output" }
+                "message": { "description": "Value to log (any JSON)" },
+                "value": { "description": "Token the task returns as output" }
             }
         })));
         Self { manifest }
@@ -119,13 +119,13 @@ impl Default for DelayTask {
     fn default() -> Self {
         let mut manifest = TaskManifest::new("util.delay");
         manifest.description =
-            Some("Espera `ms` milisegundos y devuelve `value` como output".into());
+            Some("Waits `ms` milliseconds and returns `value` as output".into());
         manifest.input_schema = Some(schema(json!({
             "type": "object",
             "required": ["ms"],
             "properties": {
                 "ms": { "type": "integer", "minimum": 0 },
-                "value": { "description": "Token que la tarea devuelve como output" }
+                "value": { "description": "Token the task returns as output" }
             }
         })));
         Self { manifest }
@@ -159,14 +159,14 @@ impl Default for IdempotencyKeyTask {
     fn default() -> Self {
         let mut manifest = TaskManifest::new("util.idempotency_key");
         manifest.description = Some(
-            "Deriva una clave de idempotencia estable de `value` y la devuelve como `{ key }`"
+            "Derives a stable idempotency key from `value` and returns it as `{ key }`"
                 .into(),
         );
         manifest.input_schema = Some(schema(json!({
             "type": "object",
             "required": ["value"],
             "properties": {
-                "value": { "description": "Payload del que derivar la clave (cualquier JSON)" }
+                "value": { "description": "Payload to derive the key from (any JSON)" }
             }
         })));
         manifest.output_schema = Some(schema(json!({

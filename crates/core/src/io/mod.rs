@@ -1,12 +1,12 @@
-//! La familia **io**: recursos del host que cruzan la frontera del engine.
+//! The **io** family: host resources that cross the engine boundary.
 //!
-//! - [`blob`]: binarios grandes que viajan por referencia (`$blob`) en vez
-//!   de inline en el contexto JSON. [`BlobStore`] es el trait inyectable;
-//!   [`TempDirBlobStore`] la implementación v1 (directorio temporal por
-//!   ejecución).
-//! - [`secret`]: credenciales que nunca se hornean en definiciones
-//!   (`{"$secret": "X"}`). [`SecretProvider`] es el trait inyectable;
-//!   [`EnvSecrets`] la implementación por defecto (variables de entorno).
+//! - [`blob`]: large binaries that travel by reference (`$blob`) instead
+//!   of inline in the JSON context. [`BlobStore`] is the injectable trait;
+//!   [`TempDirBlobStore`] the v1 implementation (temporary directory per
+//!   execution).
+//! - [`secret`]: credentials that are never baked into definitions
+//!   (`{"$secret": "X"}`). [`SecretProvider`] is the injectable trait;
+//!   [`EnvSecrets`] the default implementation (environment variables).
 
 pub mod blob;
 pub mod secret;

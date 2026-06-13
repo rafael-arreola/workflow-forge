@@ -1,5 +1,5 @@
-//! Reglas de estructura básica: versión de spec, unicidad de ids,
-//! referencias de aristas y presencia/grado de start/end.
+//! Basic structure rules: spec version, id uniqueness, edge references,
+//! and start/end presence and degree.
 
 use std::collections::HashSet;
 
@@ -8,7 +8,7 @@ use crate::spec::node::{NodeId, NodeKind};
 use crate::spec::workflow::WorkflowDefinition;
 use crate::validate::{SUPPORTED_SPECS, ValidationCtx, ValidationRule};
 
-/// La versión de spec del documento debe estar soportada por este core.
+/// The document's spec version must be supported by this core.
 pub struct SpecSupported;
 
 impl ValidationRule for SpecSupported {
@@ -26,7 +26,7 @@ impl ValidationRule for SpecSupported {
             errors.push(WorkflowError::new(
                 codes::UNSUPPORTED_SPEC,
                 format!(
-                    "Spec '{}' no soportada; este core soporta: {}",
+                    "Spec '{}' not supported; this core supports: {}",
                     workflow.spec,
                     SUPPORTED_SPECS.join(", ")
                 ),
@@ -35,7 +35,7 @@ impl ValidationRule for SpecSupported {
     }
 }
 
-/// Ningún id de nodo puede repetirse.
+/// No node id may be repeated.
 pub struct UniqueNodeIds;
 
 impl ValidationRule for UniqueNodeIds {
@@ -55,7 +55,7 @@ impl ValidationRule for UniqueNodeIds {
                 errors.push(
                     WorkflowError::new(
                         codes::DUPLICATE_NODE_ID,
-                        format!("El id de nodo '{}' está duplicado", node.id),
+                        format!("Node id '{}' is duplicated", node.id),
                     )
                     .with_source_task(node.id.to_string()),
                 );
@@ -64,7 +64,7 @@ impl ValidationRule for UniqueNodeIds {
     }
 }
 
-/// Toda arista debe referenciar nodos que existen.
+/// Every edge must reference nodes that exist.
 pub struct EdgeReferences;
 
 impl ValidationRule for EdgeReferences {
@@ -79,12 +79,12 @@ impl ValidationRule for EdgeReferences {
         errors: &mut Vec<WorkflowError>,
     ) {
         for edge in &workflow.edges {
-            for (end, id) in [("origen", &edge.from), ("destino", &edge.to)] {
+            for (end, id) in [("source", &edge.from), ("target", &edge.to)] {
                 if !ctx.has_node(id) {
                     errors.push(WorkflowError::new(
                         codes::UNKNOWN_NODE_REF,
                         format!(
-                            "La arista {}→{} referencia un {} inexistente",
+                            "Edge {}→{} references a nonexistent {}",
                             edge.from, edge.to, end
                         ),
                     ));
@@ -94,7 +94,7 @@ impl ValidationRule for EdgeReferences {
     }
 }
 
-/// El workflow debe tener exactamente un `start` y al menos un `end`.
+/// The workflow must have exactly one `start` and at least one `end`.
 pub struct StartEndPresence;
 
 impl ValidationRule for StartEndPresence {
@@ -115,12 +115,12 @@ impl ValidationRule for StartEndPresence {
         match ctx.starts().len() {
             0 => errors.push(WorkflowError::new(
                 codes::NO_START_NODE,
-                "El workflow no tiene nodo start",
+                "The workflow has no start node",
             )),
             1 => {}
             _ => errors.push(WorkflowError::new(
                 codes::MULTIPLE_START_NODES,
-                "El workflow tiene más de un nodo start; la spec 1.0 exige exactamente uno",
+                "The workflow has more than one start node; spec 1.0 requires exactly one",
             )),
         }
         if !workflow
@@ -130,13 +130,14 @@ impl ValidationRule for StartEndPresence {
         {
             errors.push(WorkflowError::new(
                 codes::NO_END_NODE,
-                "El workflow no tiene ningún nodo end",
+                "The workflow has no end node",
             ));
         }
     }
 }
 
-/// Un `start` no admite aristas entrantes; un `end` no admite salientes.
+/// A `start` does not accept incoming edges; an `end` does not accept
+/// outgoing ones.
 pub struct StartEndEdges;
 
 impl ValidationRule for StartEndEdges {
@@ -157,7 +158,7 @@ impl ValidationRule for StartEndEdges {
                         WorkflowError::new(
                             codes::START_HAS_INCOMING,
                             format!(
-                                "El nodo start '{}' no puede tener aristas entrantes",
+                                "Start node '{}' cannot have incoming edges",
                                 node.id
                             ),
                         )
@@ -168,7 +169,7 @@ impl ValidationRule for StartEndEdges {
                     errors.push(
                         WorkflowError::new(
                             codes::END_HAS_OUTGOING,
-                            format!("El nodo end '{}' no puede tener aristas salientes", node.id),
+                            format!("End node '{}' cannot have outgoing edges", node.id),
                         )
                         .with_source_task(node.id.to_string()),
                     );

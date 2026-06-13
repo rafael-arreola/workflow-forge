@@ -14,6 +14,7 @@ categories.workspace = true
 # Mock tasks + dry-run helpers (the `testing` module) for exercising workflows
 # without live dependencies. Off by default; enable in `[dev-dependencies]`.
 testing = []
+benchmarks = ["dep:criterion"]
 
 [dependencies]
 async-trait = { workspace = true }
@@ -21,12 +22,18 @@ fastrand = { workspace = true }
 futures = { workspace = true }
 jsonpath-rust = { workspace = true }
 jsonschema = { workspace = true }
+parking_lot = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
+criterion = { workspace = true, optional = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 schemars = { workspace = true }
+
+[[bench]]
+name = "workflow_bench"
+harness = false

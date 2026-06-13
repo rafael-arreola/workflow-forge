@@ -1,6 +1,6 @@
-//! Nodos `loop`: iteración acotada de una tarea con condición de
-//! continuación. El caso canónico es la paginación: "pide la siguiente
-//! página hasta que `next` sea null".
+//! `loop` nodes: bounded iteration of a task with a continuation condition.
+//! The canonical use case is pagination: "fetch the next page until `next`
+//! is null".
 
 use std::sync::Arc;
 
@@ -16,11 +16,11 @@ use crate::spec::node::Node;
 use crate::spec::node::loop_node::{Collect, LoopNode, OnMax};
 
 impl WorkflowExecutor {
-    /// Ejecuta un nodo loop. La primera iteración corre con `input` (o el
-    /// token del predecesor); después de cada iteración se evalúa `while`
-    /// contra el documento `{ input, output, index }` y, si continúa, el
-    /// shape `next` construye el input siguiente contra ese mismo documento.
-    /// El resultado lo cierra `after_task_result` (ruteo de error incluido).
+    /// Executes a loop node. The first iteration runs with `input` (or the
+    /// predecessor's token); after each iteration `while` is evaluated against
+    /// the document `{ input, output, index }` and, if it continues, the
+    /// `next` shape builds the next input against that same document.
+    /// The result is finalized by `after_task_result` (error routing included).
     pub(crate) async fn run_loop(
         &self,
         node: &Node,
@@ -31,7 +31,7 @@ impl WorkflowExecutor {
         let task = self
             .registry
             .get(&lp.task)
-            .expect("validate_tasks garantiza el registro");
+            .expect("validate_tasks guarantees registration");
 
         let mut current_input = match &lp.input {
             Some(mapping_def) => ctx
@@ -40,13 +40,13 @@ impl WorkflowExecutor {
             None => Arc::unwrap_or_clone(carried),
         };
 
-        // Solo se llena con `collect: all`
+        // Only filled when `collect: all`
         let mut collected: Vec<Value> = Vec::new();
         let mut index: u32 = 0;
 
         loop {
-            // El input se clona porque el documento de iteración (para
-            // `while`/`next`) lo necesita después de invocar la tarea
+            // The input is cloned because the iteration document (for
+            // `while`/`next`) needs it after invoking the task
             let result = self
                 .execute_with_policy(
                     &task,
@@ -85,7 +85,7 @@ impl WorkflowExecutor {
                 }
             };
 
-            // Documento de iteración: raíz local de `while` ($.) y `next` (@.)
+            // Iteration document: local root for `while` ($.) and `next` (@.)
             let mut doc = json!({
                 "input": current_input,
                 "output": output,
@@ -102,8 +102,8 @@ impl WorkflowExecutor {
                 return Err(WorkflowError::new(
                     codes::LOOP_MAX_ITERATIONS_EXCEEDED,
                     format!(
-                        "El loop '{}' alcanzó max_iterations ({}) con su condición \
-                         `while` aún verdadera; sube el tope o usa on_max: \"stop\"",
+                        "Loop '{}' reached max_iterations ({}) with its `while` \
+                         condition still true; raise the limit or use on_max: \"stop\"",
                         node.id, lp.max_iterations
                     ),
                 )
@@ -121,8 +121,8 @@ impl WorkflowExecutor {
                 });
             }
 
-            // Preparar la siguiente iteración (el shape lee el doc completo,
-            // así que se resuelve antes de desarmarlo)
+            // Prepare the next iteration (the shape reads the full document,
+            // so it is resolved before dismantling it)
             let next_input = match &lp.next {
                 Some(shape_def) => shape::apply_shape(shape_def, &doc)
                     .map_err(|e| e.with_source_task(node.id.to_string()))?,

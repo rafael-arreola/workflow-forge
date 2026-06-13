@@ -1,35 +1,35 @@
-//! El documento raíz de la spec: definición del workflow y sus aristas.
+//! The root document of the spec: workflow definition and its edges.
 
 use crate::spec::node::{Node, NodeId};
 use crate::spec::profile::TaskProfile;
 use serde::{Deserialize, Serialize};
 
-/// Definición completa de un workflow lista para ser serializada/deserializada.
-/// Contiene nodos y aristas.
+/// Complete definition of a workflow ready to be serialized/deserialized.
+/// Contains nodes and edges.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowDefinition {
-    /// Versión de la spec que cumple esta definición (ej. "1.0")
+    /// Version of the spec this definition complies with (e.g., "1.0")
     #[serde(default = "default_spec")]
     pub spec: String,
-    /// Identificador único del workflow (se asigna si no se provee)
+    /// Unique identifier of the workflow (assigned if not provided)
     #[serde(default)]
     pub id: Option<String>,
-    /// Nombre descriptivo del workflow
+    /// Descriptive name of the workflow
     pub name: String,
-    /// Versión semántica
+    /// Semantic version
     pub version: String,
-    /// Perfiles de tarea locales al workflow: instancias preconfiguradas de
-    /// tareas registradas, visibles solo para esta definición
+    /// Local task profiles for the workflow: preconfigured instances of
+    /// registered tasks, visible only to this definition
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tasks: Vec<TaskProfile>,
-    /// Sub-workflows locales al documento, referenciables por nombre desde
-    /// nodos `kind: "subworkflow"`. Tienen precedencia sobre el
-    /// `WorkflowRegistry` compartido y son visibles solo para esta definición
+    /// Local sub-workflows in the document, referenceable by name from
+    /// `kind: "subworkflow"` nodes. They take precedence over the
+    /// shared `WorkflowRegistry` and are visible only to this definition
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub workflows: Vec<WorkflowDefinition>,
-    /// Nodos que componen el grafo
+    /// Nodes that make up the graph
     pub nodes: Vec<Node>,
-    /// Aristas dirigidas que definen el flujo de control
+    /// Directed edges that define the control flow
     #[serde(default)]
     pub edges: Vec<FlowEdge>,
 }
@@ -38,29 +38,29 @@ fn default_spec() -> String {
     "1.0".to_string()
 }
 
-/// Conexión dirigida entre dos nodos del workflow.
+/// Directed connection between two nodes of the workflow.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FlowEdge {
-    /// ID del nodo de origen
+    /// Source node ID
     pub from: NodeId,
-    /// ID del nodo de destino
+    /// Target node ID
     pub to: NodeId,
-    /// Etiqueta de la arista; conecta una rama de gateway (`branches[].edge`)
+    /// Edge label; connects a gateway branch (`branches[].edge`)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
-    /// Disparador alternativo: `error` enruta el flujo cuando el nodo origen
-    /// agota sus reintentos. Sin `on`, la arista es del flujo normal.
+    /// Alternative trigger: `error` routes the flow when the source node
+    /// exhausts its retries. Without `on`, the edge is from the normal flow.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub on: Option<EdgeTrigger>,
 }
 
-/// Disparadores alternativos de una arista.
+/// Alternative edge triggers.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum EdgeTrigger {
-    /// La arista se sigue cuando el nodo origen falla definitivamente
+    /// The edge is followed when the source node definitively fails
     Error,
-    /// La arista se sigue cuando la tarea del nodo origen panickea
-    /// (bug en la extensión). Un panic no reintenta ni cae en `on: error`.
+    /// The edge is followed when the source node's task panics
+    /// (bug in the extension). A panic does not retry nor fall into `on: error`.
     Panic,
 }

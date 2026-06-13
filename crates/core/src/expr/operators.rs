@@ -44,7 +44,9 @@
 //!   construir el executor.
 
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::Arc;
+
+use parking_lot::{Once, RwLock};
 
 use serde_json::Value;
 
@@ -80,25 +82,25 @@ impl OperatorRegistry {
     /// Registra un operador. Si ya existe uno con la misma llave, lo
     /// sobrescribe.
     pub fn register<O: ConditionOperator>(&self, op: O) {
-        let mut ops = self.ops.write().expect("OperatorRegistry lock poisoned");
+        let mut ops = self.ops.write();
         ops.insert(op.key().to_string(), Arc::new(op));
     }
 
     /// Obtiene un operador por su llave
     pub fn get(&self, key: &str) -> Option<Arc<dyn ConditionOperator>> {
-        let ops = self.ops.read().expect("OperatorRegistry lock poisoned");
+        let ops = self.ops.read();
         ops.get(key).cloned()
     }
 
     /// `true` si hay un operador registrado bajo esa llave
     pub fn contains(&self, key: &str) -> bool {
-        let ops = self.ops.read().expect("OperatorRegistry lock poisoned");
+        let ops = self.ops.read();
         ops.contains_key(key)
     }
 
     /// Llaves de todos los operadores registrados
     pub fn list(&self) -> Vec<String> {
-        let ops = self.ops.read().expect("OperatorRegistry lock poisoned");
+        let ops = self.ops.read();
         ops.keys().cloned().collect()
     }
 }
@@ -106,9 +108,23 @@ impl OperatorRegistry {
 /// Registro global del proceso. Las condiciones se evalúan contra este
 /// registro; los hosts registran aquí sus operadores al arrancar (antes de
 /// construir executors, para que la validación los conozca).
+static INIT: Once = Once::new();
+static mut GLOBAL_PTR: *const OperatorRegistry = std::ptr::null();
+
+/// Returns a reference to the global operator registry.
+///
+/// Custom operators registered here are visible to all condition evaluations
+/// that do not use an explicitly injected registry.
+#[deprecated = "Use WorkflowExecutorBuilder::operator_registry instead"]
 pub fn global() -> &'static OperatorRegistry {
-    static GLOBAL: OnceLock<OperatorRegistry> = OnceLock::new();
-    GLOBAL.get_or_init(OperatorRegistry::new)
+    INIT.call_once(|| {
+        let registry = Box::new(OperatorRegistry::new());
+        unsafe {
+            GLOBAL_PTR = Box::into_raw(registry);
+        }
+    });
+    // SAFETY: `INIT` guarantees GLOBAL_PTR is written exactly once before any read.
+    unsafe { &*GLOBAL_PTR }
 }
 
 impl Condition {
@@ -117,6 +133,7 @@ impl Condition {
     /// Solo falla por errores de definición (JSONPath o regex inválidos,
     /// operador custom no registrado); un path que no resuelve produce
     /// `false`, nunca error.
+    #[allow(deprecated)]
     pub fn evaluate(&self, context: &Value) -> Result<bool, WorkflowError> {
         self.evaluate_with(context, global())
     }
@@ -155,6 +172,7 @@ impl Comparison {
     /// Evalúa la comparación usando el registro global para operadores
     /// custom. El path se resuelve al primer valor que matchea; los paths
     /// de condiciones deben ser singulares.
+    #[allow(deprecated)]
     pub fn evaluate(&self, context: &Value) -> Result<bool, WorkflowError> {
         self.evaluate_with(context, global())
     }

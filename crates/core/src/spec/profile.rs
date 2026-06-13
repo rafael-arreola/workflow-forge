@@ -1,5 +1,5 @@
-//! Definición declarativa de los perfiles de tarea (la sintaxis del
-//! lenguaje). La tarea derivada que los ejecuta es
+//! Declarative definition of task profiles (the language syntax).
+//! The derived task that executes them is
 //! [`crate::task::profile::ProfileTask`].
 
 use serde::{Deserialize, Serialize};
@@ -7,9 +7,9 @@ use serde_json::Value;
 
 use crate::task::TaskId;
 
-/// Definición declarativa (JSON) de un perfil de tarea: una instancia
-/// nombrada y reusable de una tarea base, con config horneada y schemas
-/// propios.
+/// Declarative definition (JSON) of a task profile: a named,
+/// reusable instance of a base task, with baked config and own
+/// schemas.
 ///
 /// ```json
 /// {
@@ -27,32 +27,32 @@ use crate::task::TaskId;
 /// }
 /// ```
 ///
-/// Semántica:
-/// - `bind` es un shape ([`crate::expr::shape`]) resuelto contra el input del
-///   perfil: `@` es el input completo, `@.path` un subpath, el resto literales.
-///   Sin `bind`, el input pasa tal cual a la base.
-/// - `output` es un shape opcional sobre el output de la base (ej. `"@.body"`).
-/// - Los objetos `{"$secret": "X"}` dentro de `bind` se resuelven al registrar
-///   el perfil vía [`crate::io::secret::SecretProvider`].
+/// Semantics:
+/// - `bind` is a shape ([`crate::expr::shape`]) resolved against the profile's
+///   input: `@` is the full input, `@.path` a subpath, the rest literals.
+///   Without `bind`, the input passes through to the base as-is.
+/// - `output` is an optional shape over the base's output (e.g., `"@.body"`).
+/// - `{"$secret": "X"}` objects within `bind` are resolved when registering
+///   the profile via [`crate::io::secret::SecretProvider`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskProfile {
-    /// Id namespaced único bajo el que se registra el perfil
+    /// Namespaced unique id under which the profile is registered
     pub id: TaskId,
-    /// Id de la tarea base ya registrada que este perfil especializa
+    /// Id of the already-registered base task that this profile specializes
     pub extends: TaskId,
-    /// Descripción legible para el catálogo
+    /// Human-readable description for the catalog
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    /// JSON Schema del input específico del perfil
+    /// JSON Schema of the profile-specific input
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input_schema: Option<schemars::Schema>,
-    /// JSON Schema del output específico del perfil
+    /// JSON Schema of the profile-specific output
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_schema: Option<schemars::Schema>,
-    /// Shape que construye el input de la base a partir del input del perfil
+    /// Shape that builds the base's input from the profile's input
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bind: Option<Value>,
-    /// Shape opcional aplicado al output de la base
+    /// Optional shape applied to the base's output
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<Value>,
 }

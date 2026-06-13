@@ -3,16 +3,16 @@ use std::collections::HashMap;
 use crate::spec::node::{Node, NodeId, NodeKind};
 use crate::spec::workflow::{EdgeTrigger, FlowEdge, WorkflowDefinition};
 
-/// Índices precalculados del grafo para búsquedas rápidas.
+/// Precomputed graph indices for fast lookups.
 pub(crate) struct GraphIndex {
     nodes: HashMap<NodeId, Node>,
-    /// Aristas salientes del flujo normal (sin `on: error`)
+    /// Outgoing edges in the normal flow (without `on: error`)
     outgoing: HashMap<NodeId, Vec<FlowEdge>>,
-    /// Aristas salientes de error (`on: error`)
+    /// Error outgoing edges (`on: error`)
     outgoing_error: HashMap<NodeId, Vec<FlowEdge>>,
-    /// Aristas salientes de panic (`on: panic`)
+    /// Panic outgoing edges (`on: panic`)
     outgoing_panic: HashMap<NodeId, Vec<FlowEdge>>,
-    /// Cantidad de aristas entrantes del flujo normal por nodo
+    /// Number of incoming edges in the normal flow per node
     pub(crate) incoming_count: HashMap<NodeId, usize>,
     pub(crate) start: NodeId,
 }
@@ -59,7 +59,7 @@ impl GraphIndex {
             .iter()
             .find(|n| matches!(n.kind, NodeKind::Start(_)))
             .map(|n| n.id.clone())
-            .expect("validación garantiza un start");
+            .expect("validation guarantees a single start node");
 
         Self {
             nodes,
@@ -74,7 +74,7 @@ impl GraphIndex {
     pub(crate) fn node(&self, id: &NodeId) -> &Node {
         self.nodes
             .get(id)
-            .expect("validación garantiza referencias")
+            .expect("validation guarantees references")
     }
 
     pub(crate) fn outgoing_edges(&self, id: &NodeId) -> &[FlowEdge] {
