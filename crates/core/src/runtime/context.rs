@@ -2,11 +2,11 @@
 //! and conditions are resolved, plus per-execution resources (blobs, event
 //! counter).
 
+use std::collections::HashMap;
 use std::sync::Arc;
-
-use parking_lot::RwLock;
 use std::time::Instant;
 
+use parking_lot::RwLock;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -23,7 +23,7 @@ use crate::spec::workflow::WorkflowDefinition;
 /// $.workflow             → metadata (id, name, version, execution_id)
 /// ```
 ///
-/// Thread-safe: parallel branches read and write concurrently.
+/// Thread-safe: parallel branches read and write concurrently with zero global lock contention.
 pub struct WorkflowContext {
     /// Unique identifier of the current execution (UUID v7)
     execution_id: String,
@@ -31,8 +31,14 @@ pub struct WorkflowContext {
     parent_execution_id: Option<String>,
     /// Instant when the execution started
     started_at: Instant,
-    /// Execution state document
-    state: RwLock<Value>,
+    /// Initial workflow trigger payload
+    trigger: Arc<Value>,
+    /// Workflow metadata
+    workflow_meta: Arc<Value>,
+    /// Node outputs indexed by NodeId string for concurrent lock-free lookups
+    node_outputs: RwLock<HashMap<String, Arc<Value>>>,
+    /// Node errors indexed by NodeId string for error path routing
+    node_errors: RwLock<HashMap<String, Value>>,
     /// Blob storage (`$blob`) with execution lifecycle
     /// (sub-workflows share the root execution's store)
     blobs: Arc<dyn BlobStore>,
@@ -56,22 +62,22 @@ impl WorkflowContext {
         factory: &dyn BlobStoreFactory,
     ) -> Self {
         let execution_id = Uuid::now_v7().to_string();
-        let state = json!({
-            "trigger": trigger,
-            "nodes": {},
-            "workflow": {
-                "id": workflow.id,
-                "name": workflow.name,
-                "version": workflow.version,
-                "execution_id": execution_id,
-            }
+        let workflow_meta = json!({
+            "id": workflow.id,
+            "name": workflow.name,
+            "version": workflow.version,
+            "execution_id": execution_id,
         });
+
         let blobs = factory.create(&execution_id);
         Self {
             execution_id,
             parent_execution_id: None,
             started_at: Instant::now(),
-            state: RwLock::new(state),
+            trigger: Arc::new(trigger),
+            workflow_meta: Arc::new(workflow_meta),
+            node_outputs: RwLock::new(HashMap::new()),
+            node_errors: RwLock::new(HashMap::new()),
             blobs,
             event_seq: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
@@ -83,22 +89,22 @@ impl WorkflowContext {
     /// cleans up blobs when the root execution finishes.
     pub fn child_of(workflow: &WorkflowDefinition, trigger: Value, parent: &Self) -> Self {
         let execution_id = Uuid::now_v7().to_string();
-        let state = json!({
-            "trigger": trigger,
-            "nodes": {},
-            "workflow": {
-                "id": workflow.id,
-                "name": workflow.name,
-                "version": workflow.version,
-                "execution_id": execution_id,
-                "parent_execution_id": parent.execution_id,
-            }
+        let workflow_meta = json!({
+            "id": workflow.id,
+            "name": workflow.name,
+            "version": workflow.version,
+            "execution_id": execution_id,
+            "parent_execution_id": parent.execution_id,
         });
+
         Self {
             execution_id,
             parent_execution_id: Some(parent.execution_id.clone()),
             started_at: Instant::now(),
-            state: RwLock::new(state),
+            trigger: Arc::new(trigger),
+            workflow_meta: Arc::new(workflow_meta),
+            node_outputs: RwLock::new(HashMap::new()),
+            node_errors: RwLock::new(HashMap::new()),
             blobs: Arc::clone(&parent.blobs),
             event_seq: Arc::clone(&parent.event_seq),
         }
@@ -132,8 +138,34 @@ impl WorkflowContext {
 
     /// Reads the state document under the lock, without cloning
     pub fn with_state<R>(&self, f: impl FnOnce(&Value) -> R) -> R {
-        let state = self.state.read();
-        f(&state)
+        let outputs = self.node_outputs.read();
+        let errors = self.node_errors.read();
+
+        let mut nodes_map = serde_json::Map::new();
+        for (id, out) in outputs.iter() {
+            let mut entry = serde_json::Map::new();
+            entry.insert("output".to_string(), (**out).clone());
+            if let Some(err) = errors.get(id) {
+                entry.insert("error".to_string(), err.clone());
+            }
+            nodes_map.insert(id.clone(), Value::Object(entry));
+        }
+
+        for (id, err) in errors.iter() {
+            if !nodes_map.contains_key(id) {
+                let mut entry = serde_json::Map::new();
+                entry.insert("error".to_string(), err.clone());
+                nodes_map.insert(id.clone(), Value::Object(entry));
+            }
+        }
+
+        let doc = json!({
+            "trigger": &*self.trigger,
+            "nodes": nodes_map,
+            "workflow": &*self.workflow_meta,
+        });
+
+        f(&doc)
     }
 
     /// Full copy of the state document (for debugging/inspection)
@@ -143,19 +175,24 @@ impl WorkflowContext {
 
     /// Publishes a node's output at `$.nodes.<id>.output`
     pub fn set_node_output(&self, node_id: &NodeId, output: Value) {
-        let mut state = self.state.write();
-        state["nodes"][node_id.0.as_str()] = json!({ "output": output });
+        self.node_outputs
+            .write()
+            .insert(node_id.0.clone(), Arc::new(output));
     }
 
     /// Output of a previously executed node, if any
     pub fn node_output(&self, node_id: &NodeId) -> Option<Value> {
-        self.with_state(|state| state["nodes"][node_id.0.as_str()].get("output").cloned())
+        self.node_outputs
+            .read()
+            .get(node_id.0.as_str())
+            .map(|v| (**v).clone())
     }
 
     /// Publishes a node's error at `$.nodes.<id>.error` (on_error paths)
     pub fn set_node_error(&self, node_id: &NodeId, error: Value) {
-        let mut state = self.state.write();
-        state["nodes"][node_id.0.as_str()]["error"] = error;
+        self.node_errors
+            .write()
+            .insert(node_id.0.clone(), error);
     }
 }
 

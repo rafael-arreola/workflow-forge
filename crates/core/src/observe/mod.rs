@@ -144,3 +144,49 @@ impl EventKind {
         }
     }
 }
+
+/// Redacts sensitive values in JSON payloads according to a [`crate::spec::node::SecureConfig`].
+pub fn redact_value(value: &Value, config: Option<&crate::spec::node::SecureConfig>) -> Value {
+    use crate::spec::node::SecureConfig;
+
+    match config {
+        Some(SecureConfig::Full(true)) => Value::String("[REDACTED]".to_string()),
+        Some(SecureConfig::Fields(fields)) => {
+            let mut val = value.clone();
+            if let Value::Object(ref mut map) = val {
+                for f in fields {
+                    if map.contains_key(f) {
+                        map.insert(f.clone(), Value::String("[REDACTED]".to_string()));
+                    }
+                }
+            }
+            val
+        }
+        _ => value.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::spec::node::SecureConfig;
+    use serde_json::json;
+
+    #[test]
+    fn test_redact_value_full_and_fields() {
+        let val = json!({ "user": "alice", "token": "secret123" });
+
+        let redacted_full = redact_value(&val, Some(&SecureConfig::Full(true)));
+        assert_eq!(redacted_full, json!("[REDACTED]"));
+
+        let redacted_fields = redact_value(
+            &val,
+            Some(&SecureConfig::Fields(vec!["token".to_string()])),
+        );
+        assert_eq!(
+            redacted_fields,
+            json!({ "user": "alice", "token": "[REDACTED]" })
+        );
+    }
+}
+

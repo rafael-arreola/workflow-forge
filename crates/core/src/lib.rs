@@ -57,6 +57,7 @@ pub use schemars;
 /// the executor, and the types that cross the engine boundary.
 pub mod prelude {
     pub use crate::error::WorkflowError;
+    pub use crate::io::Secure;
     pub use crate::observe::{ExecutionObserver, InMemoryHistory};
     pub use crate::runtime::{
         CancellationToken, RunOptions, WorkflowContext, WorkflowExecutor, WorkflowRegistry,

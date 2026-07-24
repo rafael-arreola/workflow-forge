@@ -42,12 +42,25 @@ impl std::fmt::Display for NodeId {
     }
 }
 
-/// Workflow graph node. Contains an identifier and a behavior variant
-/// that is resolved at runtime.
+/// Censorship settings for a node's observability events.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum SecureConfig {
+    /// Full censorship of input, attempt, and output events (`"secure": true`)
+    Full(bool),
+    /// Censorship restricted to specific JSON key names (`"secure": ["password", "token"]`)
+    Fields(Vec<String>),
+}
+
+/// Workflow graph node. Contains an identifier, optional security settings,
+/// and a behavior variant that is resolved at runtime.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Node {
     /// Unique identifier of the node within the workflow
     pub id: NodeId,
+    /// Optional censorship configuration for execution events
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secure: Option<SecureConfig>,
     /// Node type: executable task, conditional, loop, parallel, etc.
     #[serde(flatten)]
     pub kind: NodeKind,
@@ -104,3 +117,34 @@ pub struct SubworkflowNode {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input: Option<serde_json::Value>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_secure_node_deserialization() {
+        let json_full = serde_json::json!({
+            "id": "node1",
+            "secure": true,
+            "kind": "start"
+        });
+        let node: Node = serde_json::from_value(json_full).unwrap();
+        assert_eq!(node.secure, Some(SecureConfig::Full(true)));
+
+        let json_fields = serde_json::json!({
+            "id": "node2",
+            "secure": ["password", "token"],
+            "kind": "start"
+        });
+        let node2: Node = serde_json::from_value(json_fields).unwrap();
+        assert_eq!(
+            node2.secure,
+            Some(SecureConfig::Fields(vec![
+                "password".to_string(),
+                "token".to_string()
+            ]))
+        );
+    }
+}
+

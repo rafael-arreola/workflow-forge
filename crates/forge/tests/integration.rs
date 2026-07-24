@@ -461,7 +461,7 @@ async fn shared_subworkflow_normalizes_with_cast_and_sends() {
                   "source": "$.trigger",
                   "fields": {
                       "date": [{ "op": "date", "from": "%d/%m/%Y" }],
-                      "total": [{ "op": "number", "decimal": ",", "thousands": "." }],
+                      "total": [{ "op": "number", "decimal": ".", "thousands": "," }],
                       "sku": [{ "op": "trim" }, { "op": "upper" }]
                   }
               } },
