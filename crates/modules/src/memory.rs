@@ -1,6 +1,6 @@
 use futures::{StreamExt, stream};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     sync::{Arc, Mutex, MutexGuard},
 };
 use workflow_forge_protocol::*;
@@ -15,10 +15,85 @@ struct Receipt {
     run_id: RunId,
     reservation: ReceiptReservation,
 }
+// Counters and the uncertainty index change under the same lock as the snapshot.
+struct StoredRun {
+    snapshot: RunSnapshot,
+    bytes: usize,
+    unresolved: BTreeSet<String>,
+}
+impl std::ops::Deref for StoredRun {
+    type Target = RunSnapshot;
+    fn deref(&self) -> &Self::Target {
+        &self.snapshot
+    }
+}
+impl StoredRun {
+    fn new(snapshot: RunSnapshot) -> Self {
+        let bytes = snapshot.retained_data_bytes();
+        let unresolved = snapshot
+            .invocations
+            .iter()
+            .filter(|(_, r)| r.is_unresolved())
+            .map(|(key, _)| key.clone())
+            .collect();
+        Self {
+            snapshot,
+            bytes,
+            unresolved,
+        }
+    }
+    fn head(&self) -> RunHead {
+        RunHead {
+            id: self.id.clone(),
+            scope: self.scope.clone(),
+            revision: self.revision,
+            state: self.snapshot.state,
+            cancel_requested: self.cancel_requested,
+            deadline_at_ms: self.deadline_at_ms,
+            invocation_count: self.invocations.len(),
+            retained_data_bytes: self.bytes,
+            unresolved_invocations: self.unresolved.len(),
+        }
+    }
+    fn after(current: &Self, snapshot: RunSnapshot) -> Self {
+        // Head-only transitions reuse payload sizes and uncertainty already checked
+        // for the same nodes. Full commit validates immutable input before this.
+        if current.invocations == snapshot.invocations {
+            Self {
+                bytes: current
+                    .bytes
+                    .saturating_sub(current.snapshot.retained_result_bytes())
+                    .saturating_add(snapshot.retained_result_bytes()),
+                unresolved: current.unresolved.clone(),
+                snapshot,
+            }
+        } else {
+            Self::new(snapshot)
+        }
+    }
+    fn view(&self, node: Option<&str>) -> ExecutionView {
+        let unresolved_descendants = match node {
+            Some(key) => {
+                let prefix = format!("{key}/");
+                self.unresolved
+                    .range(prefix.clone()..)
+                    .next()
+                    .is_some_and(|key| key.starts_with(&prefix))
+            }
+            None => !self.unresolved.is_empty(),
+        };
+        ExecutionView {
+            head: self.head(),
+            invocation: node.and_then(|key| self.invocations.get(key)).cloned(),
+            unresolved_descendants,
+        }
+    }
+}
+
 #[derive(Default)]
 struct State {
     owner: Option<String>,
-    runs: BTreeMap<RunId, RunSnapshot>,
+    runs: BTreeMap<RunId, StoredRun>,
     receipts: BTreeMap<(String, String), Receipt>,
 }
 impl State {
@@ -116,6 +191,8 @@ impl ExecutionStore for MemoryExecutionStore {
                 || run.error.is_some()
                 || run.finished_at_ms.is_some()
                 || run.cancel_requested
+                || !run.audit.is_empty()
+                || !run.unresolved_effects.is_empty()
                 || run.deadline_at_ms < run.created_at_ms
             {
                 return Err(ForgeError::new(
@@ -132,12 +209,17 @@ impl ExecutionStore for MemoryExecutionStore {
                     },
                 );
             }
-            s.runs.insert(run.id.clone(), run);
+            s.runs.insert(run.id.clone(), StoredRun::new(run));
             Ok(CreateOutcome::Created)
         })
     }
     fn get<'a>(&'a self, id: &'a RunId) -> PortFuture<'a, Option<RunSnapshot>> {
-        Box::pin(async move { Ok(locked(&self.state)?.runs.get(id).cloned()) })
+        Box::pin(async move {
+            Ok(locked(&self.state)?
+                .runs
+                .get(id)
+                .map(|r| r.snapshot.clone()))
+        })
     }
     fn unfinished(&self) -> PortFuture<'_, Vec<RunSnapshot>> {
         Box::pin(async move {
@@ -145,7 +227,7 @@ impl ExecutionStore for MemoryExecutionStore {
                 .runs
                 .values()
                 .filter(|r| !r.state.is_terminal())
-                .cloned()
+                .map(|r| r.snapshot.clone())
                 .collect())
         })
     }
@@ -162,6 +244,14 @@ impl ExecutionStore for MemoryExecutionStore {
                 .runs
                 .get(&next.id)
                 .ok_or_else(|| ForgeError::new("not_found", "Run is unavailable"))?;
+            let terminal_changed = if current.state.is_terminal() {
+                let mut stable = next.clone();
+                stable.revision = current.revision;
+                stable.audit = current.audit.clone();
+                stable != current.snapshot
+            } else {
+                false
+            };
             if current.revision != expected
                 || next.revision
                     != expected
@@ -180,15 +270,83 @@ impl ExecutionStore for MemoryExecutionStore {
                     invocation.state == InvocationState::Succeeded
                         && next.invocations.get(id) != Some(invocation)
                 })
-                || current.state.is_terminal()
+                || !next.audit.starts_with(&current.audit)
+                || terminal_changed
             {
                 return Err(ForgeError::new(
                     "state.conflict",
                     "Transition does not match the current run revision",
                 ));
             }
+            let next = StoredRun::after(current, next);
             s.runs.insert(next.id.clone(), next);
             Ok(())
+        })
+    }
+    fn view<'a>(
+        &'a self,
+        id: &'a RunId,
+        node: Option<&'a str>,
+    ) -> PortFuture<'a, Option<ExecutionView>> {
+        Box::pin(async move { Ok(locked(&self.state)?.runs.get(id).map(|r| r.view(node))) })
+    }
+    fn unfinished_heads(&self) -> PortFuture<'_, Vec<RunHead>> {
+        Box::pin(async move {
+            Ok(locked(&self.state)?
+                .runs
+                .values()
+                .filter(|r| !r.snapshot.state.is_terminal())
+                .map(StoredRun::head)
+                .collect())
+        })
+    }
+    fn commit_invocation<'a>(
+        &'a self,
+        owner: &'a str,
+        id: &'a RunId,
+        expected: u64,
+        node: &'a str,
+        record: InvocationRecord,
+    ) -> PortFuture<'a, ExecutionView> {
+        Box::pin(async move {
+            let mut state = locked(&self.state)?;
+            state.authorize(owner)?;
+            let current = state
+                .runs
+                .get_mut(id)
+                .ok_or_else(|| ForgeError::new("not_found", "Run is unavailable"))?;
+            if current.revision != expected
+                || current.snapshot.state.is_terminal()
+                || current
+                    .invocations
+                    .get(node)
+                    .is_some_and(|old| old.state == InvocationState::Succeeded && old != &record)
+            {
+                return Err(ForgeError::new(
+                    "state.conflict",
+                    "Invocation replacement does not match the committed revision",
+                ));
+            }
+            let revision = expected
+                .checked_add(1)
+                .ok_or_else(|| ForgeError::new("state.conflict", "Revision exhausted"))?;
+            current.bytes = current
+                .bytes
+                .saturating_sub(
+                    current
+                        .invocations
+                        .get(node)
+                        .map_or(0, InvocationRecord::retained_data_bytes),
+                )
+                .saturating_add(record.retained_data_bytes());
+            if record.is_unresolved() {
+                current.unresolved.insert(node.into());
+            } else {
+                current.unresolved.remove(node);
+            }
+            current.snapshot.invocations.insert(node.into(), record);
+            current.snapshot.revision = revision;
+            Ok(current.view(Some(node)))
         })
     }
     fn collect<'a>(&'a self, owner: &'a str, now: u64, limits: &'a Limits) -> PortFuture<'a, ()> {

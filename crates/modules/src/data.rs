@@ -46,6 +46,7 @@ pub fn data_operations() -> OperationBundle {
         }) as Arc<dyn Operation>
     }).collect();
     OperationBundle {
+        inspectors: Vec::new(),
         module: ModuleDescriptor {
             id: "forge.data".into(),
             version: "1".into(),

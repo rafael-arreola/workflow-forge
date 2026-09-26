@@ -2,6 +2,7 @@
 mod binding;
 mod builder;
 mod compiler;
+pub mod effects;
 mod runtime;
 mod schema;
 

@@ -5,12 +5,16 @@ mod error;
 mod execution;
 mod operation;
 mod ports;
+mod reconcile;
+mod retry;
 
 pub use definition::*;
 pub use error::*;
 pub use execution::*;
 pub use operation::*;
 pub use ports::*;
+pub use reconcile::*;
+pub use retry::*;
 
 pub const PROTOCOL_VERSION: u32 = 1;
 pub const WORKFLOW_FORMAT: &str = "forge.workflow/2";

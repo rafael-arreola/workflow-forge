@@ -2,7 +2,7 @@
 
 Motor agnóstico de integración en Rust. Las definiciones JSON conectan operaciones mediante contratos JSON Schema; el host decide qué módulos, recursos y transportes habilita.
 
-**En desarrollo, sin versión pública.** F-1 implementa secuencias en memoria mediante `workflow_forge::v2`. Ramas, efectos de escritura, persistencia y servicio tienen fases posteriores en el [ROADMAP](docs/ROADMAP.md). La [evidencia y los límites](docs/PROJECT.md) distinguen capacidades probadas de diseño pendiente.
+**En desarrollo, sin versión pública.** `workflow_forge::v2` ejecuta secuencias, decisiones, paralelo, foreach, loop y subworkflows en memoria, con retry e inspección/resolución de efectos. F-2 incluye importación CSV por lotes y mediciones verificadas de 100 y 10 000 filas. Persistencia y servicio tienen fases posteriores en el [ROADMAP](docs/ROADMAP.md). La [evidencia y los límites](docs/PROJECT.md) distinguen capacidades probadas de diseño pendiente.
 
 ## Ejecutar el primer recorrido
 
@@ -31,6 +31,14 @@ runtime.shutdown(ShutdownOptions::default()).await?;
 ```
 
 El fragmento omite la creación de la contribución y los datos. `build` es inactivo; `boot` establece propiedad y supervisión antes de readiness. `start` acusa aceptación; `wait` devuelve el estado final o bloqueo. El host autoriza el acceso; los plugins compilados son código confiable. El perfil en memoria no sobrevive a la caída del proceso.
+
+Para recorrer una integración con lotes y efectos:
+
+```sh
+cargo run --release -p workflow-forge --example v2_inventory -- 100 3
+```
+
+El [workflow de inventario](examples/workflows/inventory_import.v2.json) lee un artefacto CSV, aplica filas mediante un destino inyectado y publica un reporte JSONL. La [extensión](examples/reference-module/src/inventory/mod.rs) mantiene el parseo y las reglas de inventario fuera del engine. El [ejecutable](crates/forge/examples/v2_inventory.rs) mide tres composiciones independientes; en un servicio se conserva una instancia durante su vida, como en `v2_customer`. Un efecto incierto bloquea la continuación hasta su resolución; `collect` recoge errores conocidos.
 
 ## Contratos y extensiones
 

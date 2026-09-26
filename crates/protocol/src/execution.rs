@@ -22,6 +22,7 @@ pub enum Permission {
     Cancel,
     Signal,
     Reconcile,
+    StopTracking,
 }
 
 /// Constructed by the trusted host, never deserialized from an untrusted request.
@@ -45,6 +46,7 @@ impl AccessContext {
                 Permission::Cancel,
                 Permission::Signal,
                 Permission::Reconcile,
+                Permission::StopTracking,
             ]
             .into(),
             resources: ["*".to_owned()].into(),
@@ -79,6 +81,7 @@ impl RunState {
 pub enum InvocationState {
     Pending,
     Running,
+    RetryScheduled,
     Succeeded,
     Failed,
     Cancelled,
@@ -94,10 +97,51 @@ pub struct InvocationRecord {
     pub input: Value,
     pub output: Option<Value>,
     pub error: Option<ForgeError>,
+    #[serde(default)]
+    pub operation: Option<crate::OperationRevision>,
+    #[serde(default)]
+    pub config: Value,
+    #[serde(default)]
+    pub effect_key: Option<String>,
+    #[serde(default)]
+    pub retry: crate::RetryPolicy,
+    #[serde(default)]
+    pub next_attempt_at_ms: Option<u64>,
+    #[serde(default)]
+    pub certainty: crate::EffectCertainty,
+    #[serde(default)]
+    pub control: Option<ControlFrame>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ControlFrame {
+    Decision {
+        selected: String,
+    },
+    Parallel {
+        branches: Vec<String>,
+        next_index: usize,
+        stopped: bool,
+        error: Option<ForgeError>,
+    },
+    Foreach {
+        total: usize,
+        next_index: usize,
+        stopped: bool,
+        error: Option<ForgeError>,
+    },
+    Loop {
+        iteration: usize,
+        state: Value,
+    },
+    Subworkflow {
+        workflow: crate::WorkflowRevision,
+    },
 }
 
 /// Serializable state, not an in-process prepared plan or future.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RunSnapshot {
     pub checkpoint_format: u32,
     pub id: RunId,
@@ -115,6 +159,100 @@ pub struct RunSnapshot {
     pub deadline_at_ms: u64,
     pub finished_at_ms: Option<u64>,
     pub cancel_requested: bool,
+    #[serde(default)]
+    pub audit: Vec<crate::AuditEntry>,
+    #[serde(default)]
+    pub unresolved_effects: Vec<crate::UnresolvedEffect>,
+}
+
+/// A coherent projection of one committed revision, without historical payloads.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunHead {
+    pub id: RunId,
+    pub scope: String,
+    pub revision: u64,
+    pub state: RunState,
+    pub cancel_requested: bool,
+    pub deadline_at_ms: u64,
+    pub invocation_count: usize,
+    pub retained_data_bytes: usize,
+    pub unresolved_invocations: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ExecutionView {
+    pub head: RunHead,
+    pub invocation: Option<InvocationRecord>,
+    pub unresolved_descendants: bool,
+}
+
+impl InvocationRecord {
+    pub fn is_unresolved(&self) -> bool {
+        self.state == InvocationState::Unknown
+            || (self.operation.is_some()
+                && self.state != InvocationState::Succeeded
+                && self.certainty != crate::EffectCertainty::NotApplied)
+    }
+    /// Serialized payload budget; metadata allocation and RSS are separate limits.
+    pub fn retained_data_bytes(&self) -> usize {
+        json_bytes(&self.input)
+            .saturating_add(json_bytes(&self.config))
+            .saturating_add(self.output.as_ref().map_or(0, json_bytes))
+            .saturating_add(self.error.as_ref().map_or(0, json_bytes))
+            .saturating_add(self.control.as_ref().map_or(0, json_bytes))
+    }
+}
+
+impl RunSnapshot {
+    /// Output, diagnostics and audit payload; excludes immutable input and nodes.
+    pub fn retained_result_bytes(&self) -> usize {
+        self.output
+            .as_ref()
+            .map_or(0, json_bytes)
+            .saturating_add(self.error.as_ref().map_or(0, json_bytes))
+            .saturating_add(json_bytes(&self.audit))
+            .saturating_add(json_bytes(&self.unresolved_effects))
+    }
+    pub fn retained_data_bytes(&self) -> usize {
+        self.invocations.values().fold(
+            json_bytes(&self.input).saturating_add(self.retained_result_bytes()),
+            |bytes, record| bytes.saturating_add(record.retained_data_bytes()),
+        )
+    }
+    pub fn head(&self) -> RunHead {
+        RunHead {
+            id: self.id.clone(),
+            scope: self.scope.clone(),
+            revision: self.revision,
+            state: self.state,
+            cancel_requested: self.cancel_requested,
+            deadline_at_ms: self.deadline_at_ms,
+            invocation_count: self.invocations.len(),
+            retained_data_bytes: self.retained_data_bytes(),
+            unresolved_invocations: self
+                .invocations
+                .values()
+                .filter(|r| r.is_unresolved())
+                .count(),
+        }
+    }
+    pub fn view(&self, node: Option<&str>) -> ExecutionView {
+        let prefix = node.map(|key| format!("{key}/"));
+        ExecutionView {
+            head: self.head(),
+            invocation: node.and_then(|key| self.invocations.get(key)).cloned(),
+            unresolved_descendants: self.invocations.iter().any(|(key, record)| {
+                record.is_unresolved()
+                    && prefix.as_ref().is_none_or(|prefix| key.starts_with(prefix))
+            }),
+        }
+    }
+}
+
+fn json_bytes(value: &impl Serialize) -> usize {
+    serde_json::to_vec(value)
+        .expect("public JSON values serialize")
+        .len()
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,6 +282,7 @@ pub struct ExecutionEvent {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Limits {
     pub document_bytes: usize,
+    pub plan_bytes: usize,
     pub schema_resources: usize,
     pub nodes: usize,
     pub json_depth: usize,
@@ -160,12 +299,24 @@ pub struct Limits {
     pub retention_ms: u64,
     pub receipt_count: usize,
     pub receipt_ttl_ms: u64,
+    pub control_depth: usize,
+    pub group_branches: usize,
+    pub group_concurrency: usize,
+    pub active_scopes: usize,
+    pub foreach_items: usize,
+    pub loop_iterations: usize,
+    pub activations: usize,
+    pub max_retry_attempts: u32,
+    pub audit_entries: usize,
+    pub evidence_bytes: usize,
+    pub late_response_grace_ms: u64,
 }
 
 impl Default for Limits {
     fn default() -> Self {
         Self {
             document_bytes: 1024 * 1024,
+            plan_bytes: 16 * 1024 * 1024,
             schema_resources: 64,
             nodes: 256,
             json_depth: 64,
@@ -182,6 +333,17 @@ impl Default for Limits {
             retention_ms: 3_600_000,
             receipt_count: 10_000,
             receipt_ttl_ms: 3_600_000,
+            control_depth: 8,
+            group_branches: 32,
+            group_concurrency: 32,
+            active_scopes: 128,
+            foreach_items: 10_000,
+            loop_iterations: 1024,
+            activations: 10_000,
+            max_retry_attempts: 5,
+            audit_entries: 256,
+            evidence_bytes: 64 * 1024,
+            late_response_grace_ms: 1000,
         }
     }
 }

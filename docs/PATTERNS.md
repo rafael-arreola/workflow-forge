@@ -105,6 +105,8 @@ La clave es ilustrativa, no un formato obligatorio; el destino debe aplicar dedu
 
 **Participantes aquí:** estado del run/invocación, evento de entrada y función de transición; el coordinador confirma la decisión mediante el store. Estado de lifecycle del motor y estado de un run son máquinas distintas.
 
+En F-2, `ControlFrame` representa selección, cursor, detención y estado de iteración. Las decisiones puras de `planner` se aplican mediante el coordinador; los plugins siguen implementando `Operation`, sin editar ese enum. Al reanudar un grupo bloqueado se consumen resultados confirmados y se conserva una detención previa por fallo conocido. [Las pruebas de control](../crates/forge/tests/v2_control.rs) y [efectos anidados](../crates/forge/tests/v2_effects.rs) verifican esta separación.
+
 Ejemplo PX-02 — un solo caso de la tabla, no la máquina completa:
 
 ```rust
@@ -241,6 +243,8 @@ let runtime = EngineRuntime::boot(assembly, options).await?;
 
 `register_bundle(&mut self, bundle)` valida y registra atómicamente una contribución. Se registran contribuciones en preparación; la disponibilidad pública requiere `build` exitoso y el lifecycle definido en ARCHITECTURE. No se admite «último registro gana» ante ID/revisión duplicados. La [extensión de referencia](../examples/reference-module/src/lib.rs) implementa esta frontera con dependencias exclusivamente del protocolo y su cliente inyectado; [v2_acceptance](../crates/forge/tests/v2_acceptance.rs) prueba sustitución y Decorator sin alterar identidad ni número de invocaciones.
 
+En F-2, `OperationBundle.inspectors` aporta los `EffectInspector` asociados por revisión exacta. Si una operación declara reconciliación, el builder exige ese proveedor; inspectores duplicados o ajenos al paquete rechazan toda la contribución. Inspeccionar produce evidencia; la transición pertenece a `WorkflowApplication::reconcile`. La [suite de efectos](../crates/forge/tests/v2_effects.rs) muestra esta separación y la clasificación antes de usar `BackoffPolicy`.
+
 Las dependencias son capacidades/puertos con requisitos declarados y recursos concretos inyectados. Dos módulos de negocio no se llaman mediante IDs secretos en el catálogo: su composición visible pertenece al workflow. Una biblioteca técnica compartida puede inyectarse sin convertirse en nodo. Evitar dependencias circulares de inicialización; si aparecen, revisar la responsabilidad del contrato.
 
 ## 5. Evolución, compatibilidad y retiro
@@ -274,7 +278,7 @@ Esta guía no introduce hot reload ni descarga de bibliotecas. Incorporarlos exi
 
 ## 7. Conformidad y revisión de una extensión
 
-V-17 amplía la verificación de extensibilidad de TDD-02: debe demostrar registro íntegro, contratos coherentes, compatibilidad y aislamiento de responsabilidad. Los casos siguientes son pruebas futuras, no resultados actuales.
+V-17 amplía la verificación de extensibilidad de TDD-02: debe demostrar registro íntegro, contratos coherentes, compatibilidad y aislamiento de responsabilidad. La tabla expresa requisitos de conformidad; PROJECT identifica cuáles se han verificado y en qué perfil.
 
 | Caso | Resultado exigido |
 |---|---|
@@ -289,6 +293,10 @@ V-17 amplía la verificación de extensibilidad de TDD-02: debe demostrar regist
 Al revisar un cambio, indicar: problema, patrón elegido, participantes, alternativa sencilla descartada, invariantes conservadas y prueba V-* que demuestra sustitución. Ningún nuevo patrón se justifica solamente por «mejores prácticas».
 
 La aceptación de una extensión incluye sus límites de efecto/cancelación, recursos y coste operativo. El engine permanece agnóstico al proveedor; evolucionar sus protocolos es posible cuando existe una necesidad común justificada y se actualizan todos los contratos afectados.
+
+El [módulo de inventario](../examples/reference-module/src/inventory/mod.rs) es otro ejemplo ejecutable de Adapter y composición: aporta lectura CSV, aplicación de filas y reportes, inyecta `InventoryDestination` y registra su inspector junto con las operaciones. Solo depende del protocolo público y sus bibliotecas de datos. El [workflow](../examples/workflows/inventory_import.v2.json) decide lotes y orden; el cliente concreto decide cómo hablar con el destino. Cambiar de proveedor no añade un caso de inventario al coordinador.
+
+La sustitución también aplica a optimizaciones: las vistas de `ExecutionStore` tienen un camino predeterminado basado en snapshots. Un backend puede mantener índices y contadores para acelerar consultas, siempre que el [kit de conformidad](../crates/conformance/src/lib.rs) observe la misma revisión, cuotas y resultados inmutables. La política de efectos pertenece al engine incluso cuando cambia el almacenamiento.
 
 ## 8. Aplicarlos sin aumentar la dificultad de uso
 

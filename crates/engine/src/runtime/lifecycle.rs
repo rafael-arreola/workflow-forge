@@ -5,8 +5,10 @@ impl EngineRuntime {
         let composition = assembly.0;
         composition.store.claim(&composition.id).await?;
         let (events, mut receiver) = mpsc::channel::<ExecutionEvent>(128);
+        let (late, late_receiver) = mpsc::channel(composition.limits.concurrent_attempts);
         let shared = Arc::new(Shared {
             attempts: Arc::new(Semaphore::new(composition.limits.concurrent_attempts)),
+            scope_slots: Arc::new(Semaphore::new(composition.limits.active_scopes)),
             composition: composition.clone(),
             phase: AtomicU8::new(DRAINING),
             admission: Mutex::new(()),
@@ -17,10 +19,11 @@ impl EngineRuntime {
             versions: Mutex::new(BTreeMap::new()),
             cancellations: Mutex::new(BTreeMap::new()),
             events,
+            late,
         });
         let initialization = async {
             for definition in options.definitions {
-                prepare_registered(&shared, definition).await?;
+                prepare_registered(&shared, definition, None).await?;
             }
             for mut run in composition.store.unfinished().await? {
                 if run.scope != composition.scope {
@@ -29,10 +32,10 @@ impl EngineRuntime {
                         "Store contains a different execution scope",
                     ));
                 }
-                // F-1 has only pure/repeatable reads. Confirmed outputs remain fixed;
-                // an unfinished attempt can be re-entered after a host restart.
-                match prepare_registered(&shared, run.definition.clone()).await {
+                // Resolve exact revisions before classifying unfinished attempts.
+                match prepare_registered(&shared, run.definition.clone(), None).await {
                     Ok(plan) => {
+                        recovery::classify_unfinished(&shared, &run).await?;
                         shared.plans.lock().await.insert(run.id.clone(), plan);
                     }
                     Err(error) => {
@@ -68,7 +71,7 @@ impl EngineRuntime {
         shared.phase.store(READY, Ordering::Release);
         let worker = shared.clone();
         let supervisor = tokio::spawn(async move {
-            let outcome = AssertUnwindSafe(supervise(worker.clone()))
+            let outcome = AssertUnwindSafe(supervise(worker.clone(), late_receiver))
                 .catch_unwind()
                 .await
                 .unwrap_or_else(|_| {

@@ -21,9 +21,10 @@ pub enum Repetition {
     Keyed,
     Unsafe,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EffectCertainty {
+    #[default]
     NotApplied,
     Applied,
     Unknown,
@@ -171,4 +172,5 @@ pub struct ModuleDescriptor {
 pub struct OperationBundle {
     pub module: ModuleDescriptor,
     pub operations: Vec<Arc<dyn Operation>>,
+    pub inspectors: Vec<Arc<dyn crate::EffectInspector>>,
 }

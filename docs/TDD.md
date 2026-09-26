@@ -99,7 +99,7 @@ Diagnóstico lógico: código estable, severidad, ubicación de nodo/arista/camp
 
 Separar una transición que decide trabajo listo de la ejecución asíncrona de ese trabajo. El coordinador administra estados, intenta persistir la decisión según perfil y despacha operaciones. El scheduler aplica límites; no decide reglas de negocio.
 
-Semántica propuesta, sujeta a revisión P-09:
+Semántica adoptada bajo P-09. [CONTRACTS §9](CONTRACTS.md#9-contrato-de-ampliación-f-2--control-estructurado-y-efectos) concreta sintaxis, ámbitos y cuotas antes de implementar F-2:
 
 | Instrucción | Comportamiento |
 |---|---|
@@ -114,6 +114,22 @@ Semántica propuesta, sujeta a revisión P-09:
 Para joins, distinguir rama no activada, completada, fallida y cancelada. La propuesta es estructurar fork/join y rechazar topologías ambiguas; sustituye contar indiscriminadamente aristas entrantes del prototipo. Una rama activada que se desvía por una ruta de error debe concluir con un estado interpretable por su ámbito. No declarar éxito por quedar sin trabajo listo si aún hay ramas requeridas pendientes.
 
 Definir políticas de abortar o recolectar errores por grupo/iteración. La primera versión propuesta no incluye joins `any`/quorum: ampliarlos exige definir cancelación y resultados tardíos. En subworkflows, un retry del padre no repite silenciosamente todos los efectos confirmados del hijo.
+
+La implementación F-2 divide ese recorrido en cuatro responsabilidades: el compilador recursivo produce cuerpos preparados y reúne recursos de todas sus dependencias; `planner` decide con datos puros si un nodo está confirmado y cuántos hijos pueden admitirse; `control`/`groups` confirman selección, cursor y estado de control; `steps` registra y ejecuta cada intento. El permiso de run pertenece al raíz. Un subworkflow no llama a `start` ni espera un segundo permiso de run: ejecuta el cuerpo fijado dentro de su propio ámbito del mismo checkpoint.
+
+`ControlFrame` conserva la alternativa elegida de una decisión, el cursor y eventual causa de detención de un grupo, el estado/índice de un loop o la revisión del subworkflow. La vuelta de un loop confirma primero sus hijos y después avanza su cursor. Si se interrumpe entre ambas confirmaciones, la reentrada consume los outputs confirmados antes de avanzar. El estado de control no convierte efectos inciertos en fallos conocidos; la clasificación sigue centralizada en TDD-06.
+
+Fragmento de composición para definiciones reutilizables, antes del arranque:
+
+```rust
+builder.register_workflow(customer_lookup)?; // revisión exacta disponible para hijos
+let assembly = builder.build()?;             // detecta dependencias ausentes o ciclos
+let runtime = EngineRuntime::boot(assembly, BootOptions::default()).await?;
+let app = runtime.application();
+let plan = app.prepare(access.clone(), customer_batch).await?;
+```
+
+El fragmento asume módulos y proveedores ya registrados. Una extensión implementa la consulta; la definición `customer_batch` puede repetirla mediante `foreach` y `subworkflow`. Agregar otro proveedor conserva este recorrido y no requiere modificar `planner`.
 
 ## 7. TDD-06 — invocaciones y efectos
 
@@ -313,6 +329,6 @@ V-18 añade en F-2/F-3 el caso donde una consulta remota devuelve «no encontrad
 
 ## 15. Detalles que deben cerrarse antes de codificar cada contrato
 
-El diseño no afirma que los DTOs, schemas, DDL y estados anteriores estén ya implementados. CONTRACTS cierra las decisiones de F-1; sus formas se convierten a tipos y schemas comprobables como parte de esa fase. Para fases posteriores faltan codec/DDL/migraciones del checkpoint, matriz completa de instrucciones avanzadas, DTOs HTTP y cuotas durables según [P-01 a P-09](PRD.md#7-registro-canónico-de-decisiones-pendientes). La referencia SQLite y el transporte HTTP ya están seleccionados; sus adaptadores aún deben demostrar conformidad.
+PROJECT distingue diseño de capacidad verificada. CONTRACTS concreta F-1 y las instrucciones, identidades, efectos y cuotas F-2; sus formas ya tienen tipos, schema y pruebas. Para fases posteriores faltan codec/DDL/migraciones del checkpoint durable, instrucciones de esperas/señales, DTOs HTTP y cuotas durables según [P-01 a P-09](PRD.md#7-registro-canónico-de-decisiones-pendientes). La referencia SQLite y el transporte HTTP ya están seleccionados; sus adaptadores aún deben demostrar conformidad.
 
 La [hoja de ruta](ROADMAP.md) exige cerrar los detalles de la fase antes de programarlos. Decidir persistencia no equivale a elegir automáticamente event sourcing, Redis, SQL o workers remotos. Las [referencias de arquitectura](ARCHITECTURE.md#9-referencias-de-diseño) orientan este diseño sin imponer infraestructura.

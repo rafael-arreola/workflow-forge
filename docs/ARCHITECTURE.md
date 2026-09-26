@@ -71,7 +71,7 @@ La raíz de composición crea clientes y proveedores, valida su compatibilidad e
 
 ### 2.1 Organización de responsabilidades en el repositorio
 
-Árbol objetivo ilustrativo; las rutas aún no existen y los nombres pueden ajustarse durante F-1:
+Árbol de responsabilidades ilustrativo. F-1/F-2 ya tienen crates `protocol`, `engine`, `modules`, `forge` y `conformance`; algunas responsabilidades son archivos o módulos bajo `engine/src/runtime`, no carpetas separadas. El servicio corresponde a F-4:
 
 ```text
 crates/

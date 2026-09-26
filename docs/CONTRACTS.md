@@ -1,6 +1,6 @@
 # Workflow Forge — contratos de la primera entrega
 
-Contratos de F-1, 2026-09-26. Este anexo del [TDD](TDD.md) establece el comportamiento y las formas de datos, dentro del alcance del [PRD](PRD.md). La implementación usa temporalmente `workflow_forge::v2`; [PROJECT](PROJECT.md) acredita lo verificado. Los fragmentos de este documento son parciales; [v2_customer.rs](../crates/forge/examples/v2_customer.rs) contiene un host ejecutable. Los casos de [ACCEPTANCE](ACCEPTANCE.md) permiten comprobarlo sin conocer los internos del motor.
+Contratos de F-1 y su ampliación F-2, 2026-09-26. Este anexo del [TDD](TDD.md) establece el comportamiento y las formas de datos, dentro del alcance del [PRD](PRD.md). La sección 2 conserva el perfil inicial; la sección 9 define el control y los efectos añadidos. La implementación usa temporalmente `workflow_forge::v2`; [PROJECT](PROJECT.md) acredita lo verificado. Los fragmentos de este documento son parciales; [v2_customer.rs](../crates/forge/examples/v2_customer.rs) contiene un host ejecutable. Los casos de [ACCEPTANCE](ACCEPTANCE.md) permiten comprobarlo sin conocer los internos del motor.
 
 ## 1. El recorrido que debe poder explicar un desarrollador
 
@@ -176,3 +176,93 @@ F-2 concreta los límites de ramas/iteraciones/profundidad; F-3 agrega cuotas pe
 El checkpoint y SQL se concretan antes de F-3; rutas y DTOs HTTP antes de F-4; cifras objetivo de producción con las cargas reales antes de F-5. La referencia durable será SQLite local para un coordinador, reemplazable por un proveedor conforme; embedding simple seguirá usando memoria por defecto. La elección aprovecha las [transacciones de SQLite](https://www.sqlite.org/transactional.html), pero su conformidad requiere las pruebas de caída del TDD: el nombre de una base de datos no demuestra por sí solo las garantías del adaptador.
 
 El servicio inicial usará HTTP/JSON, acceso autenticado provisto por el host y aceptación consultable por `RunId`; desconectarse no cancela el run. El editor completo permanece como entrega separada. Estas decisiones se registran con sus límites y pendientes en P-01 a P-09; no existen defaults ocultos adicionales en los ejemplos.
+
+## 9. Contrato de ampliación F-2 — control estructurado y efectos
+
+Esta sección concreta P-09 y las cuotas avanzadas antes de implementarlas. El cierre F-1 conserva su perfil secuencial; la presencia de esta especificación no habilita capacidades en runtime. PROJECT registra la transición a F-2.
+
+### 9.1 Instrucciones y ámbitos
+
+Cada cuerpo conserva `entry`, `nodes`, `edges` y `output`. Sus aristas forman una cadena; la concurrencia y los caminos alternativos se expresan mediante instrucciones con cuerpos anidados. Así un join siempre conoce las ramas que activó su fork. Se rechazan aristas entre cuerpos, ciclos arbitrarios y joins implícitos por contar predecesores. El editor puede representar cada cuerpo como un subgrafo, sin convertirlo en otra operación de negocio.
+
+Los nodos comparten `id` e `input`. `kind` selecciona una variante cerrada; campos de otra variante se rechazan. Las operaciones siguen usando `operation`, `config` y schemas de su descriptor. Las instrucciones del lenguaje pertenecen al engine: una extensión agrega operaciones, no variantes al scheduler.
+
+| `kind` | Campos específicos | Semántica y resultado |
+|---|---|---|
+| `operation` | `operation`, `config`, `retry` opcional | Invocación bajo revisión exacta; publica el JSON de la operación. |
+| `decision` | `cases` ordenados con `id`, `when`, `body`; `fallback` opcional | Evalúa booleanos sobre el input del nodo; primera condición verdadera. Ejecuta solo ese cuerpo y devuelve `{"selected":"case-id","output":...}`. Ninguna coincidencia sin fallback produce error. |
+| `parallel` | `branches` por ID, `concurrency`, `errors`, `join: "all"` | Activa todas sus ramas con el input del nodo; espera su conclusión y devuelve resultados por ID. Una rama no se confunde con otra por terminar antes. |
+| `foreach` | `items`, `body`, `concurrency`, `errors` | `items` es un binding sobre el input del nodo y debe producir array. El cuerpo recibe `{"item":valor,"index":índice,"context":input_del_nodo}`. Devuelve resultados en orden de índice, independientemente del orden de efectos. |
+| `loop` | `while`, `body`, `max_iterations`, `on_limit` | El input del nodo es el estado inicial. Condición y cuerpo reciben `{"state":estado,"iteration":índice}`. El output del cuerpo reemplaza el estado; condición falsa devuelve el estado actual. |
+| `subworkflow` | `workflow: {id, revision}` | Resuelve una definición registrada antes de `build`; valida input/output del hijo y devuelve su output. Mantiene ámbito e identidad propios dentro del checkpoint del run raíz. |
+
+`body` es un cuerpo inline, no un documento con revisión independiente. Una definición reutilizable se registra con `register_workflow(definition)` y se referencia por revisión exacta. `BootOptions.definitions` sigue siendo la lista de definiciones obligatorias que deben preparar antes de readiness; no permite cambiar catálogos después de construir la composición. Las dependencias de subworkflows se resuelven recursivamente; ciclos y revisiones ausentes se rechazan al preparar. Todo lo resuelto queda fijado en el plan.
+
+Dentro de un cuerpo, `select.source: input` corresponde al input de ese ámbito y `source: node` solo permite predecesores locales confirmados. No existe acceso implícito a outputs de otra rama o a variables del padre. El host del cuerpo pasa esos datos explícitamente en `input`/`context`. La salida del nodo de control permite leer los resultados reunidos desde su sucesor. El `fallback` de selección mantiene las reglas de ausencia/null de F-1.
+
+Un resultado de grupo usa `{"status":"succeeded","output":...}` o `{"status":"failed","error":diagnóstico}`. Foreach agrega `index` a cada elemento; paralelo usa la clave de rama. `errors` admite `fail_fast` y `collect`: ante un fallo conocido, el primero deja de admitir hijos y cancela cooperativamente los activos; el segundo reúne errores conocidos. Ambos esperan clasificar el trabajo activo. Ante incertidumbre, `fail_fast` pausa nuevas admisiones y deja concluir los hijos activos bajo sus deadlines; `collect` puede continuar hijos independientes. Un efecto incierto bloquea el grupo y el run; no se convierte en un error recolectable ni habilita éxito parcial. Tras resolverlo, se reutilizan los resultados confirmados. Un fallo conocido previo conserva su decisión de detener el grupo, incluso si después fue necesario resolver otro efecto.
+
+En loop, `on_limit` admite `fail` y `return_last`. Se comprueba `while` antes de cada vuelta; si sigue verdadera al alcanzar `max_iterations`, se aplica esa política. La condición exige un booleano real, sin coerción ni expresiones ejecutables. Una operación puede calcular la siguiente condición dentro del estado.
+
+### 9.2 Identidad, planificación y presupuesto
+
+La identidad lógica incluye run raíz, camino de ámbitos, ID local e índice/iteración cuando corresponde. En `RunSnapshot.invocations` se usa una ruta de segmentos etiquetados: `/nodes/import/items/3/nodes/write`, o `/nodes/group/branches/left/nodes/call/workflows/lookup/revisions/r1/nodes/read`. Dentro de un segmento se escapan `~` como `~0` y `/` como `~1`; un ID que contiene separadores no puede suplantar otro ámbito. Estas rutas sustituyen las claves simples de F-1 durante el desarrollo previo a publicación. El intento añade una identidad nueva; nunca reemplaza la identidad lógica ni su clave de efecto. Dos elementos iguales de un array siguen teniendo invocaciones diferentes.
+
+Un hijo de control se representa en el checkpoint del run raíz; no consume otro permiso de run activo mientras su padre retiene el suyo. Solo las llamadas a operaciones consumen permisos de intento. Los registros de control conservan ramas activadas, cursor/estado de iteración y resultados confirmados; no contienen futures. Antes de despachar, una decisión pura produce el trabajo listo y la transición que el coordinador debe confirmar. El ejecutor de un intento devuelve un resultado identificado; no elige sucesores.
+
+Defaults adicionales: 32 ramas por paralelo, concurrencia de grupo hasta 32 y nunca mayor al límite del host; 10 000 elementos por foreach; 1 024 vueltas por loop; profundidad de cuerpos/subworkflows 8; hasta 10 000 activaciones totales por run, contando control y operaciones. El plan tiene un presupuesto de 16 MiB (`plan_bytes`) sobre tamaño serializado de definiciones expandidas y nodos preparados; incluye schemas y referencias repetidas. Es una cota de preparación, no una medición de RSS. El límite de 256 nodos del documento incluye sus cuerpos inline.
+
+La instancia admite hasta 128 cuerpos hijos de grupos activos (`active_scopes`), compartidos entre runs y grupos anidados. El input de un hijo se construye al admitirlo; no se clona el contexto para todos los elementos por adelantado. Agotar esta cuota produce `resource.limit`, detiene nuevas admisiones y cancela/clasifica el trabajo activo. No se espera un permiso que pueda estar retenido por un padre, evitando interbloqueo por anidamiento. Si no se puede confirmar el progreso del grupo, falla la supervisión y la recuperación clasifica las intenciones pendientes antes de otro despacho. La activación se reserva antes del efecto. El host ajusta las cuotas según su carga; aumentar el máximo de filas también puede exigir aumentar activaciones y retención.
+
+La política `retry` tiene `max_attempts` (incluye el primero, default 1, máximo del host 5), `initial_delay_ms` (default 100), `max_delay_ms` (default 30 000) y `jitter` (default true). Los deadlines siguen prevaleciendo. El backoff exponencial saturado y jitter solo eligen demora después de autorizar la repetición; una Strategy de demora no decide si es seguro repetir.
+
+### 9.3 Clasificar antes de reintentar
+
+| Resultado de intento | Acción |
+|---|---|
+| Output válido | Confirmar una sola vez y habilitar continuación. |
+| Fallo de mapping/input antes del despacho | Fallo conocido; no se produjo efecto ni se ejecuta retry automático de validación. |
+| Error transitorio/de recurso con `not_applied` definitivo | Retry si quedan intentos y deadline, incluso cuando el destino no es idempotente. |
+| Error de negocio/input/interno con `not_applied` | Fallar; no aplicar backoff a rechazos permanentes. |
+| Escritura `unknown` y repetición `safe/keyed` | Retry solo para errores elegibles, conservando la clave de efecto; sin presupuesto suficiente queda bloqueada. |
+| Escritura `unknown` y repetición `unsafe` | Bloquear sin repetir. |
+| Efecto `applied` sin output válido, incluido error de schema tras respuesta | Bloquear para obtener resultado conforme; no hacer retry automático por invalidar el output. |
+| Cancelación/vencimiento/panic después de despachar escritura | Clasificar como potencial efecto desconocido; cancelar no demuestra ausencia de efecto. |
+
+Para operaciones puras/lecturas, la certeza no introduce un efecto de escritura. La cancelación conocida termina como `Cancelled`; el deadline sin petición de cancelación termina como `Failed`. Un run con escritura incierta permanece `Blocked` aunque se haya pedido cancelar, hasta resolverla o cerrar seguimiento explícitamente.
+
+La certeza se conserva a través de todos los intentos de una invocación: un intento nuevo declarado `not_applied` no borra un efecto incierto anterior. Un efecto ya confirmado como `applied` tampoco se convierte en no aplicado por una resolución contradictoria.
+
+Los intentos obsoletos no pueden publicar outputs. Un resultado que llegue después de timeout/resolución puede conservarse como evidencia identificada y acotada; no sobrescribe el resultado autorizado. El runtime mantiene una ventana acotada de recogida de respuestas tardías (1 s por intento, hasta el límite de intentos concurrentes); después libera el future local y conserva la incertidumbre remota. Esto no constituye una garantía de cancelación del destino.
+
+### 9.4 Inspección y resolución
+
+`EffectInspector` es un puerto separado, asociado a la revisión de operación y registrado como contribución del mismo módulo. Si el descriptor anuncia reconciliación, la composición exige ese proveedor. Su consulta recibe input/config, identidad lógica/intento/clave y recursos autorizados; carece de acceso al store y no crea un efecto de negocio. `inspect_effect` retorna evidencia; aplicar una decisión requiere `reconcile`.
+
+`ReconcileCommand` fija `command_id`, `run_id`, `invocation_id`, `expected_revision`, `observed_attempt` y decisión. Las decisiones son `confirm_applied`, `confirm_not_applied`, `record_inconclusive` y `stop_tracking`, según TDD-06. La evidencia identifica autoridad, referencia y afirmación; no basta una string «no encontrado». No aplicación exige además garantía explícita de que el intento ya no puede completarse. El host y el adaptador de confianza responden por esa afirmación; el motor no puede verificar por sí mismo el estado de un destino remoto.
+
+Confirmar aplicación valida el output contra la revisión fijada. Si es inválido se registra la investigación y se mantiene el bloqueo. Confirmar no aplicación solo habilita otro intento si se solicitó, queda presupuesto y el run no está cancelado. `stop_tracking` requiere permiso separado `StopTracking`, clasifica el trabajo activo y finaliza sin éxito con `unresolved_effects` visibles. Nunca borra la incertidumbre histórica.
+
+El commit CAS incluye decisión, auditoría y acuse. Un comando duplicado idéntico del mismo actor autenticado devuelve el acuse previo; el mismo ID con otro contenido o una revisión obsoleta produce conflicto. La búsqueda del acuse precede a la comprobación de revisión para poder recuperar un acuse perdido. Dos resoluciones distintas no pueden ganar sobre el mismo estado.
+
+Por run: hasta 256 registros de investigación/comandos y 64 KiB por evidencia/comando JSON, además del presupuesto total de datos. Evidencia mayor usa referencia autorizada a artefacto. Llenar la auditoría rechaza nuevas resoluciones antes de aplicarlas; no elimina acuses vigentes para hacer espacio. Los resultados terminales no se reabren; observaciones tardías pueden agregar auditoría acotada conservando resultado, estado y outputs confirmados.
+
+### 9.5 Recorrido C-02 en memoria
+
+La extensión de referencia separa cuatro operaciones: `read_page` (leer/parsear una página), `apply_row` (adaptar el destino inyectado), `report_batch` (escribir un reporte parcial inmutable) y `publish_report` (reunir los reportes confirmados). El engine no interpreta CSV, SKU ni reglas de inventario. El workflow usa un loop con cursor y un foreach `collect` de concurrencia 4 dentro de cada lote; el host puede reducirla.
+
+El lector acepta un `ArtifactRef` autorizado, UTF-8, cabecera exacta `sku,quantity`, hasta 4 MiB y 10 000 registros. Reabre el artefacto inmutable por página porque el puerto inicial no tiene seek; recorre el archivo con memoria de una página de hasta 100 filas y un buffer de entrada acotado. Cabecera, codificación, exceso de registros y errores estructurales se rechazan antes de llamar al destino. Cada fila conserva índice lógico y línea CSV; cantidad se convierte explícitamente a entero no negativo. SKU vacío/largo, número inválido o columnas incorrectas producen un error por fila; el schema de `apply_row` impide despacharla.
+
+El cursor del loop conserva fuente, próxima fila, totales acumulados, indicador `more` y referencia al último reporte de lote. Los reportes de lote enlazan el anterior y siempre declaran `partial: true`; no se conserva un array creciente en el estado del loop. La publicación final recorre esas referencias y transmite JSON Lines en orden de origen, con un resumen `rows/succeeded/failed` y la referencia final. Un archivo vacío con cabecera válida produce cero filas; un archivo sin cabecera falla. El límite del fixture de 10 000 filas usa 12 000 activaciones del host, incluyendo controles y reporte, manteniendo las demás cuotas publicadas.
+
+Si una fila deja un efecto incierto, el foreach y el run bloquean antes de confirmar ese lote o publicar un reporte final. El reporte del último lote confirmado sigue siendo parcial; los `Unknown` del snapshot identifican las filas pendientes de resolución. No se cuentan como fallos conocidos. El destino simulado deduplica por effect key y permite inspección autoritativa; sustituirlo requiere conservar esas garantías o declarar otras en su contrato.
+
+Las operaciones de reporte declaran escritura repetible: crean artefactos inmutables, sin repetir ajustes de inventario. Una referencia no confirmada puede dejar un artefacto huérfano, sujeto al presupuesto del proveedor. F-3 implementa retención y limpieza de ese estado; F-2 no promete recuperación de artefactos tras caída del proceso. Error o respuesta perdida durante una escritura de artefacto conserva incertidumbre, sin atribuir ausencia de efecto a un error del proveedor.
+
+### 9.6 Acceso al estado durante ejecución
+
+La lectura de un snapshot completo sirve para diagnóstico, recuperación y resultado final. El camino frecuente usa una vista coherente de cabecera + invocación local + indicación de descendientes inciertos. Esa vista corresponde a una sola revisión; contiene conteos de activaciones y bytes retenidos para comprobar cuotas sin serializar todos los registros otra vez.
+
+`ExecutionStore::view` consulta esa proyección; `unfinished_heads` enumera cabeceras pendientes; `commit_invocation` reemplaza un registro bajo propietario y revisión CAS. El reemplazo incrementa la revisión del run, conserva resultados confirmados y rechaza estados terminales. La creación de intención, resultado, cursor o fallo sigue siendo una transición observable; la proyección no omite confirmaciones ni autoriza despachar antes del commit. La transición de cabecera/auditoría y la recuperación completa conservan el puerto de snapshot existente.
+
+Los nuevos métodos tienen una implementación predeterminada mediante `get`/`commit`/`unfinished`, para que un proveedor correcto pueda adoptarlos por etapas. Un backend puede optimizarlos manteniendo sus contadores e índices en la misma sección crítica/transacción que el registro. Conformidad compara proyección, snapshot y reemplazo, incluyendo CAS obsoleto y resultado confirmado inmutable. Las pruebas concurrentes enfrentan confirmación de nodo, cancelación y confirmación final; las cuotas se comprueban contra la misma revisión que el commit. [PROJECT](PROJECT.md) registra la mejora medida en memoria y los costes restantes; otros proveedores deben medir su implementación.

@@ -9,6 +9,7 @@ license.workspace = true
 [dependencies]
 workflow-forge-protocol = { workspace = true }
 serde_json = { workspace = true }
+serde = { workspace = true }
 jsonschema = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }

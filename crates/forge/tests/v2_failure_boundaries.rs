@@ -1,4 +1,4 @@
-use serde_json::json;
+use serde_json::{Value, json};
 use std::{
     sync::{
         Arc, Mutex,
@@ -25,6 +25,9 @@ struct HookStore {
     created: Notify,
     release_create: Notify,
     saved: Mutex<Option<RunId>>,
+    hold_finish: AtomicBool,
+    finishing: Notify,
+    release_finish: Notify,
 }
 impl ExecutionStore for HookStore {
     fn capabilities(&self) -> StoreCapabilities {
@@ -75,7 +78,13 @@ impl ExecutionStore for HookStore {
         expected: u64,
         next: RunSnapshot,
     ) -> PortFuture<'a, ()> {
-        self.inner.commit(owner, expected, next)
+        Box::pin(async move {
+            if next.state == RunState::Succeeded && self.hold_finish.swap(false, Ordering::SeqCst) {
+                self.finishing.notify_one();
+                self.release_finish.notified().await;
+            }
+            self.inner.commit(owner, expected, next).await
+        })
     }
     fn collect<'a>(&'a self, owner: &'a str, now: u64, limits: &'a Limits) -> PortFuture<'a, ()> {
         self.inner.collect(owner, now, limits)
@@ -235,9 +244,8 @@ async fn global_output_validation_fails_the_run_without_coercing_data() {
     runtime.shutdown(ShutdownOptions::default()).await.unwrap();
 }
 
-#[tokio::test]
-async fn public_store_conformance_runs_without_engine_internals() {
-    let sample = RunSnapshot {
+fn sample_snapshot() -> RunSnapshot {
+    RunSnapshot {
         checkpoint_format: 1,
         id: RunId("conformance.run".into()),
         scope: "test".into(),
@@ -254,7 +262,14 @@ async fn public_store_conformance_runs_without_engine_internals() {
         deadline_at_ms: 1000,
         finished_at_ms: None,
         cancel_requested: false,
-    };
+        audit: Vec::new(),
+        unresolved_effects: Vec::new(),
+    }
+}
+
+#[tokio::test]
+async fn public_store_conformance_runs_without_engine_internals() {
+    let sample = sample_snapshot();
     workflow_forge_conformance::execution_store(
         &modules::MemoryExecutionStore::default(),
         sample.clone(),
@@ -294,4 +309,152 @@ async fn artifact_provider_bounds_storage_and_preserves_scope() {
             .code(),
         "resource.limit"
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn projected_and_full_commits_share_one_cas_and_coherent_counters() {
+    let store = Arc::new(modules::MemoryExecutionStore::default());
+    let initial = sample_snapshot();
+    let id = initial.id.clone();
+    store.claim("owner").await.unwrap();
+    store
+        .create("owner", initial, None, &Limits::default())
+        .await
+        .unwrap();
+    let mut running = store.get(&id).await.unwrap().unwrap();
+    running.state = RunState::Running;
+    running.revision = 1;
+    store.commit("owner", 0, running).await.unwrap();
+    let record = InvocationRecord {
+        id: "logical".into(),
+        attempt_id: "attempt".into(),
+        attempts: 1,
+        state: InvocationState::Unknown,
+        input: json!({"value":1}),
+        output: None,
+        error: None,
+        operation: Some(OperationRevision::new("test.write", "1", "r1")),
+        config: json!({}),
+        effect_key: Some("effect".into()),
+        retry: RetryPolicy::default(),
+        next_attempt_at_ms: None,
+        certainty: EffectCertainty::Unknown,
+        control: None,
+    };
+    let barrier = Arc::new(tokio::sync::Barrier::new(3));
+    let mut tasks = tokio::task::JoinSet::new();
+    for key in ["/nodes/left", "/nodes/right"] {
+        let store = store.clone();
+        let id = id.clone();
+        let record = record.clone();
+        let barrier = barrier.clone();
+        tasks.spawn(async move {
+            barrier.wait().await;
+            store.commit_invocation("owner", &id, 1, key, record).await
+        });
+    }
+    barrier.wait().await;
+    let mut wins = 0;
+    while let Some(result) = tasks.join_next().await {
+        match result.unwrap() {
+            Ok(_) => wins += 1,
+            Err(error) => assert_eq!(error.code(), "state.conflict"),
+        }
+    }
+    assert_eq!(wins, 1);
+    let before = store.get(&id).await.unwrap().unwrap();
+    assert_eq!(before.invocations.len(), 1);
+    assert_eq!(
+        store.view(&id, None).await.unwrap(),
+        Some(before.view(None))
+    );
+    let (key, mut confirmed) = before
+        .invocations
+        .iter()
+        .next()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .unwrap();
+    confirmed.state = InvocationState::Succeeded;
+    confirmed.certainty = EffectCertainty::Applied;
+    confirmed.output = Some(json!("confirmed"));
+    confirmed.input = Value::Null;
+    let mut cancelled = before.clone();
+    cancelled.revision += 1;
+    cancelled.cancel_requested = true;
+    cancelled.state = RunState::Cancelling;
+    let barrier = Arc::new(tokio::sync::Barrier::new(3));
+    let full = {
+        let store = store.clone();
+        let barrier = barrier.clone();
+        tokio::spawn(async move {
+            barrier.wait().await;
+            store.commit("owner", 2, cancelled).await
+        })
+    };
+    let projected = {
+        let store = store.clone();
+        let barrier = barrier.clone();
+        let id = id.clone();
+        tokio::spawn(async move {
+            barrier.wait().await;
+            store
+                .commit_invocation("owner", &id, 2, &key, confirmed)
+                .await
+        })
+    };
+    barrier.wait().await;
+    let full = full.await.unwrap();
+    let projected = projected.await.unwrap();
+    assert_ne!(full.is_ok(), projected.is_ok());
+    let current = store.get(&id).await.unwrap().unwrap();
+    assert_eq!(current.revision, 3);
+    let view = store.view(&id, None).await.unwrap().unwrap();
+    assert_eq!(view, current.view(None));
+    assert_eq!(view.head.unresolved_invocations, usize::from(full.is_ok()));
+    assert_eq!(current.cancel_requested, full.is_ok());
+    store.release("owner").await.unwrap();
+}
+
+#[tokio::test]
+async fn a_cancel_committed_before_final_result_is_rechecked_after_cas_conflict() {
+    let store = Arc::new(HookStore::default());
+    store.hold_finish.store(true, Ordering::SeqCst);
+    let runtime = EngineRuntime::boot(
+        WorkflowBuilder::standard()
+            .execution_store(store.clone())
+            .build()
+            .unwrap(),
+        BootOptions::default(),
+    )
+    .await
+    .unwrap();
+    let app = runtime.application();
+    let plan = app.prepare(access(), definition()).await.unwrap();
+    let receipt = app
+        .start(
+            access(),
+            StartRunRequest::new(plan, json!("already-computed")),
+        )
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(3), store.finishing.notified())
+        .await
+        .unwrap();
+    app.cancel(access(), receipt.run_id.clone()).await.unwrap();
+    store.release_finish.notify_one();
+    let run = tokio::time::timeout(Duration::from_secs(3), app.wait(access(), receipt.run_id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(run.state, RunState::Cancelled);
+    assert!(run.output.is_none());
+    assert_eq!(
+        run.invocations["/nodes/one"].state,
+        InvocationState::Succeeded
+    );
+    assert_eq!(
+        run.invocations["/nodes/one"].output,
+        Some(json!("already-computed"))
+    );
+    runtime.shutdown(ShutdownOptions::default()).await.unwrap();
 }

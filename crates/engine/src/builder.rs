@@ -15,6 +15,9 @@ pub(crate) struct Composition {
     pub secrets: Arc<dyn SecretProvider>,
     pub artifacts: Arc<dyn ArtifactStore>,
     pub observer: Arc<dyn ExecutionObserver>,
+    pub inspectors: BTreeMap<OperationRevision, Arc<dyn EffectInspector>>,
+    pub backoff: Arc<dyn BackoffPolicy>,
+    pub workflows: BTreeMap<WorkflowRevision, WorkflowDefinition>,
 }
 
 pub struct EngineAssembly(pub(crate) Arc<Composition>);
@@ -30,6 +33,9 @@ pub struct EngineBuilder {
     secrets: Option<Arc<dyn SecretProvider>>,
     artifacts: Option<Arc<dyn ArtifactStore>>,
     observer: Option<Arc<dyn ExecutionObserver>>,
+    inspectors: BTreeMap<OperationRevision, Arc<dyn EffectInspector>>,
+    backoff: Option<Arc<dyn BackoffPolicy>>,
+    workflows: BTreeMap<WorkflowRevision, WorkflowDefinition>,
 }
 
 impl EngineBuilder {
@@ -44,6 +50,9 @@ impl EngineBuilder {
             secrets: None,
             artifacts: None,
             observer: None,
+            inspectors: BTreeMap::new(),
+            backoff: None,
+            workflows: BTreeMap::new(),
         }
     }
     pub fn limits(mut self, limits: Limits) -> Self {
@@ -64,6 +73,10 @@ impl EngineBuilder {
     }
     pub fn observer(mut self, observer: Arc<dyn ExecutionObserver>) -> Self {
         self.observer = Some(observer);
+        self
+    }
+    pub fn backoff_policy(mut self, policy: Arc<dyn BackoffPolicy>) -> Self {
+        self.backoff = Some(policy);
         self
     }
 
@@ -116,6 +129,35 @@ impl EngineBuilder {
         Ok(())
     }
 
+    pub fn register_workflow(&mut self, definition: WorkflowDefinition) -> Result<(), ForgeError> {
+        crate::schema::check_value(
+            &serde_json::to_value(&definition).expect("definition serializes"),
+            self.limits.document_bytes,
+            self.limits.json_depth,
+        )?;
+        let revision = WorkflowRevision {
+            id: definition.id.clone(),
+            revision: definition.revision.clone(),
+        };
+        if revision.id.is_empty()
+            || revision.revision.is_empty()
+            || self.workflows.contains_key(&revision)
+        {
+            return Err(ForgeError::new(
+                "state.conflict",
+                "Workflow identity must be nonempty and registered once",
+            ));
+        }
+        if self.workflows.len() >= 1000 {
+            return Err(ForgeError::new(
+                "resource.limit",
+                "Definition catalog is full",
+            ));
+        }
+        self.workflows.insert(revision, definition);
+        Ok(())
+    }
+
     /// Validate the whole contribution before changing any registry entries.
     pub fn register_bundle(&mut self, bundle: OperationBundle) -> Result<(), ForgeError> {
         let module = &bundle.module;
@@ -153,6 +195,29 @@ impl EngineBuilder {
                 "Module exports do not match its operations",
             ));
         }
+        let mut inspectors = BTreeMap::new();
+        for inspector in bundle.inspectors {
+            let revision = inspector.operation().clone();
+            if !staged
+                .get(&revision)
+                .is_some_and(|operation| operation.descriptor.reconciliation)
+                || inspectors.insert(revision, inspector).is_some()
+            {
+                return Err(ForgeError::new(
+                    "definition.invalid",
+                    "Inspector must uniquely match a reconcilable operation in its module",
+                ));
+            }
+        }
+        if staged.iter().any(|(revision, op)| {
+            op.descriptor.reconciliation && !inspectors.contains_key(revision)
+        }) {
+            return Err(ForgeError::new(
+                "resource.missing",
+                "A reconcilable operation has no inspector",
+            ));
+        }
+        self.inspectors.extend(inspectors);
         self.operations.extend(staged);
         self.modules.insert(module.id.clone());
         Ok(())
@@ -172,6 +237,7 @@ impl EngineBuilder {
         if self.scope.is_empty()
             || [
                 l.document_bytes,
+                l.plan_bytes,
                 l.schema_resources,
                 l.nodes,
                 l.json_depth,
@@ -183,12 +249,23 @@ impl EngineBuilder {
                 l.concurrent_attempts,
                 l.terminal_runs,
                 l.receipt_count,
+                l.control_depth,
+                l.group_branches,
+                l.group_concurrency,
+                l.active_scopes,
+                l.foreach_items,
+                l.loop_iterations,
+                l.activations,
+                l.audit_entries,
+                l.evidence_bytes,
             ]
             .contains(&0)
             || l.attempt_timeout_ms == 0
             || l.run_timeout_ms == 0
             || l.retention_ms == 0
             || l.receipt_ttl_ms == 0
+            || l.max_retry_attempts == 0
+            || l.late_response_grace_ms == 0
             || l.active_runs.checked_add(l.pending_runs).is_none()
         {
             return Err(ForgeError::new(
@@ -239,7 +316,7 @@ impl EngineBuilder {
             }
             operations.insert(key, Arc::new(compiled));
         }
-        Ok(EngineAssembly(Arc::new(Composition {
+        let composition = Arc::new(Composition {
             id: uuid::Uuid::now_v7().to_string(),
             scope: self.scope,
             limits: self.limits,
@@ -249,6 +326,13 @@ impl EngineBuilder {
             secrets,
             artifacts: self.artifacts.ok_or_else(missing)?,
             observer: self.observer.ok_or_else(missing)?,
-        })))
+            inspectors: self.inspectors,
+            backoff: self.backoff.ok_or_else(missing)?,
+            workflows: self.workflows,
+        });
+        for definition in composition.workflows.values() {
+            crate::compiler::prepare(&composition, definition.clone())?;
+        }
+        Ok(EngineAssembly(composition))
     }
 }

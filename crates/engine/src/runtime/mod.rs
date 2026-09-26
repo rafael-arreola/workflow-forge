@@ -84,7 +84,9 @@ struct Shared {
     versions: Mutex<BTreeMap<(String, String), Value>>,
     cancellations: Mutex<BTreeMap<RunId, CancellationToken>>,
     attempts: Arc<Semaphore>,
+    scope_slots: Arc<Semaphore>,
     events: mpsc::Sender<ExecutionEvent>,
+    late: mpsc::Sender<invocation::LateAttempt>,
 }
 
 #[derive(Clone)]
@@ -98,8 +100,15 @@ pub struct EngineRuntime {
 }
 
 mod application;
+mod control;
 mod coordinator;
+mod groups;
 mod invocation;
 mod lifecycle;
+mod planner;
+mod reconcile;
+mod recovery;
+mod state;
+mod steps;
 use application::prepare_registered;
 use coordinator::{supervise, transition};

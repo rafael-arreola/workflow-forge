@@ -4,7 +4,7 @@ impl WorkflowApplication {
     pub fn is_ready(&self) -> bool {
         self.shared.phase.load(Ordering::Acquire) == READY
     }
-    fn authorize(
+    pub(super) fn authorize(
         &self,
         access: &AccessContext,
         permission: Permission,
@@ -64,20 +64,6 @@ impl WorkflowApplication {
         }
         let value: Value = serde_json::from_slice(json)
             .map_err(|_| ForgeError::new("definition.invalid", "Invalid JSON document"))?;
-        if value
-            .get("nodes")
-            .and_then(Value::as_array)
-            .is_some_and(|nodes| {
-                nodes
-                    .iter()
-                    .any(|n| n.get("kind").and_then(Value::as_str) != Some("operation"))
-            })
-        {
-            return Err(ForgeError::new(
-                "capability.unsupported",
-                "This profile supports operation sequences",
-            ));
-        }
         let definition = serde_json::from_value(value).map_err(|_| {
             ForgeError::new(
                 "definition.invalid",
@@ -94,11 +80,10 @@ impl WorkflowApplication {
         let _guard = self.shared.admission.lock().await;
         self.authorize(&access, Permission::Prepare, true)?;
         for node in &definition.nodes {
-            if self
-                .shared
-                .composition
-                .operations
-                .get(&node.operation)
+            if node
+                .instruction
+                .operation_revision()
+                .and_then(|revision| self.shared.composition.operations.get(revision))
                 .is_some_and(|op| {
                     op.descriptor
                         .required_resources
@@ -112,7 +97,7 @@ impl WorkflowApplication {
                 ));
             }
         }
-        let plan = prepare_registered(&self.shared, definition).await?;
+        let plan = prepare_registered(&self.shared, definition, Some(&access)).await?;
         authorize_resources(&plan, &access)?;
         Ok(plan)
     }
@@ -187,6 +172,8 @@ impl WorkflowApplication {
             deadline_at_ms: now.saturating_add(timeout),
             finished_at_ms: None,
             cancel_requested: false,
+            audit: Vec::new(),
+            unresolved_effects: Vec::new(),
         };
         match composition
             .store
@@ -250,9 +237,13 @@ impl WorkflowApplication {
             let notified = self.shared.changed.notified();
             tokio::pin!(notified);
             notified.as_mut().enable();
-            let run = self.status(access.clone(), id.clone()).await?;
-            if run.state.is_terminal() || run.state == RunState::Blocked {
-                return Ok(run);
+            self.authorize(&access, Permission::Read, false)?;
+            let view = state::view(&self.shared, &id, None).await?;
+            if view.head.state.is_terminal() || view.head.state == RunState::Blocked {
+                let run = self.status(access.clone(), id.clone()).await?;
+                if run.state.is_terminal() || run.state == RunState::Blocked {
+                    return Ok(run);
+                }
             }
             tokio::select! { _=notified=>(), _=tokio::time::sleep(Duration::from_millis(50))=>() }
         }
@@ -273,13 +264,12 @@ impl WorkflowApplication {
 }
 
 fn authorize_resources(plan: &PreparedWorkflow, access: &AccessContext) -> Result<(), ForgeError> {
-    if plan.0.sequence.iter().any(|node| {
-        node.operation
-            .descriptor
-            .required_resources
-            .iter()
-            .any(|r| !access.permits_resource(r))
-    }) {
+    if plan
+        .0
+        .resources
+        .iter()
+        .any(|resource| !access.permits_resource(resource))
+    {
         Err(ForgeError::new(
             "access.denied",
             "Plan requires a resource not granted to this caller",
@@ -292,32 +282,47 @@ fn authorize_resources(plan: &PreparedWorkflow, access: &AccessContext) -> Resul
 pub(super) async fn prepare_registered(
     shared: &Arc<Shared>,
     definition: WorkflowDefinition,
+    access: Option<&AccessContext>,
 ) -> Result<PreparedWorkflow, ForgeError> {
     let composition = shared.composition.clone();
     let plan = tokio::task::spawn_blocking(move || compiler::prepare(&composition, definition))
         .await
         .map_err(|_| ForgeError::new("definition.invalid", "Compiler could not complete"))??;
-    let key = (
-        plan.definition().id.clone(),
-        plan.definition().revision.clone(),
-    );
-    let semantic = plan.definition().semantic_value();
+    if let Some(access) = access {
+        authorize_resources(&plan, access)?;
+    }
+    let candidates: BTreeMap<_, _> = plan
+        .0
+        .definitions
+        .iter()
+        .map(|(revision, definition)| {
+            (
+                (revision.id.clone(), revision.revision.clone()),
+                definition.semantic_value(),
+            )
+        })
+        .collect();
     let mut versions = shared.versions.lock().await;
-    if let Some(previous) = versions.get(&key) {
-        if previous != &semantic {
+    for (key, value) in &candidates {
+        if versions.get(key).is_some_and(|previous| previous != value) {
             return Err(ForgeError::new(
                 "state.conflict",
                 "Workflow revision already identifies different content",
             ));
         }
-    } else {
-        if versions.len() >= 1000 {
-            return Err(ForgeError::new(
-                "admission.full",
-                "Prepared revision registry is full",
-            ));
-        }
-        versions.insert(key, semantic);
     }
+    if versions.len()
+        + candidates
+            .keys()
+            .filter(|key| !versions.contains_key(*key))
+            .count()
+        > 1000
+    {
+        return Err(ForgeError::new(
+            "admission.full",
+            "Prepared revision registry is full",
+        ));
+    }
+    versions.extend(candidates);
     Ok(plan)
 }

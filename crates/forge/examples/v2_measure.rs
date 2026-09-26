@@ -12,9 +12,11 @@ fn definition(count: usize) -> WorkflowDefinition {
     let nodes = (0..count)
         .map(|i| NodeDefinition {
             id: format!("n{i}"),
-            kind: "operation".into(),
-            operation: OperationRevision::new("forge.data.identity", "1", "r1"),
-            config: json!({}),
+            instruction: Instruction::Operation {
+                operation: OperationRevision::new("forge.data.identity", "1", "r1"),
+                config: json!({}),
+                retry: RetryPolicy::default(),
+            },
             input: if i == 0 {
                 Binding::Select(Selection {
                     source: DataSource::Input,
@@ -126,6 +128,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         json!({"nodes":count,"json_bytes":bytes,"warmup":100,"samples":samples,"concurrency":concurrency,"prepare":percentile(&mut preparation),"execute":percentile(&mut execution),"runs_per_second":samples as f64/seconds,"failed_runs":failed,"profile":"default-memory"})
     );
     runtime.shutdown(ShutdownOptions::default()).await?;
+    if failed != 0 {
+        return Err("Measurement contains failed or incorrect runs".into());
+    }
     Ok(())
 }
 

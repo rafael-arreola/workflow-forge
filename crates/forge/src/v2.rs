@@ -17,6 +17,7 @@ impl WorkflowBuilder {
             .secret_provider(Arc::new(modules::MemorySecrets::default()))
             .artifact_store(Arc::new(modules::MemoryArtifacts::default()))
             .observer(Arc::new(modules::NoopObserver));
+        builder = builder.backoff_policy(Arc::new(modules::ExponentialBackoff));
         builder
             .register_bundle(modules::data_operations())
             .expect("official data descriptors are valid");
@@ -37,11 +38,17 @@ impl WorkflowBuilder {
     pub fn observer(self, observer: Arc<dyn ExecutionObserver>) -> Self {
         Self(self.0.observer(observer))
     }
+    pub fn backoff_policy(self, policy: Arc<dyn BackoffPolicy>) -> Self {
+        Self(self.0.backoff_policy(policy))
+    }
     pub fn register_bundle(&mut self, bundle: OperationBundle) -> Result<(), ForgeError> {
         self.0.register_bundle(bundle)
     }
     pub fn register_schemas(&mut self, schemas: Vec<SchemaResource>) -> Result<(), ForgeError> {
         self.0.register_schemas(schemas)
+    }
+    pub fn register_workflow(&mut self, definition: WorkflowDefinition) -> Result<(), ForgeError> {
+        self.0.register_workflow(definition)
     }
     pub fn build(self) -> Result<EngineAssembly, ForgeError> {
         self.0.build()

@@ -1,0 +1,320 @@
+{
+  "format": "forge.workflow/2",
+  "id": "reference.inventory_import",
+  "revision": "r1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "source"
+    ],
+    "properties": {
+      "source": {
+        "type": "object",
+        "required": [
+          "id",
+          "scope",
+          "bytes",
+          "media_type"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scope": {
+            "type": "string",
+            "minLength": 1
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "media_type": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "additionalProperties": false
+  },
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "rows",
+      "succeeded",
+      "failed",
+      "report"
+    ],
+    "properties": {
+      "rows": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "succeeded": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "failed": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "report": {
+        "type": "object",
+        "required": [
+          "id",
+          "scope",
+          "bytes",
+          "media_type"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scope": {
+            "type": "string",
+            "minLength": 1
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "media_type": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "additionalProperties": false
+  },
+  "entry": "import",
+  "nodes": [
+    {
+      "id": "import",
+      "kind": "loop",
+      "input": {
+        "object": {
+          "source": {
+            "select": {
+              "source": "input",
+              "pointer": "/source"
+            }
+          },
+          "cursor": {
+            "literal": 0
+          },
+          "more": {
+            "literal": true
+          },
+          "summary": {
+            "literal": {
+              "rows": 0,
+              "succeeded": 0,
+              "failed": 0
+            }
+          },
+          "report": {
+            "literal": null
+          }
+        }
+      },
+      "while": {
+        "select": {
+          "source": "input",
+          "pointer": "/state/more"
+        }
+      },
+      "body": {
+        "entry": "page",
+        "nodes": [
+          {
+            "id": "page",
+            "kind": "operation",
+            "operation": {
+              "id": "reference.inventory.read_page",
+              "contract": "1",
+              "implementation": "r1"
+            },
+            "config": {
+              "batch_size": 100
+            },
+            "input": {
+              "select": {
+                "source": "input",
+                "pointer": "/state"
+              }
+            }
+          },
+          {
+            "id": "rows",
+            "kind": "foreach",
+            "input": {
+              "select": {
+                "source": "node",
+                "node": "page",
+                "pointer": "/rows"
+              }
+            },
+            "items": {
+              "select": {
+                "source": "input",
+                "pointer": ""
+              }
+            },
+            "concurrency": 4,
+            "errors": "collect",
+            "body": {
+              "entry": "apply",
+              "nodes": [
+                {
+                  "id": "apply",
+                  "kind": "operation",
+                  "operation": {
+                    "id": "reference.inventory.apply_row",
+                    "contract": "1",
+                    "implementation": "r1"
+                  },
+                  "config": {},
+                  "input": {
+                    "object": {
+                      "index": {
+                        "select": {
+                          "source": "input",
+                          "pointer": "/item/index"
+                        }
+                      },
+                      "line": {
+                        "select": {
+                          "source": "input",
+                          "pointer": "/item/line"
+                        }
+                      },
+                      "sku": {
+                        "select": {
+                          "source": "input",
+                          "pointer": "/item/sku"
+                        }
+                      },
+                      "quantity": {
+                        "select": {
+                          "source": "input",
+                          "pointer": "/item/quantity"
+                        }
+                      }
+                    }
+                  },
+                  "retry": {
+                    "max_attempts": 3,
+                    "initial_delay_ms": 0,
+                    "max_delay_ms": 0,
+                    "jitter": false
+                  }
+                }
+              ],
+              "edges": [],
+              "output": {
+                "select": {
+                  "source": "node",
+                  "node": "apply",
+                  "pointer": ""
+                }
+              }
+            }
+          },
+          {
+            "id": "report",
+            "kind": "operation",
+            "operation": {
+              "id": "reference.inventory.report_batch",
+              "contract": "1",
+              "implementation": "r1"
+            },
+            "config": {},
+            "input": {
+              "object": {
+                "state": {
+                  "select": {
+                    "source": "input",
+                    "pointer": "/state"
+                  }
+                },
+                "page": {
+                  "select": {
+                    "source": "node",
+                    "node": "page",
+                    "pointer": ""
+                  }
+                },
+                "results": {
+                  "select": {
+                    "source": "node",
+                    "node": "rows",
+                    "pointer": ""
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "edges": [
+          {
+            "from": "page",
+            "to": "rows"
+          },
+          {
+            "from": "rows",
+            "to": "report"
+          }
+        ],
+        "output": {
+          "select": {
+            "source": "node",
+            "node": "report",
+            "pointer": ""
+          }
+        }
+      },
+      "max_iterations": 100,
+      "on_limit": "fail"
+    },
+    {
+      "id": "publish",
+      "kind": "operation",
+      "operation": {
+        "id": "reference.inventory.publish_report",
+        "contract": "1",
+        "implementation": "r1"
+      },
+      "config": {},
+      "input": {
+        "select": {
+          "source": "node",
+          "node": "import",
+          "pointer": ""
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "import",
+      "to": "publish"
+    }
+  ],
+  "output": {
+    "select": {
+      "source": "node",
+      "node": "publish",
+      "pointer": ""
+    }
+  },
+  "presentation": {
+    "label": "Import inventory CSV",
+    "description": "Read bounded pages, validate each row, apply inventory updates and publish a report"
+  }
+}

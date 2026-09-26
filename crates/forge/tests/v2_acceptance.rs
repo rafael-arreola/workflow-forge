@@ -330,6 +330,7 @@ fn probe(mode: u8) -> (Arc<Probe>, OperationBundle) {
         mode,
     });
     let bundle = OperationBundle {
+        inspectors: Vec::new(),
         module: ModuleDescriptor {
             id: "test.probes".into(),
             version: "1".into(),
@@ -342,7 +343,7 @@ fn probe(mode: u8) -> (Arc<Probe>, OperationBundle) {
 }
 fn probe_definition() -> WorkflowDefinition {
     let mut d = echo(json!({"select":{"source":"input","pointer":""}}));
-    d.nodes[0].operation.id = "test.probe".into();
+    d.nodes[0].instruction.operation_revision_mut().unwrap().id = "test.probe".into();
     d
 }
 
@@ -422,6 +423,7 @@ async fn bundle_registration_is_atomic_and_rejects_unsupported_protocol() {
     };
     builder
         .register_bundle(OperationBundle {
+            inspectors: Vec::new(),
             module: module.clone(),
             operations: vec![operation.clone()],
         })
@@ -432,6 +434,7 @@ async fn bundle_registration_is_atomic_and_rejects_unsupported_protocol() {
     assert_eq!(
         builder
             .register_bundle(OperationBundle {
+                inspectors: Vec::new(),
                 module: unsupported,
                 operations: vec![operation]
             })
@@ -498,7 +501,11 @@ async fn panic_becomes_a_run_error_and_runtime_stays_usable() {
 async fn failed_boot_releases_store_and_double_ownership_is_rejected() {
     let store = Arc::new(modules::MemoryExecutionStore::default());
     let mut invalid = echo(json!({"literal":1}));
-    invalid.nodes[0].operation.implementation = "absent".into();
+    invalid.nodes[0]
+        .instruction
+        .operation_revision_mut()
+        .unwrap()
+        .implementation = "absent".into();
     let result = EngineRuntime::boot(
         WorkflowBuilder::standard()
             .execution_store(store.clone())

@@ -1,4 +1,5 @@
 //! An external extension: no dependencies on the engine, facade or official modules.
+pub mod inventory;
 use serde_json::json;
 use std::{collections::BTreeMap, sync::Arc};
 use workflow_forge_protocol::*;
@@ -56,6 +57,7 @@ pub fn customer_operations(directory: Arc<dyn CustomerDirectory>) -> OperationBu
         examples: vec![json!({"input":{"customer":"C-9"},"output":{"active":true}})],
     };
     OperationBundle {
+        inspectors: Vec::new(),
         module: ModuleDescriptor {
             id: "reference.customers".into(),
             version: "1".into(),

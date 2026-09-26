@@ -3279,6 +3279,7 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "jsonschema",
+ "serde",
  "serde_json",
  "tokio",
  "tokio-util",
@@ -3392,6 +3393,9 @@ dependencies = [
 name = "workflow-forge-reference-module"
 version = "0.1.0"
 dependencies = [
+ "csv",
+ "futures",
+ "serde",
  "serde_json",
  "workflow-forge-protocol",
 ]

@@ -1,4 +1,7 @@
-use crate::{ExecutionEvent, ForgeError, Limits, PortFuture, RunId, RunSnapshot};
+use crate::{
+    ExecutionEvent, ExecutionView, ForgeError, InvocationRecord, InvocationState, Limits,
+    PortFuture, RunHead, RunId, RunSnapshot,
+};
 use futures::Stream;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -39,10 +42,67 @@ pub trait ExecutionStore: Send + Sync {
         limits: &'a Limits,
     ) -> PortFuture<'a, CreateOutcome>;
     fn get<'a>(&'a self, id: &'a RunId) -> PortFuture<'a, Option<RunSnapshot>>;
+    /// The head, requested node and descendant uncertainty must share a revision.
+    /// `None` requests only the head and uncertainty of the whole run.
+    fn view<'a>(
+        &'a self,
+        id: &'a RunId,
+        node: Option<&'a str>,
+    ) -> PortFuture<'a, Option<ExecutionView>> {
+        Box::pin(async move { Ok(self.get(id).await?.map(|run| run.view(node))) })
+    }
     fn unfinished(&self) -> PortFuture<'_, Vec<RunSnapshot>>;
+    fn unfinished_heads(&self) -> PortFuture<'_, Vec<RunHead>> {
+        Box::pin(async move {
+            Ok(self
+                .unfinished()
+                .await?
+                .iter()
+                .map(RunSnapshot::head)
+                .collect())
+        })
+    }
     /// `next.revision` must equal expected+1. Every check and write is atomic.
     fn commit<'a>(&'a self, owner: &'a str, expected: u64, next: RunSnapshot)
     -> PortFuture<'a, ()>;
+    /// Atomic replacement of one invocation under the same run CAS as `commit`.
+    /// This cannot alter run identity, head state, audit or any other invocation.
+    /// The caller checks admission/data budgets against the coherent view first;
+    /// an implementation updates its projection counters in the same commit.
+    fn commit_invocation<'a>(
+        &'a self,
+        owner: &'a str,
+        id: &'a RunId,
+        expected: u64,
+        node: &'a str,
+        record: InvocationRecord,
+    ) -> PortFuture<'a, ExecutionView> {
+        Box::pin(async move {
+            let mut run = self
+                .get(id)
+                .await?
+                .ok_or_else(|| ForgeError::new("not_found", "Run is unavailable"))?;
+            if run.revision != expected
+                || run.state.is_terminal()
+                || run
+                    .invocations
+                    .get(node)
+                    .is_some_and(|old| old.state == InvocationState::Succeeded && old != &record)
+            {
+                return Err(ForgeError::new(
+                    "state.conflict",
+                    "Invocation replacement does not match the committed revision",
+                ));
+            }
+            run.revision = expected
+                .checked_add(1)
+                .ok_or_else(|| ForgeError::new("state.conflict", "Revision exhausted"))?;
+            run.invocations.insert(node.into(), record);
+            let view = run.view(Some(node));
+            self.commit(owner, expected, run).await?;
+            Ok(view)
+        })
+    }
     fn collect<'a>(&'a self, owner: &'a str, now_ms: u64, limits: &'a Limits)
     -> PortFuture<'a, ()>;
 }

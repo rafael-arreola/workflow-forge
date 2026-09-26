@@ -57,17 +57,61 @@ impl CompiledOperation {
     }
 }
 
-pub(crate) struct PreparedNode {
-    pub definition: NodeDefinition,
+mod control;
+
+pub(crate) struct PreparedOperation {
     pub operation: Arc<CompiledOperation>,
+    pub config: Value,
+    pub retry: RetryPolicy,
+}
+pub(crate) struct PreparedNode {
+    pub id: String,
+    pub input: Binding,
+    pub instruction: PreparedInstruction,
+}
+pub(crate) struct PreparedBody {
+    pub sequence: Vec<PreparedNode>,
+    pub output: Binding,
+}
+pub(crate) struct PreparedCase {
+    pub id: String,
+    pub when: Binding,
+    pub body: Arc<PreparedBody>,
+}
+pub(crate) enum PreparedInstruction {
+    Operation(PreparedOperation),
+    Decision {
+        cases: Vec<PreparedCase>,
+        fallback: Option<(String, Arc<PreparedBody>)>,
+    },
+    Parallel {
+        branches: BTreeMap<String, Arc<PreparedBody>>,
+        concurrency: usize,
+        errors: GroupErrors,
+    },
+    Foreach {
+        items: Binding,
+        body: Arc<PreparedBody>,
+        concurrency: usize,
+        errors: GroupErrors,
+    },
+    Loop {
+        condition: Binding,
+        body: Arc<PreparedBody>,
+        max_iterations: usize,
+        on_limit: LoopLimit,
+    },
+    Subworkflow(PreparedWorkflow),
 }
 pub(crate) struct Plan {
     pub composition: String,
     pub definition: WorkflowDefinition,
-    pub sequence: Vec<PreparedNode>,
+    pub body: Arc<PreparedBody>,
     pub input: CompiledSchema,
     pub output: CompiledSchema,
     pub warnings: Vec<Diagnostic>,
+    pub resources: BTreeSet<String>,
+    pub definitions: BTreeMap<WorkflowRevision, WorkflowDefinition>,
 }
 
 #[derive(Clone)]
@@ -80,7 +124,6 @@ impl PreparedWorkflow {
         &self.0.warnings
     }
 }
-
 fn located(mut error: ForgeError, node: Option<&str>, field: &str) -> ForgeError {
     for d in &mut error.diagnostics {
         d.phase = "prepare".into();
@@ -89,188 +132,9 @@ fn located(mut error: ForgeError, node: Option<&str>, field: &str) -> ForgeError
     }
     error
 }
-
 pub(crate) fn prepare(
     composition: &Composition,
     definition: WorkflowDefinition,
 ) -> Result<PreparedWorkflow, ForgeError> {
-    let limits = &composition.limits;
-    check_value(
-        &serde_json::to_value(&definition).expect("definition serializes"),
-        limits.document_bytes,
-        limits.json_depth,
-    )?;
-    if definition.format != WORKFLOW_FORMAT
-        || definition.schema_dialect != SCHEMA_DIALECT
-        || definition.id.is_empty()
-        || definition.revision.is_empty()
-    {
-        return Err(ForgeError::new(
-            "definition.invalid",
-            "Definition format, dialect and identity must be explicit and supported",
-        ));
-    }
-    if definition.nodes.is_empty() || definition.nodes.len() > limits.nodes {
-        return Err(ForgeError::new(
-            "definition.invalid",
-            "Definition has an invalid number of nodes",
-        ));
-    }
-    let mut nodes = BTreeMap::new();
-    let mut diagnostics = Vec::new();
-    for node in &definition.nodes {
-        if node.id.is_empty() || nodes.insert(node.id.clone(), node).is_some() {
-            diagnostics.push(
-                Diagnostic::new(
-                    "definition.invalid",
-                    "Node identities must be nonempty and unique",
-                )
-                .at("prepare", Some(&node.id), "/nodes"),
-            );
-        }
-        if node.kind != "operation" {
-            diagnostics.push(
-                Diagnostic::new(
-                    "capability.unsupported",
-                    "This profile supports operation sequences",
-                )
-                .at("prepare", Some(&node.id), "/kind"),
-            );
-        }
-    }
-    if !diagnostics.is_empty() {
-        return Err(ForgeError { diagnostics });
-    }
-    let mut next = BTreeMap::new();
-    let mut predecessors = BTreeMap::new();
-    let mut edges = BTreeSet::new();
-    for edge in &definition.edges {
-        if !nodes.contains_key(&edge.from) || !nodes.contains_key(&edge.to) {
-            diagnostics.push(
-                Diagnostic::new("reference.missing", "Edge references an unknown node")
-                    .at("prepare", None, "/edges"),
-            );
-            continue;
-        }
-        if !edges.insert(edge.clone()) {
-            diagnostics.push(
-                Diagnostic::new("definition.invalid", "Duplicate edge")
-                    .at("prepare", None, "/edges"),
-            );
-        }
-        if next.insert(edge.from.clone(), edge.to.clone()).is_some()
-            || predecessors
-                .insert(edge.to.clone(), edge.from.clone())
-                .is_some()
-        {
-            diagnostics.push(
-                Diagnostic::new(
-                    "capability.unsupported",
-                    "Forks and joins require the advanced control profile",
-                )
-                .at("prepare", None, "/edges"),
-            );
-        }
-    }
-    if !nodes.contains_key(&definition.entry) || predecessors.contains_key(&definition.entry) {
-        diagnostics.push(
-            Diagnostic::new(
-                "definition.invalid",
-                "Entry must exist and have no predecessor",
-            )
-            .at("prepare", None, "/entry"),
-        );
-    }
-    if !diagnostics.is_empty() {
-        return Err(ForgeError { diagnostics });
-    }
-    let mut order = Vec::new();
-    let mut visited = BTreeSet::new();
-    let mut cursor = Some(definition.entry.clone());
-    while let Some(id) = cursor {
-        if !visited.insert(id.clone()) {
-            return Err(ForgeError::new(
-                "definition.invalid",
-                "Control cycles are not supported",
-            ));
-        }
-        order.push(id.clone());
-        cursor = next.get(&id).cloned();
-    }
-    if visited.len() != nodes.len() {
-        return Err(ForgeError::new(
-            "definition.invalid",
-            "All nodes must be reachable from entry",
-        ));
-    }
-    let input = CompiledSchema::compile(&definition.input_schema, &composition.schemas, limits)
-        .map_err(|e| located(e, None, "/input_schema"))?;
-    let output = CompiledSchema::compile(&definition.output_schema, &composition.schemas, limits)
-        .map_err(|e| located(e, None, "/output_schema"))?;
-    let mut available = BTreeSet::new();
-    let mut sequence = Vec::new();
-    let mut warnings = Vec::new();
-    for id in order {
-        let node = nodes[&id];
-        let Some(operation) = composition.operations.get(&node.operation) else {
-            diagnostics.push(
-                Diagnostic::new("reference.missing", "Operation revision is unavailable").at(
-                    "prepare",
-                    Some(&id),
-                    "/operation",
-                ),
-            );
-            available.insert(id);
-            continue;
-        };
-        if operation.descriptor.effect == EffectKind::Write
-            || operation.descriptor.repetition != Repetition::Safe
-        {
-            diagnostics.push(
-                Diagnostic::new(
-                    "capability.unsupported",
-                    "F-1 supports pure operations and repeatable reads",
-                )
-                .at("prepare", Some(&id), "/operation"),
-            );
-        }
-        if let Err(e) = operation.config.validate(&node.config, limits) {
-            diagnostics.extend(located(e, Some(&id), "/config").diagnostics);
-        }
-        if let Err(e) = binding::check(&node.input, &available, limits) {
-            diagnostics.extend(located(e, Some(&id), "/input").diagnostics);
-        }
-        if let Binding::Literal(value) = &node.input {
-            if let Err(e) = operation.input.validate(value, limits) {
-                diagnostics.extend(located(e, Some(&id), "/input").diagnostics);
-            }
-        } else {
-            warnings.push(
-                Diagnostic::new(
-                    "compatibility.unknown",
-                    "Data compatibility will be validated at invocation",
-                )
-                .at("prepare", Some(&id), "/input"),
-            );
-        }
-        sequence.push(PreparedNode {
-            definition: node.clone(),
-            operation: operation.clone(),
-        });
-        available.insert(id);
-    }
-    if let Err(e) = binding::check(&definition.output, &available, limits) {
-        diagnostics.extend(located(e, None, "/output").diagnostics);
-    }
-    if !diagnostics.is_empty() {
-        return Err(ForgeError { diagnostics });
-    }
-    Ok(PreparedWorkflow(Arc::new(Plan {
-        composition: composition.id.clone(),
-        definition,
-        sequence,
-        input,
-        output,
-        warnings,
-    })))
+    control::Compiler::new(composition).workflow(definition, 0)
 }
