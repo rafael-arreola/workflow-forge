@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/extensions/*", "crates/forge", "crates/cli"]
+members = ["crates/core", "crates/extensions/*", "crates/forge", "crates/cli", "crates/protocol", "crates/engine", "crates/modules", "crates/conformance", "examples/reference-module"]
 
 [workspace.package]
 version = "0.1.0"
@@ -13,6 +13,9 @@ keywords = ["workflow", "orchestration", "json", "jsonpath", "declarative"]
 categories = ["asynchronous"]
 
 [workspace.dependencies]
+workflow-forge-protocol = { path = "crates/protocol", version = "0.1.0" }
+workflow-forge-engine = { path = "crates/engine", version = "0.1.0" }
+workflow-forge-modules = { path = "crates/modules", version = "0.1.0" }
 workflow-forge-core = { path = "crates/core", version = "0.1.0" }
 workflow-forge-ext-util = { path = "crates/extensions/util", version = "0.1.0" }
 workflow-forge-ext-data = { path = "crates/extensions/data", version = "0.1.0" }

@@ -1,345 +1,72 @@
 # workflow-forge
 
-> **Architecture refactoring in planning (2026-09-26).** The target product is an
-> agnostic integration engine, available as a Rust library and a service, with
-> public contracts for modules, extensions and visual composition. Start with the
-> [documentation map](docs/README.md), [PRD](docs/PRD.md),
-> [architecture](docs/ARCHITECTURE.md) and [technical design](docs/TDD.md).
-> The examples and API below describe the existing prototype, not the target architecture.
+Motor agnóstico de integración en Rust. Las definiciones JSON conectan operaciones mediante contratos JSON Schema; el host decide qué módulos, recursos y transportes habilita.
 
-[![CI](https://github.com/rafael-arreola/workflow-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/rafael-arreola/workflow-forge/actions/workflows/ci.yml)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+**En desarrollo, sin versión pública.** F-1 implementa secuencias en memoria mediante `workflow_forge::v2`. Ramas, efectos de escritura, persistencia y servicio tienen fases posteriores en el [ROADMAP](docs/ROADMAP.md). La [evidencia y los límites](docs/PROJECT.md) distinguen capacidades probadas de diseño pendiente.
 
-A declarative, JSON-based workflow engine for Rust. Workflows are **plain JSON
-documents** — defined with [JSON Schema](schemas/1.0/), wired with JSONPath —
-executed by an embeddable, async core.
+## Ejecutar el primer recorrido
 
-> **Status: pre-1.0.** The spec and APIs may still change. Feedback and
-> contributions are very welcome.
+Desde este checkout:
 
-## Why
-
-- **Workflows as data**: a workflow is a JSON document you can store, diff,
-  validate and generate. No DSL to learn, no macros.
-- **Validate without the engine**: the [published JSON Schemas](schemas/1.0/)
-  let any standard validator (or editor) check a workflow definition.
-- **Typed extensions**: every task declares a manifest (id + JSON Schemas for
-  its input/output). The engine enforces the contracts at runtime and can
-  export the full task catalog as JSON — the foundation for tooling and
-  visual editors.
-- **Real control flow**: exclusive/parallel/join gateways, `foreach` over
-  arrays, bounded `loop`s (pagination!), per-node retries with backoff and
-  jitter, timeouts, error routes (`on: "error"`), and a condition mini-DSL
-  that is itself JSON.
-
-## Quickstart
-
-```toml
-[dependencies]
-workflow-forge = "0.1"   # features: util, data, http (default) + tabular, sftp
-tokio = { version = "1", features = ["full"] }
+```sh
+cargo run -p workflow-forge --example v2_customer
 ```
+
+Carga una definición, normaliza el cliente `" C-9 "`, consulta una extensión y devuelve `{"customer":"C-9","active":true}`. El [ejemplo completo](crates/forge/examples/v2_customer.rs) conserva el runtime y espera el apagado incluso si falla el recorrido.
+
+La instancia se construye una vez al arrancar el host:
 
 ```rust
-use workflow_forge::prelude::*;
+use workflow_forge::v2::*;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let workflow: WorkflowDefinition = serde_json::from_str(r#"{
-        "spec": "1.0",
-        "name": "greet",
-        "version": "0.1.0",
-        "nodes": [
-            { "id": "start", "kind": "start" },
-            { "id": "render", "kind": "task", "task": "data.template",
-              "input": { "template": "Hello {who}!", "values": "$.trigger" } },
-            { "id": "end", "kind": "end" }
-        ],
-        "edges": [
-            { "from": "start", "to": "render" },
-            { "from": "render", "to": "end" }
-        ]
-    }"#)?;
-
-    let registry = workflow_forge::default_registry();
-    let executor = WorkflowExecutor::new(workflow, registry)
-        .map_err(|errors| format!("invalid workflow: {errors:?}"))?;
-
-    let result = executor
-        .run(WorkflowData(serde_json::json!({ "who": "world" })))
-        .await?;
-
-    println!("{}", result.0); // "Hello world!"
-    Ok(())
-}
+let mut builder = WorkflowBuilder::standard();
+builder.register_bundle(host_operations)?;
+let runtime = EngineRuntime::boot(builder.build()?, BootOptions::default()).await?;
+let app = runtime.application(); // clonar y compartir con los handlers
+let access = AccessContext::trusted("default");
+let plan = app.prepare(access.clone(), definition).await?;
+let receipt = app.start(access.clone(), StartRunRequest::new(plan, input)).await?;
+let completed = app.wait(access, receipt.run_id).await?;
+runtime.shutdown(ShutdownOptions::default()).await?;
 ```
 
-## Anatomy of a workflow
+El fragmento omite la creación de la contribución y los datos. `build` es inactivo; `boot` establece propiedad y supervisión antes de readiness. `start` acusa aceptación; `wait` devuelve el estado final o bloqueo. El host autoriza el acceso; los plugins compilados son código confiable. El perfil en memoria no sobrevive a la caída del proceso.
 
-Data flows through a per-execution **context document**. Every node reads its
-input via JSONPath mappings and publishes its output:
+## Contratos y extensiones
 
-```text
-$.trigger              → the initial input of the execution
-$.nodes.<id>.output    → the output of each executed node
-$.nodes.<id>.error     → the error of a node, when routed via on: "error"
-$.workflow             → metadata (name, version, execution_id)
+- [CONTRACTS](docs/CONTRACTS.md): documento, mappings explícitos, errores, recursos y cuotas.
+- [Schema de formato 2](schemas/2/workflow.schema.json) y [definición ejecutable](examples/workflows/customer_lookup.v2.json).
+- [Extensión externa](examples/reference-module/src/lib.rs): depende del protocolo y un cliente inyectado, sin importar internos del engine.
+- [PATTERNS](docs/PATTERNS.md): Builder, Adapter, Decorator y reglas de evolución.
+- [Kit de conformidad](crates/conformance/src/lib.rs): checks públicos para proveedores sustitutos.
+
+`standard()` instala `forge.data.identity`, `forge.text.trim`, estado/secretos/artefactos en memoria y un observador vacío. La configuración se congela antes del arranque. No se sobrescriben operaciones por orden de registro ni se descargan referencias de schemas desde la red.
+
+## Organización
+
+| Crate | Responsabilidad |
+|---|---|
+| `protocol` | Traits, DTOs, descriptores y puertos públicos. |
+| `engine` | Preparación, coordinación, validación y lifecycle; depende de puertos. |
+| `modules` | Operaciones y proveedores oficiales. |
+| `forge` | Fachada y composición estándar. |
+| `conformance` | Verificaciones reutilizables de proveedores. |
+| `examples/reference-module` | Extensión independiente del motor. |
+
+El prototipo spec 1.0 (`core`, `extensions`, CLI y [EXAMPLES](EXAMPLES.md)) permanece temporalmente para caracterizar el comportamiento anterior. Su retiro acompaña la migración de consumidores y módulos en F-4/F-5; no se garantiza compatibilidad automática. El namespace `v2` permite identificar la nueva API durante esa transición.
+
+## Verificación
+
+```sh
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
+cargo run --release -p workflow-forge --example v2_measure -- 10 1024 1000 8
 ```
 
-A more complete example — branch on an HTTP status, retry with backoff, and
-handle failures through an error route:
+El benchmark separa preparación y ejecución, realiza 100 calentamientos y exige al menos 1 000 muestras. El test SFTP del prototipo requiere un servidor externo; permanece ignorado en las pruebas locales generales. Consultar [PROJECT](docs/PROJECT.md) para comandos, resultados y entorno realmente medidos.
 
-```json
-{
-  "spec": "1.0",
-  "name": "sync-user",
-  "version": "1.0.0",
-  "nodes": [
-    { "id": "start", "kind": "start" },
-    {
-      "id": "fetch",
-      "kind": "task",
-      "task": "http.request",
-      "input": { "url": "$.trigger.url", "fail_on_error_status": true },
-      "retry": { "max": 3, "backoff": "exponential", "initial_ms": 500 },
-      "timeout_ms": 10000
-    },
-    {
-      "id": "check",
-      "kind": "gateway",
-      "gateway": "exclusive",
-      "branches": [
-        {
-          "when": { "path": "$.nodes.fetch.output.body.active", "eq": true },
-          "edge": "active"
-        },
-        { "else": true, "edge": "inactive" }
-      ]
-    },
-    {
-      "id": "notify",
-      "kind": "task",
-      "task": "util.log",
-      "input": {
-        "message": "user is active",
-        "value": "$.nodes.fetch.output.body"
-      }
-    },
-    {
-      "id": "alert",
-      "kind": "task",
-      "task": "util.log",
-      "input": { "level": "error", "message": "$.nodes.fetch.error" }
-    },
-    { "id": "end", "kind": "end" },
-    { "id": "end-error", "kind": "end", "status": "error" }
-  ],
-  "edges": [
-    { "from": "start", "to": "fetch" },
-    { "from": "fetch", "to": "check" },
-    { "from": "fetch", "on": "error", "to": "alert" },
-    { "from": "check", "label": "active", "to": "notify" },
-    { "from": "check", "label": "inactive", "to": "end" },
-    { "from": "notify", "to": "end" },
-    { "from": "alert", "to": "end-error" }
-  ]
-}
-```
-
-Conditions are JSON too — composable with `and` / `or` / `not` and operators
-like `eq`, `gt`, `in`, `contains`, `exists`, `starts_with`, `matches`:
-
-```json
-{
-  "and": [
-    { "path": "$.nodes.fetch.output.status", "eq": 200 },
-    {
-      "or": [
-        { "path": "$.trigger.priority", "in": ["high", "urgent"] },
-        { "path": "$.trigger.retry_count", "gt": 3 }
-      ]
-    }
-  ]
-}
-```
-
-## Official extensions
-
-Extensions are crates that register tasks. Enable them via feature flags on
-the `workflow-forge` facade (`util`, `data`, `http` are on by default; add
-`tabular`, `sftp`, `compress`, or use `full`).
-
-| Namespace | Tasks                                                                  | Notes                                                       |
-| --------- | ---------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `util`    | `util.noop`, `util.log`, `util.delay`, `util.idempotency_key`          | Debugging, testing, idempotency for side-effecting calls    |
-| `data`    | `data.transform`, `data.map`, `data.merge`, `data.template`, `data.cast` | All data reshaping and conversion lives here              |
-| `http`    | `http.request`                                                         | Bodies (JSON/form/raw/blob/multipart), auth, blob downloads |
-| `tabular` | `tabular.parse`, `tabular.write`                                       | CSV / XLSX ↔ JSON, via `$blob`                              |
-| `sftp`    | `sftp.get`, `sftp.put`, `sftp.list`                                    | Streaming transfers, via `$blob`, optional session pooling  |
-| `compress`| `compress.gzip`, `compress.gunzip`, `compress.zip`, `compress.unzip`   | gzip & zip over `$blob` (the `.csv.gz` / `.zip` a partner sends) |
-
-Large files never travel inline in the context: tasks exchange **blob
-references** (`{ "$blob": "<id>", "name": "...", "size": ... }`) backed by a
-per-execution `BlobStore` that is cleaned up when the run ends.
-
-### Writing your own extension
-
-A task is the unit of extension, and the fast path is a closure. With
-`register_typed`, you write two Rust types and the engine **derives** their
-JSON Schemas (via [`schemars`]) — input/output validation and the task catalog
-come for free, no hand-written schema:
-
-```rust
-use serde::{Deserialize, Serialize};
-use schemars::JsonSchema;
-
-#[derive(Deserialize, JsonSchema)]
-struct CreateShipmentIn { sku: String, qty: u32 }
-
-#[derive(Serialize, JsonSchema)]
-struct CreateShipmentOut { tracking: String }
-
-registry.register_typed("acme.create_shipment", |ctx, input: CreateShipmentIn| async move {
-    // `ctx` exposes per-execution resources (blobs, execution id)
-    Ok(CreateShipmentOut { tracking: format!("{}-{}", input.sku, input.qty) })
-});
-```
-
-For trivial JSON-in/JSON-out tasks, `register_fn` skips the types entirely:
-
-```rust
-registry.register_fn("util.echo", |_ctx, input| async move { Ok(input) });
-```
-
-When a task needs to hold state or dependencies (a DB pool, a configured HTTP
-client) or read the full execution state, implement the `Task` trait directly —
-the struct you register can carry whatever it needs:
-
-```rust
-use workflow_forge::prelude::*;
-use async_trait::async_trait;
-
-struct MyTask { manifest: TaskManifest /* + pools, clients, config… */ }
-
-#[async_trait]
-impl Task for MyTask {
-    fn manifest(&self) -> &TaskManifest { &self.manifest }
-
-    async fn execute(&self, _ctx: &WorkflowContext, input: WorkflowData) -> WorkflowResult {
-        Ok(input) // your logic here
-    }
-}
-```
-
-Either way, `TaskRegistry::catalog()` exports every registered manifest as JSON
-([extension schema](schemas/1.0/extension.schema.json)) — the foundation for
-tooling and visual editors.
-
-#### Validation: tolerant by default, strict on request
-
-For `register_typed` tasks the engine validates the input against the derived
-schema **before** the closure runs and the output **after**, and the typed
-wrapper additionally deserializes/serializes your Rust types — two aligned
-layers (`schemars` reads the same `serde` attributes the deserializer uses, so
-the schema and the deserialization never disagree). Nested types and enums are
-fully enforced: a derived schema's internal `$ref`/`$defs` are resolved and
-applied, so an invalid sub-field is rejected with `TASK_INPUT_INVALID`.
-
-By default validation is **tolerant**: extra, undeclared fields in the input
-are accepted (neither `schemars` nor `serde` reject unknown keys). This is
-usually what you want — forward-compatible inputs. When you need **strict**
-validation that rejects unknown fields, add `#[serde(deny_unknown_fields)]` to
-your input type; `schemars` honors it and emits `additionalProperties: false`,
-keeping both layers strict and aligned:
-
-```rust
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)] // schema becomes additionalProperties: false
-struct CreateShipmentIn { sku: String, qty: u32 }
-```
-
-[`schemars`]: https://docs.rs/schemars
-
-## Observability, limits and testing
-
-The executor emits typed, serializable events to any `ExecutionObserver`.
-Two adapters ship ready to use — `TracingObserver` (events through the
-`tracing` crate) and `JsonlObserver` (append-only JSON-lines audit log) — and
-`InMemoryHistory` folds the events of a run into a per-node
-`ExecutionReport`:
-
-```rust
-let history = std::sync::Arc::new(InMemoryHistory::new());
-let executor = WorkflowExecutor::new(workflow, registry)?
-    .with_observer(history.clone());
-```
-
-Runs are **unlimited by default**; deadlines and cooperative cancellation are
-opt-in per run:
-
-```rust
-let token = CancellationToken::new();
-let options = RunOptions::default()
-    .deadline(Duration::from_secs(30))
-    .cancel(token.clone()); // token.cancel() aborts from anywhere
-let result = executor.run_with(trigger, options).await;
-```
-
-And with the `testing` feature, `MockTask` replaces any registered task to
-dry-run a workflow — assert the output *and* what it would have called, with
-no network or filesystem:
-
-```rust
-let mock = MockTask::returning("acme.create_order", json!({ "order_id": "o-1" }));
-let calls = mock.call_log(); // inspect inputs after the run
-registry.register(mock);
-```
-
-## CLI
-
-The `workflow-forge-cli` crate ships a `forge` binary that runs, validates
-and inspects workflows with all official extensions bundled:
-
-```bash
-forge run workflow.json --input '{"who":"world"}'   # or pipe stdin
-forge run workflow.json --timeout-ms 30000
-forge validate workflow.json                        # non-zero exit if invalid
-forge catalog                                       # task catalog as JSON
-```
-
-## Spec & schemas
-
-The execution contract is versioned independently from the crates:
-
-- [`schemas/1.0/workflow.schema.json`](schemas/1.0/workflow.schema.json) —
-  what a valid workflow definition looks like.
-- [`schemas/1.0/extension.schema.json`](schemas/1.0/extension.schema.json) —
-  what a task manifest / catalog looks like.
-
-The target design lives in [ARCHITECTURE](docs/ARCHITECTURE.md) and
-[TDD](docs/TDD.md). See the [documentation map](docs/README.md) for the active
-specification and implementation roadmap.
-
-## Workspace
-
-```text
-crates/
-  core/                  workflow-forge-core  — spec types, executor, validation, BlobStore
-  extensions/
-    util/ data/ http/ tabular/ sftp/          — official extensions (one crate each)
-  forge/                 workflow-forge       — facade with feature flags
-  cli/                   workflow-forge-cli   — the `forge` binary (run/validate/catalog)
-```
-
-Rules: extensions depend only on `core`, never on each other; every task ships
-a manifest and integration tests against the real executor.
-
-## Roadmap
-
-The active [refactoring roadmap](docs/ROADMAP.md) connects the product requirements
-to implementation phases and acceptance checks. See [PROJECT](docs/PROJECT.md)
-for evidence of current progress and the [PRD decision register](docs/PRD.md#7-registro-canónico-de-decisiones-pendientes)
-for choices still open, including the editor, extension loading and durable backend.
+El [mapa documental](docs/README.md) conecta PRD, arquitectura, TDD y hoja de ruta. Los casos reales y objetivos de producción siguen sujetos a validación con el implementador.
 
 ## License
 

@@ -1,0 +1,44 @@
+{
+  "format": "forge.workflow/2",
+  "id": "reference.customer_lookup",
+  "revision": "r1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "input_schema": {
+    "type": "object",
+    "required": ["request_id", "customer", "items"],
+    "properties": {
+      "request_id": {"type": "string", "minLength": 1},
+      "customer": {"type": "string", "minLength": 1},
+      "items": {"type": "array", "minItems": 1, "items": {
+        "type": "object", "required": ["sku", "quantity"],
+        "properties": {"sku": {"type": "string", "minLength": 1}, "quantity": {"type": "integer", "minimum": 1}},
+        "additionalProperties": false
+      }}
+    },
+    "additionalProperties": false
+  },
+  "output_schema": {
+    "type": "object", "required": ["customer", "active"],
+    "properties": {"customer": {"type": "string"}, "active": {"type": "boolean"}},
+    "additionalProperties": false
+  },
+  "entry": "normalize",
+  "nodes": [
+    {
+      "id": "normalize", "kind": "operation",
+      "operation": {"id": "forge.text.trim", "contract": "1", "implementation": "r1"},
+      "config": {}, "input": {"select": {"source": "input", "pointer": "/customer"}}
+    },
+    {
+      "id": "lookup", "kind": "operation",
+      "operation": {"id": "reference.customer_lookup", "contract": "1", "implementation": "r1"},
+      "config": {}, "input": {"object": {"customer": {"select": {"source": "node", "node": "normalize", "pointer": ""}}}}
+    }
+  ],
+  "edges": [{"from": "normalize", "to": "lookup"}],
+  "output": {"object": {
+    "customer": {"select": {"source": "node", "node": "normalize", "pointer": ""}},
+    "active": {"select": {"source": "node", "node": "lookup", "pointer": "/active"}}
+  }},
+  "presentation": {"normalize": {"x": 100, "y": 100}, "lookup": {"x": 300, "y": 100}}
+}

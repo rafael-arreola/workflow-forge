@@ -436,12 +436,12 @@ Ok(OperationOutput::json(response.into_workflow_value()))
 Ejemplo E-06 — composición con proveedores ya creados por el host; muestra sustitución explícita de los defaults:
 
 ```rust
-let assembly = WorkflowBuilder::standard()
+let mut builder = WorkflowBuilder::standard()
     .execution_store(host_store)
     .artifact_store(host_artifacts)
-    .secret_provider(host_secrets)
-    .register_operation(Arc::new(create_order))?
-    .build()?;
+    .secret_provider(host_secrets);
+builder.register_bundle(host_operations)?;
+let assembly = builder.build()?;
 
 let runtime = EngineRuntime::boot(assembly, boot_options).await?;
 let app = runtime.application();
@@ -633,7 +633,7 @@ La caída de `EngineRuntime` por `Drop` no puede prometer una operación async d
 | Scheduler o tarea esencial deja de funcionar | Retirar readiness, cerrar admisión y notificar al supervisor. |
 | Vence el plazo de apagado | Reportar drenado incompleto y evidencia disponible; no fingir cancelación de efectos remotos. |
 
-La firma final del lifecycle y sus estados públicos se cierra en F-1 junto con la composición. Sus hooks de recuperación se implementan en F-3; el bootstrap del servicio en F-4. El mecanismo de construcción y propiedad también aplica a embedding, aunque no exista transporte.
+F-1 implementa `EngineRuntime::boot(assembly, BootOptions)`, `application()` y `shutdown(ShutdownOptions)`. `BootOptions.definitions` prepara definiciones obligatorias antes de readiness; `ShutdownOptions.timeout` limita el drenado. El host debe esperar el apagado asíncrono: descartar el runtime aborta tareas, pero no sustituye la liberación ordenada del store. El [host ejecutable](../crates/forge/examples/v2_customer.rs) muestra el recorrido completo. La recuperación durable se implementa en F-3; el bootstrap del servicio en F-4. El mecanismo de construcción y propiedad también aplica a embedding, aunque no exista transporte.
 
 ### 6.2 Observación y lectura de estado
 

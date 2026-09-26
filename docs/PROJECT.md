@@ -4,23 +4,46 @@ Actualizado: 2026-09-26. Esta página registra evidencia; el producto objetivo e
 
 ## Punto actual
 
-**Implementación autorizada el 2026-09-26:** avanzar F-0 a F-5 en orden y crear un commit por fase. El worktree inicial estaba limpio en `66d39a5`, que ya conserva la planificación. F-0 corrigió la configuración async de Criterion, declaró `required-features` en el benchmark y aplicó rustfmt al baseline. `cargo fmt --all --check`, Clippy con features predeterminadas y all-features, y `cargo test --workspace --all-features` pasan (220 pruebas, 1 SFTP ignorada). F-1 es el siguiente trabajo; las verificaciones históricas de abajo conservan el diagnóstico anterior.
+**Implementación autorizada el 2026-09-26:** avanzar F-0 a F-5 en orden y crear un commit por fase. La planificación quedó conservada en `66d39a5`; F-0 en `d5901a1`. F-1 está completada: fmt, Clippy predeterminado/all-features, tests del workspace y primeros benchmarks verificados. La API nueva se encuentra en `workflow_forge::v2`; la CLI y los módulos spec 1.0 permanecen temporalmente durante su migración.
 
-El usuario solicitó completar primero la refactorización documental. Se crearon PRD, ARCHITECTURE, TDD, mapa documental y ROADMAP a partir de las decisiones de la conversación y el plan inicial. No se implementó la arquitectura objetivo ni se cambiaron contratos de código en este trabajo.
+F-1 incorpora protocolo público, engine, módulos oficiales, fachada, kit de conformidad y extensión externa. El recorrido C-01A recibe JSON, normaliza un identificador, consulta un cliente inyectado y devuelve un resultado validado. `build` permanece inactivo, `boot` reclama el store y supervisa ejecución, los handles comparten la instancia y `shutdown` cierra admisión y drena.
 
-Después de consolidar la especificación, se eliminaron el diseño anterior, el borrador inicial y los manuales sustituidos por solicitud del usuario. Los ejemplos y schemas se conservan porque siguen siendo utilizados por las pruebas del prototipo.
+Los patrones se concretan en código: Builder en la composición, Adapter en la extensión, Factory Function en las contribuciones, Facade en el handle, Command en la invocación y Decorator en la prueba de observación. No se requiere importar internos del engine para extender operaciones o sustituir proveedores. El compilador fija revisiones y rechaza las capacidades fuera del perfil F-1.
 
-La arquitectura se amplió con matriz de comunicación, propiedad por ámbito, secuencias de preparación/ejecución/recuperación/señales, recetas de extensión y ocho fragmentos orientativos E-*. ROADMAP desarrolla los paquetes de trabajo por fase. Se tomó como referencia la presentación de contratos y recorridos de `memory-forge`, sin adoptar su dominio o infraestructura. Los fragmentos no se compilaron ni representan API entregada.
+El alcance completo sigue en ROADMAP. F-2 incorpora control y efectos; F-3 durabilidad/esperas; F-4 servicio y módulos de integración; F-5 adopción. P-01 aún requiere contrastar las referencias con dos sistemas reales del usuario y P-07 cerrar sus metas de despliegue. El éxito de los fixtures no acredita esas integraciones.
 
-Se agregó el contrato de instancia y bootstrap: composición inactiva, boot asíncrono, runtime propiedad del host y handles compartidos. E-09/E-10 muestran registro/carga, readiness, supervisión y apagado; E-06 se ajustó al mismo lifecycle. V-16 cubre arranque y cierre, con integración prevista en F-1/F-3/F-4.
+## Evidencia F-1
 
-Se añadió PATTERNS como desarrollo de la arquitectura: diez patrones/mecanismos con participantes, límites y conformidad, cinco fragmentos PX-* y reglas de registro, compatibilidad y retiro de extensiones. TDD-02 incorpora el contrato de contribuciones; V-17 verifica su crecimiento sin cambios de negocio en el engine. P-03 ahora adopta crates compilados; la carga dinámica queda fuera de la primera composición.
+| Contrato / verificación aplicable | Evidencia |
+|---|---|
+| C-01A; V-01/V-02/V-03/V-04 | [Extensión pública](../examples/reference-module/src/lib.rs), [fixture](../examples/workflows/customer_lookup.v2.json) y [schema](../schemas/2/workflow.schema.json). Round-trip, metadatos visuales, validación antes de aceptar, salida global validada y compatibilidad desconocida explícita. |
+| C-03; V-04/V-05/V-17 | [Aceptación](../crates/forge/tests/v2_acceptance.rs): sustitución del cliente, Decorator transparente, 32 runs independientes, registro atómico y recursos autorizados. [Kit público](../crates/conformance/src/lib.rs) ejecutado contra memoria y wrapper alternativo. |
+| V-15, parte en memoria | Revisiones inmutables, plan ligado a composición y recuperación del trabajo aceptado cuyo solicitante desaparece antes del acuse. Revisión durable ausente corresponde a F-3. |
+| V-16, parte embebida | Boot fallido libera propiedad, doble propietario rechazado, fallo esencial elimina readiness, cierre forzado y cleanup tras fallo del supervisor. |
+| V-19 | Scopes/permisos, referencias de schemas sin red, diferencia ausente/null/literal, cuotas de datos/admisión, garantía durable rechazada explícitamente. |
+| Retención y cancelación | [Fronteras de fallo](../crates/forge/tests/v2_failure_boundaries.rs): recibos sobreviven a resultados expirados, CAS y terminal inmutable, aceptación sin conexión del solicitante, artefactos acotados y cierre del runtime. |
+| Host ejecutable | `target/release/examples/v2_customer`: exit 0; estado `Succeeded`, salida `{"active":true,"customer":"C-9"}`. |
+| Checks de cierre | `cargo fmt --all --check` y Clippy workspace/all-targets con features predeterminadas y all-features, usando `-D warnings`: exit 0. Tests workspace/all-features: 241 pasan, 0 fallan, 1 SFTP ignorada. Enlaces locales, fences y JSON documental válidos; no se volvió a renderizar Mermaid. |
+| Suite dirigida | `cargo test -p workflow-forge --test v2_acceptance --test v2_failure_boundaries`: 21 pruebas pasan. |
 
-Las respuestas confirmadas permiten rehacer API/formato y exigen librería + servicio, protocolos + implementaciones + extensiones, composición integrada y mecanismos sustituibles de recuperación. El plan adopta UI separada, plugins compilados, SQLite local como referencia durable y HTTP/JSON para servicio; no se presentan como preferencias originalmente confirmadas por el usuario.
+Los tests usan únicamente API/puertos públicos para inyectar fallos. No acreditan durabilidad: en F-1 un proceso perdido pierde su store en memoria. El perfil de schemas y los límites adicionales están publicados en CONTRACTS. El kit de stores es secuencial; sus casos no sustituyen las pruebas de concurrencia y caída requeridas para un backend durable.
 
-Se cerró el diseño de la primera entrega en CONTRACTS: formato 2, bindings pequeños, schema dialect/refs, frontera async, errores, confianza, recursos y defaults. ACCEPTANCE concreta dos integraciones de referencia, sustitución de módulos y esperas/resolución, con fixtures y protocolo de medición desde F-1. TDD-06 define reconciliación autorizada, evidencia, carreras y auditoría; V-18/V-19 amplían su verificación. PATTERNS agrega una guía por necesidad del desarrollador. No se programó el motor nuevo.
+### Primera medición V-14
 
-P-01 sigue esperando contraste con sistemas reales del usuario. Las referencias permiten construir contratos sin inventar hechos de esos sistemas. Las metas de producción, codecs/DDL durables y rutas/DTOs del servicio conservan condiciones de cierre por fase en PRD.
+Ejecutada el 2026-09-26 sobre el cambio F-1 basado en `d5901a1`: Apple M1 Max (10 CPU, 64 GiB), macOS 27.0, `rustc 1.98.1`, build `release`. Datos de una pasada local, sin red ni latencia simulada. No son objetivos de producción ni comparación entre máquinas.
+
+Comandos: `cargo build --release -p workflow-forge --example v2_measure --example v2_customer`; después `/usr/bin/time -l target/release/examples/v2_measure N BYTES 1000 CONCURRENCY`. Cada proceso ejecuta 100 preparaciones y runs de calentamiento, más 1 000 muestras medidas. Preparación recompila el documento contra catálogo fijo; ejecución reutiliza el plan. El calentamiento termina antes de comenzar a contar throughput. Se comprueba estado y contenido del resultado.
+
+| Nodos / JSON / concurrencia | Preparación p50 / p95 / p99 (µs) | Ejecución p50 / p95 / p99 (µs) | Runs/s | RSS máximo (bytes) |
+|---|---|---|---|---|
+| 1 / 1 KiB / 1 | 16.792 / 38.000 / 61.917 | 105.000 / 141.166 / 182.958 | 8 848.53 | 19 595 264 |
+| 10 / 1 KiB / 8 | 45.958 / 66.417 / 84.250 | 7 563.834 / 11 186.875 / 12 334.250 | 932.82 | 35 962 880 |
+| 100 / 1 KiB / 32 | 387.417 / 440.542 / 486.250 | 385 809.625 / 606 257.083 / 625 247.166 | 51.97 | 251 166 720 |
+| 1 / 64 KiB / 1 | 14.792 / 28.958 / 48.084 | 628.958 / 726.916 / 789.584 | 1 534.17 | 218 103 808 |
+
+Cero resultados incorrectos o runs fallidos en esas cuatro combinaciones. Defaults de CONTRACTS, incluyendo retención de hasta 1 000 resultados: el RSS incluye resultados retenidos y preparación. `/usr/bin/time -l` mide el proceso ejecutable, sin compilador; se habilitó la consulta de estadísticas del SO después de que el sandbox la bloqueara. La pasada anterior sin estadísticas completas no se usa en la tabla.
+
+La carga de 100 nodos muestra un coste de coordinación que habrá que perfilar antes de prometer eficiencia de producción. Las cargas cambian también concurrencia; no permiten atribuir toda la diferencia al número de nodos. Esta entrega fija una comparación inicial; la matriz completa de ACCEPTANCE, la latencia simulada y las cargas durables se amplían en las fases correspondientes.
 
 ## Evidencia del prototipo
 
@@ -43,7 +66,8 @@ Revisión estática inicial del 2026-09-26; no equivale a una suite ejecutada ni
 | Fase | Estado |
 |---|---|
 | F-0 | Completada: diseño/casos registrados, formato y benchmark corregidos; fmt, ambas variantes de Clippy y 220 pruebas all-features pasan. |
-| F-1 a F-5 | Planificadas; implementación no iniciada por este trabajo. |
+| F-1 | Completada: C-01A/C-03, garantías aplicables en memoria, 21 pruebas nuevas y primera medición V-14. |
+| F-2 a F-5 | Pendientes según dependencias y criterios de ROADMAP. |
 
 ## Cobertura de los puntos revisados
 
@@ -54,11 +78,13 @@ Revisión estática inicial del 2026-09-26; no equivale a una suite ejecutada ni
 | Contratos concretos | CONTRACTS §3–6 y E-01: documento, revisiones, mappings, schema dialect, operación y errores. |
 | Confianza y recursos tempranos | CONTRACTS §7, P-08 y V-19 desde F-1; no se promete sandbox de plugins compilados. |
 | Ejecuciones inciertas | TDD-06, C-04 y V-18: evidencia, permisos, transiciones, concurrencia, auditoría y cierre con incertidumbre. |
-| Evidencia y mediciones tempranas | Baseline de abajo y ACCEPTANCE §5; mediciones del motor nuevo aún por implementar, con cargas definidas desde F-1. |
+| Evidencia y mediciones tempranas | Baseline de abajo y ACCEPTANCE §5; mediciones iniciales ejecutadas arriba; matriz completa aún pendiente. |
 
 La lectura por rol está en README; PATTERNS §8 orienta la elección por necesidad y ARCHITECTURE §1.1 explica motivos/alternativas. Se conserva un registro único de decisiones P-* y se enlazan los detalles sin duplicar sus estados.
 
-## Verificaciones
+## Verificaciones históricas del baseline documental
+
+Las diferencias de fmt/Clippy de esta tabla se corrigieron en F-0; no describen el estado actual.
 
 | Verificación | Estado |
 |---|---|
@@ -77,7 +103,7 @@ La lectura por rol está en README; PATTERNS §8 orienta la elección por necesi
 
 ## Siguiente punto de reanudación
 
-Continuar F-1 con [CONTRACTS](CONTRACTS.md) y C-01A/C-03 de [ACCEPTANCE](ACCEPTANCE.md). Convertir el diseño a tipos/schemas y recorrido de F-1, incluyendo confianza y mediciones; mantener las garantías de recuperación previstas. Contrastar referencias con integraciones reales cuando haya datos. La implementación y los checkpoints por fase ya están autorizados.
+Conservar el checkpoint F-1; después concretar las instrucciones de F-2 bajo P-09, las cuotas de P-07 y TDD-05/06 antes de implementarlas. Contrastar referencias con integraciones reales cuando haya datos. La implementación y los checkpoints por fase ya están autorizados.
 
 Baseline reproducido sobre HEAD `392303b`, con los cambios documentales del worktree, macOS y `rustc 1.98.1` / `cargo 1.98.1`. La ejecución inicial aislada no podía preparar dependencias; las pruebas se completaron después con acceso autorizado. La CI existente usa all-features y un job SFTP separado. El manifiesto del core declara Criterion opcional bajo `benchmarks`; el target de benchmark no declara `required-features`. Antes de medir rendimiento, corregir la configuración de ese target y habilitar su soporte async compatible, volver a comprobar Clippy y registrar el resultado. El formato pendiente debe tratarse en un cambio explícito de código, sin confundirlo con deuda introducida por esta documentación.
 

@@ -2,7 +2,7 @@
 
 La documentación define la refactorización de Workflow Forge como motor agnóstico de integración en Rust. La planificación sigue la separación de producto, arquitectura y diseño técnico utilizada en `memory-forge`, adaptada a este proyecto.
 
-**Estado al 2026-09-26:** implementación por fases autorizada. Existe un prototipo; las capacidades objetivo solo se consideran entregadas con evidencia en PROJECT. El plan y el baseline F-0 están preparados para avanzar a F-1.
+**Estado al 2026-09-26:** implementación por fases autorizada. Existe un prototipo; las capacidades objetivo solo se consideran entregadas con evidencia en PROJECT. F-0 y F-1 están completadas; contratos, recorrido, pruebas y mediciones están registrados en PROJECT.
 
 ## Recorrido de lectura
 
@@ -49,7 +49,7 @@ Los IDs `PRD-*`, `ARC-*`, `TDD-*`, `V-*`, `F-*` y `P-*` enlazan requisitos, arqu
 
 ## Referencias complementarias vigentes
 
-Los [ejemplos](../EXAMPLES.md) y [schemas 1.0](../schemas/1.0/workflow.schema.json) siguen siendo referencias del código existente y participan en sus pruebas; no especifican el formato futuro. El [changelog](../CHANGELOG.md) conserva el registro de cambios del prototipo.
+El [ejemplo de host formato 2](../crates/forge/examples/v2_customer.rs) y el [schema formato 2](../schemas/2/workflow.schema.json) corresponden a F-1. Los [ejemplos del prototipo](../EXAMPLES.md) y [schemas 1.0](../schemas/1.0/workflow.schema.json) siguen siendo referencias del código existente y participan en sus pruebas; se retirarán con sus consumidores y no especifican el motor nuevo. El [changelog](../CHANGELOG.md) conserva el registro de cambios del prototipo.
 
 El diseño anterior, el borrador de evolución y los manuales sustituidos se eliminaron tras consolidar la planificación. Las nuevas decisiones sustituyen las históricas incompatibles según la tabla de ARCHITECTURE. No se promete migración compatible de la spec 1.0: el proyecto aún no tiene una versión pública, según lo confirmado por el usuario.
 

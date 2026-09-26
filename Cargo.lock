@@ -3212,18 +3212,25 @@ dependencies = [
 name = "workflow-forge"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "httpmock",
+ "jsonschema",
  "schemars",
  "serde",
  "serde_json",
  "tokio",
+ "workflow-forge-conformance",
  "workflow-forge-core",
+ "workflow-forge-engine",
  "workflow-forge-ext-compress",
  "workflow-forge-ext-data",
  "workflow-forge-ext-http",
  "workflow-forge-ext-sftp",
  "workflow-forge-ext-tabular",
  "workflow-forge-ext-util",
+ "workflow-forge-modules",
+ "workflow-forge-protocol",
+ "workflow-forge-reference-module",
 ]
 
 [[package]]
@@ -3234,6 +3241,14 @@ dependencies = [
  "serde_json",
  "tokio",
  "workflow-forge",
+]
+
+[[package]]
+name = "workflow-forge-conformance"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "workflow-forge-protocol",
 ]
 
 [[package]]
@@ -3256,6 +3271,19 @@ dependencies = [
  "tokio-util",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "workflow-forge-engine"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "jsonschema",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "uuid",
+ "workflow-forge-protocol",
 ]
 
 [[package]]
@@ -3338,6 +3366,34 @@ dependencies = [
  "tokio",
  "tracing",
  "workflow-forge-core",
+]
+
+[[package]]
+name = "workflow-forge-modules"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "serde_json",
+ "uuid",
+ "workflow-forge-protocol",
+]
+
+[[package]]
+name = "workflow-forge-protocol"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "serde",
+ "serde_json",
+ "tokio-util",
+]
+
+[[package]]
+name = "workflow-forge-reference-module"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "workflow-forge-protocol",
 ]
 
 [[package]]

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workflow-forge.dev/schemas/2/workflow.schema.json",
+  "title": "Workflow Forge sequence definition",
+  "type": "object",
+  "required": ["format", "id", "revision", "schema_dialect", "input_schema", "output_schema", "entry", "nodes", "edges", "output"],
+  "additionalProperties": false,
+  "properties": {
+    "format": {"const": "forge.workflow/2"},
+    "id": {"$ref": "#/$defs/id"},
+    "revision": {"$ref": "#/$defs/id"},
+    "schema_dialect": {"const": "https://json-schema.org/draft/2020-12/schema"},
+    "input_schema": {"$ref": "#/$defs/schema"},
+    "output_schema": {"$ref": "#/$defs/schema"},
+    "entry": {"$ref": "#/$defs/id"},
+    "nodes": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/node"}},
+    "edges": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/edge"}},
+    "output": {"$ref": "#/$defs/binding"},
+    "presentation": {"type": "object"}
+  },
+  "$defs": {
+    "id": {"type": "string", "minLength": 1},
+    "schema": {"type": ["object", "boolean"]},
+    "operation": {
+      "type": "object", "required": ["id", "contract", "implementation"], "additionalProperties": false,
+      "properties": {"id": {"$ref": "#/$defs/id"}, "contract": {"$ref": "#/$defs/id"}, "implementation": {"$ref": "#/$defs/id"}}
+    },
+    "node": {
+      "type": "object", "required": ["id", "kind", "operation", "config", "input"], "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "kind": {"const": "operation"},
+        "operation": {"$ref": "#/$defs/operation"}, "config": true, "input": {"$ref": "#/$defs/binding"}
+      }
+    },
+    "edge": {
+      "type": "object", "required": ["from", "to"], "additionalProperties": false,
+      "properties": {"from": {"$ref": "#/$defs/id"}, "to": {"$ref": "#/$defs/id"}}
+    },
+    "binding": {
+      "oneOf": [
+        {"type": "object", "required": ["literal"], "additionalProperties": false, "properties": {"literal": true}},
+        {"type": "object", "required": ["select"], "additionalProperties": false, "properties": {"select": {"$ref": "#/$defs/selection"}}},
+        {"type": "object", "required": ["object"], "additionalProperties": false, "properties": {"object": {"type": "object", "additionalProperties": {"$ref": "#/$defs/binding"}}}},
+        {"type": "object", "required": ["array"], "additionalProperties": false, "properties": {"array": {"type": "array", "items": {"$ref": "#/$defs/binding"}}}}
+      ]
+    },
+    "selection": {
+      "type": "object", "required": ["source", "pointer"], "additionalProperties": false,
+      "properties": {
+        "source": {"enum": ["input", "node"]}, "node": {"$ref": "#/$defs/id"},
+        "pointer": {"type": "string", "pattern": "^(?:/(?:[^~]|~[01])*)*$"},
+        "fallback": {"$ref": "#/$defs/binding"}
+      },
+      "if": {"properties": {"source": {"const": "node"}}},
+      "then": {"required": ["node"]},
+      "else": {"not": {"required": ["node"]}}
+    }
+  }
+}

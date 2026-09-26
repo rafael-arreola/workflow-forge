@@ -1,6 +1,6 @@
 # Workflow Forge — contratos de la primera entrega
 
-Decisiones de diseño para implementar F-1, 2026-09-26. Este anexo del [TDD](TDD.md) establece el contrato que debe cumplir la implementación, dentro del alcance del [PRD](PRD.md). Define comportamiento y formas de datos; los fragmentos Rust siguen siendo parciales y no son una librería implementada. Los casos de [ACCEPTANCE](ACCEPTANCE.md) permiten comprobarlo sin conocer los internos del motor.
+Contratos de F-1, 2026-09-26. Este anexo del [TDD](TDD.md) establece el comportamiento y las formas de datos, dentro del alcance del [PRD](PRD.md). La implementación usa temporalmente `workflow_forge::v2`; [PROJECT](PROJECT.md) acredita lo verificado. Los fragmentos de este documento son parciales; [v2_customer.rs](../crates/forge/examples/v2_customer.rs) contiene un host ejecutable. Los casos de [ACCEPTANCE](ACCEPTANCE.md) permiten comprobarlo sin conocer los internos del motor.
 
 ## 1. El recorrido que debe poder explicar un desarrollador
 
@@ -41,9 +41,9 @@ El formato nuevo se identifica como `forge.workflow/2`; no se procesa como spec 
 
 En F-1 cada nodo tiene `id`, `kind: operation`, `operation`, `config` e `input`. La referencia `operation` contiene `id`, `contract` e `implementation`, todos exactos; no admite `latest` ni rangos. El editor puede ayudar a seleccionarlos consultando el catálogo.
 
-La secuencia es una cadena no vacía: `entry` sin predecesor, un sucesor por nodo salvo el final, un predecesor por nodo salvo entrada; todos alcanzables y sin ciclos. Cada arista tiene `from` y `to`; duplicados se rechazan. El orden del array y las coordenadas visuales no ordenan ejecución. Campos desconocidos se rechazan, excepto dentro de `presentation`; capacidades futuras no se ignoran.
+La secuencia es una cadena no vacía: `entry` sin predecesor, un sucesor por nodo salvo el final, un predecesor por nodo salvo entrada; todos alcanzables y sin ciclos. Cada arista tiene `from` y `to`; duplicados se rechazan. El orden del array y las coordenadas visuales no ordenan ejecución. Campos desconocidos se rechazan, excepto dentro de `presentation`; capacidades futuras no se ignoran. El [schema del documento](../schemas/2/workflow.schema.json) permite autoría estructural independiente; las relaciones, permisos y revisiones se verifican además mediante `prepare`.
 
-Las revisiones son strings opacos no vacíos asignados por quien publica. El registro conserva el contenido semántico normalizado de cada revisión y rechaza reutilizarla con otro contenido. El normalizador convierte `nodes` a un mapa por ID, compara `edges` como conjunto y excluye únicamente `presentation`; preserva arrays de datos, tipos y valores sin coerción. No depende de un hash sin especificar. Una revisión de implementación debe cambiar al cambiar el código o comportamiento de la operación. El catálogo y los perfiles fijados por el plan también conservan revisiones exactas.
+Las revisiones son strings opacos no vacíos asignados por quien publica. El registro conserva el contenido semántico normalizado de cada revisión y rechaza reutilizarla con otro contenido. El normalizador ordena `nodes` por ID y `edges` por sus extremos después de rechazar duplicados y excluye únicamente `presentation`; preserva arrays de datos, tipos y valores sin coerción. No depende de un hash sin especificar. Una revisión de implementación debe cambiar al cambiar el código o comportamiento de la operación. El catálogo y los perfiles fijados por el plan también conservan revisiones exactas.
 
 Ejemplo CT-01 — definición completa del recorrido mínimo, para el formato objetivo:
 
@@ -98,7 +98,9 @@ Esta decisión sustituye el uso implícito del DSL/JSONPath del prototipo para e
 
 El dialecto base es [JSON Schema 2020-12](https://json-schema.org/draft/2020-12/json-schema-core). `schema_dialect` lo declara para el documento; los schemas objeto publicados por módulos también lo declaran con `$schema`. Un schema booleano hereda el dialecto del descriptor. La validación no inserta defaults ni convierte tipos; `format` es anotación en el perfil inicial. Si un contrato necesita validar un formato como condición de negocio, debe hacerlo explícito mediante restricciones soportadas u operación de validación.
 
-Los recursos `$ref`/`$dynamicRef` se resuelven exclusivamente en el paquete de schemas registrado. Cada recurso tiene URI absoluta y revisión fijada; URIs desconocidas, dialectos/vocabularios requeridos no soportados y conflictos de contenido impiden preparar. La URI identifica un recurso y no autoriza descargarlo. Una referencia recursiva de schema no es por sí sola un error: el validador debe soportarla con límites o rechazar explícitamente la capacidad que no pueda cumplir.
+Los recursos `$ref` se resuelven exclusivamente en el paquete de schemas registrado. Cada recurso tiene URI absoluta y revisión fijada; URIs desconocidas, dialectos/vocabularios requeridos no soportados y conflictos de contenido impiden preparar. La URI identifica un recurso y no autoriza descargarlo. Una referencia recursiva de schema no es por sí sola un error: el perfil F-1 la rechaza explícitamente como capacidad no soportada.
+
+El perfil inicial admite referencias locales por JSON Pointer y absolutas a recursos registrados. Rechaza `$dynamicRef`, anchors nombrados y `$id` anidados; el `$id` raíz de un recurso, si existe, debe coincidir con su URI registrada. La expansión está acotada a 10 000 visitas y profundidad 64. La evaluación comprueba un presupuesto conservador de 1 000 000 unidades sobre tamaño del dato y coste del schema; usa el motor regex lineal de la biblioteca con límite de compilación de 1 MiB. Estas restricciones forman parte del perfil publicado; no se anuncia soporte sin restricciones de todas las construcciones 2020-12.
 
 Validar en orden: documento → grafo → referencias → mappings → capacidades. Acumular diagnósticos independientes; evitar derivados de premisas inválidas. En ejecución: input global antes de aceptar; input de operación antes de despachar; output de operación antes de publicarlo; output global antes de declarar éxito. Un error del output tras un efecto mantiene la evidencia del efecto.
 
@@ -160,6 +162,10 @@ Valores iniciales de protección, configurables y sujetos a medición; no son pr
 | Deadline de intento / run activo | 30 s / 5 min | Cancelación cooperativa y clasificación de resultado. |
 | Resultados terminales en memoria | 1 000 o 1 h, lo que se alcance primero | Expirar resultados; no expulsar runs activos. |
 | Recibos de deduplicación en memoria | Ventana 1 h; 10 000 recibos por instancia | Reservar al admitir; al llenarse rechazar nuevas recepciones con clave, sin borrar promesas vigentes. |
+| Revisiones de definición preparadas | 1 000 por instancia en F-1 | `admission.full`; se conservan para impedir reutilizar una revisión con otro contenido. |
+| Artefactos del proveedor en memoria | 64 MiB de contenido total; 1 024 referencias; scope/media type de hasta 256 bytes | `resource.limit`; fragmentos de lectura de hasta 64 KiB. Se liberan al destruir el proveedor; retención durable en F-3. |
+
+El store conserva metadatos inmutables, entrada y outputs confirmados, exige CAS y no permite sobrescribir resultados terminales. El kit público [workflow-forge-conformance](../crates/conformance/src/lib.rs) comprueba propiedad, deduplicación, CAS y retención sobre un proveedor aislado. Es una comprobación secuencial; las pruebas de concurrencia, pérdida de acuse y caídas complementan el kit, y las garantías durables se agregan en F-3.
 
 El presupuesto de datos retenidos cuenta también el input. Los validadores deben tener un presupuesto efectivo; si la biblioteca elegida no permite limitar una evaluación, restringir las construcciones problemáticas o aislar el trabajo antes de publicar el soporte. Un timeout async no interrumpe por sí solo código CPU bloqueante. Operaciones de CPU usan un executor acotado; no saturan el coordinador ni crean hilos sin límite.
 

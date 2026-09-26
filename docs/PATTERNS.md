@@ -233,13 +233,13 @@ Ejemplo PX-05 — entrada del paquete al builder, antes de `build`/`boot`:
 
 ```rust
 let contribution = partner_module::create_operations(config, client)?;
-let assembly = WorkflowBuilder::standard()
-    .register_bundle(contribution)? // valida todo el paquete; rechaza conflictos
-    .build()?;
+let mut builder = WorkflowBuilder::standard();
+builder.register_bundle(contribution)?; // valida todo el paquete; rechaza conflictos
+let assembly = builder.build()?;
 let runtime = EngineRuntime::boot(assembly, options).await?;
 ```
 
-`register_bundle` ilustra ergonomía sobre registro explícito, no un loader nuevo. Se registran contribuciones en preparación; la disponibilidad pública requiere `build` exitoso y el lifecycle definido en ARCHITECTURE. No se admite «último registro gana» ante ID/revisión duplicados.
+`register_bundle(&mut self, bundle)` valida y registra atómicamente una contribución. Se registran contribuciones en preparación; la disponibilidad pública requiere `build` exitoso y el lifecycle definido en ARCHITECTURE. No se admite «último registro gana» ante ID/revisión duplicados. La [extensión de referencia](../examples/reference-module/src/lib.rs) implementa esta frontera con dependencias exclusivamente del protocolo y su cliente inyectado; [v2_acceptance](../crates/forge/tests/v2_acceptance.rs) prueba sustitución y Decorator sin alterar identidad ni número de invocaciones.
 
 Las dependencias son capacidades/puertos con requisitos declarados y recursos concretos inyectados. Dos módulos de negocio no se llaman mediante IDs secretos en el catálogo: su composición visible pertenece al workflow. Una biblioteca técnica compartida puede inyectarse sin convertirse en nodo. Evitar dependencias circulares de inicialización; si aparecen, revisar la responsabilidad del contrato.
 

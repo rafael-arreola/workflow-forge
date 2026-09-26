@@ -1,0 +1,16 @@
+[package]
+name = "workflow-forge-engine"
+description = "Domain-independent compilation and coordination for Workflow Forge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+workflow-forge-protocol = { workspace = true }
+serde_json = { workspace = true }
+jsonschema = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+futures = { workspace = true }
+uuid = { workspace = true }

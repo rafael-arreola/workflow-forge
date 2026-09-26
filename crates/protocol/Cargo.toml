@@ -1,0 +1,13 @@
+[package]
+name = "workflow-forge-protocol"
+description = "Public contracts for Workflow Forge operations and infrastructure"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio-util = { workspace = true }
+futures = { workspace = true }

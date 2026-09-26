@@ -1,0 +1,13 @@
+[package]
+name = "workflow-forge-modules"
+description = "Official operations and infrastructure providers for Workflow Forge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+workflow-forge-protocol = { workspace = true }
+serde_json = { workspace = true }
+futures = { workspace = true }
+uuid = { workspace = true }

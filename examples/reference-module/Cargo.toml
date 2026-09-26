@@ -1,0 +1,10 @@
+[package]
+name = "workflow-forge-reference-module"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+workflow-forge-protocol = { workspace = true }
+serde_json = { workspace = true }

@@ -32,6 +32,9 @@
 
 use std::sync::Arc;
 
+pub mod v2;
+pub use v2::WorkflowBuilder;
+
 pub use workflow_forge_core as core;
 pub use workflow_forge_core::idempotency;
 

@@ -26,6 +26,9 @@ testing = ["workflow-forge-core/testing"]
 all-features = true
 
 [dependencies]
+workflow-forge-protocol = { workspace = true }
+workflow-forge-engine = { workspace = true }
+workflow-forge-modules = { workspace = true }
 workflow-forge-core = { workspace = true }
 workflow-forge-ext-util = { workspace = true, optional = true }
 workflow-forge-ext-data = { workspace = true, optional = true }
@@ -35,6 +38,10 @@ workflow-forge-ext-sftp = { workspace = true, optional = true }
 workflow-forge-ext-compress = { workspace = true, optional = true }
 
 [dev-dependencies]
+workflow-forge-conformance = { path = "../conformance" }
+workflow-forge-reference-module = { path = "../../examples/reference-module" }
+jsonschema = { workspace = true }
+futures = { workspace = true }
 httpmock = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
