@@ -75,9 +75,14 @@ async fn test_partner_fanout_resilience_and_redaction() {
         .await
         .expect("Workflow run failed");
 
-    assert!(result.0.is_object() || result.0.is_array() || result.0.is_null() || !result.0.is_null());
+    assert!(
+        result.0.is_object() || result.0.is_array() || result.0.is_null() || !result.0.is_null()
+    );
 
     // Inspect history audit logs
     let report = history.report();
-    assert_eq!(report.status, workflow_forge_core::observe::ExecutionStatus::Completed);
+    assert_eq!(
+        report.status,
+        workflow_forge_core::observe::ExecutionStatus::Completed
+    );
 }

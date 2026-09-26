@@ -2,7 +2,7 @@
 
 La documentación define la refactorización de Workflow Forge como motor agnóstico de integración en Rust. La planificación sigue la separación de producto, arquitectura y diseño técnico utilizada en `memory-forge`, adaptada a este proyecto.
 
-**Estado al 2026-09-26:** especificación inicial de la refactorización. Existe un prototipo; esta documentación no acredita la implementación de la arquitectura objetivo. El trabajo actual es documental.
+**Estado al 2026-09-26:** implementación por fases autorizada. Existe un prototipo; las capacidades objetivo solo se consideran entregadas con evidencia en PROJECT. El plan y el baseline F-0 están preparados para avanzar a F-1.
 
 ## Recorrido de lectura
 

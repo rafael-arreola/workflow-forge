@@ -179,14 +179,11 @@ mod tests {
         let redacted_full = redact_value(&val, Some(&SecureConfig::Full(true)));
         assert_eq!(redacted_full, json!("[REDACTED]"));
 
-        let redacted_fields = redact_value(
-            &val,
-            Some(&SecureConfig::Fields(vec!["token".to_string()])),
-        );
+        let redacted_fields =
+            redact_value(&val, Some(&SecureConfig::Fields(vec!["token".to_string()])));
         assert_eq!(
             redacted_fields,
             json!({ "user": "alice", "token": "[REDACTED]" })
         );
     }
 }
-

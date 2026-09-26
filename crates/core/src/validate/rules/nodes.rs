@@ -29,10 +29,7 @@ impl ValidationRule for ForeachConcurrency {
                 errors.push(
                     WorkflowError::new(
                         codes::FOREACH_INVALID_CONCURRENCY,
-                        format!(
-                            "Foreach '{}' declares concurrency 0; must be >= 1",
-                            node.id
-                        ),
+                        format!("Foreach '{}' declares concurrency 0; must be >= 1", node.id),
                     )
                     .with_source_task(node.id.to_string()),
                 );
@@ -62,10 +59,7 @@ impl ValidationRule for LoopMaxIterations {
                 errors.push(
                     WorkflowError::new(
                         codes::LOOP_INVALID_MAX_ITERATIONS,
-                        format!(
-                            "Loop '{}' declares max_iterations 0; must be >= 1",
-                            node.id
-                        ),
+                        format!("Loop '{}' declares max_iterations 0; must be >= 1", node.id),
                     )
                     .with_source_task(node.id.to_string()),
                 );

@@ -67,8 +67,7 @@ pub struct LogTask {
 impl Default for LogTask {
     fn default() -> Self {
         let mut manifest = TaskManifest::new("util.log");
-        manifest.description =
-            Some("Logs `message` at the given level and returns `value`".into());
+        manifest.description = Some("Logs `message` at the given level and returns `value`".into());
         manifest.input_schema = Some(schema(json!({
             "type": "object",
             "required": ["message"],
@@ -118,8 +117,7 @@ pub struct DelayTask {
 impl Default for DelayTask {
     fn default() -> Self {
         let mut manifest = TaskManifest::new("util.delay");
-        manifest.description =
-            Some("Waits `ms` milliseconds and returns `value` as output".into());
+        manifest.description = Some("Waits `ms` milliseconds and returns `value` as output".into());
         manifest.input_schema = Some(schema(json!({
             "type": "object",
             "required": ["ms"],
@@ -159,8 +157,7 @@ impl Default for IdempotencyKeyTask {
     fn default() -> Self {
         let mut manifest = TaskManifest::new("util.idempotency_key");
         manifest.description = Some(
-            "Derives a stable idempotency key from `value` and returns it as `{ key }`"
-                .into(),
+            "Derives a stable idempotency key from `value` and returns it as `{ key }`".into(),
         );
         manifest.input_schema = Some(schema(json!({
             "type": "object",

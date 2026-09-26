@@ -157,10 +157,7 @@ impl ValidationRule for StartEndEdges {
                     errors.push(
                         WorkflowError::new(
                             codes::START_HAS_INCOMING,
-                            format!(
-                                "Start node '{}' cannot have incoming edges",
-                                node.id
-                            ),
+                            format!("Start node '{}' cannot have incoming edges", node.id),
                         )
                         .with_source_task(node.id.to_string()),
                     );

@@ -190,9 +190,7 @@ impl WorkflowContext {
 
     /// Publishes a node's error at `$.nodes.<id>.error` (on_error paths)
     pub fn set_node_error(&self, node_id: &NodeId, error: Value) {
-        self.node_errors
-            .write()
-            .insert(node_id.0.clone(), error);
+        self.node_errors.write().insert(node_id.0.clone(), error);
     }
 }
 

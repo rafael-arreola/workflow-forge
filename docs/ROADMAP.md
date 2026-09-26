@@ -1,6 +1,6 @@
 # Workflow Forge — hoja de ruta de refactorización
 
-Fecha: 2026-09-26. Secuencia propuesta, sin fechas ni estimaciones de esfuerzo. El trabajo actual es documentación; ninguna fase de implementación está acreditada como terminada. [PRD](PRD.md), [ARCHITECTURE](ARCHITECTURE.md), [TDD](TDD.md) y [estado actual](PROJECT.md).
+Fecha: 2026-09-26. Secuencia de implementación autorizada, sin estimaciones de esfuerzo. El estado y evidencia de cada fase están en [PROJECT](PROJECT.md); cada fase completa se conserva en un commit. [PRD](PRD.md), [ARCHITECTURE](ARCHITECTURE.md), [TDD](TDD.md).
 
 ## Reglas de ejecución
 

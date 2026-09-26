@@ -145,9 +145,7 @@ impl WorkflowExecutor {
                         validate_compiled(validator, &output.0).map_err(|e| {
                             WorkflowError::new(
                                 codes::TASK_OUTPUT_INVALID,
-                                format!(
-                                    "Task '{task_id}' output does not match its schema: {e}"
-                                ),
+                                format!("Task '{task_id}' output does not match its schema: {e}"),
                             )
                             .with_source_task(node_id.to_string())
                         })?;

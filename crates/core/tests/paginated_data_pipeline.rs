@@ -63,5 +63,7 @@ async fn test_paginated_loop_pipeline() {
         .await
         .expect("Paginated pipeline execution failed");
 
-    assert!(result.0.is_object() || result.0.is_array() || result.0.is_null() || !result.0.is_null());
+    assert!(
+        result.0.is_object() || result.0.is_array() || result.0.is_null() || !result.0.is_null()
+    );
 }

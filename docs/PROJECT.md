@@ -4,6 +4,8 @@ Actualizado: 2026-09-26. Esta página registra evidencia; el producto objetivo e
 
 ## Punto actual
 
+**Implementación autorizada el 2026-09-26:** avanzar F-0 a F-5 en orden y crear un commit por fase. El worktree inicial estaba limpio en `66d39a5`, que ya conserva la planificación. F-0 corrigió la configuración async de Criterion, declaró `required-features` en el benchmark y aplicó rustfmt al baseline. `cargo fmt --all --check`, Clippy con features predeterminadas y all-features, y `cargo test --workspace --all-features` pasan (220 pruebas, 1 SFTP ignorada). F-1 es el siguiente trabajo; las verificaciones históricas de abajo conservan el diagnóstico anterior.
+
 El usuario solicitó completar primero la refactorización documental. Se crearon PRD, ARCHITECTURE, TDD, mapa documental y ROADMAP a partir de las decisiones de la conversación y el plan inicial. No se implementó la arquitectura objetivo ni se cambiaron contratos de código en este trabajo.
 
 Después de consolidar la especificación, se eliminaron el diseño anterior, el borrador inicial y los manuales sustituidos por solicitud del usuario. Los ejemplos y schemas se conservan porque siguen siendo utilizados por las pruebas del prototipo.
@@ -40,7 +42,7 @@ Revisión estática inicial del 2026-09-26; no equivale a una suite ejecutada ni
 
 | Fase | Estado |
 |---|---|
-| F-0 | Diseño de primera entrega, casos y baseline registrados; deuda de formato/benchmark identificada. No equivale a implementación aprobada ni a todos los checks verdes. |
+| F-0 | Completada: diseño/casos registrados, formato y benchmark corregidos; fmt, ambas variantes de Clippy y 220 pruebas all-features pasan. |
 | F-1 a F-5 | Planificadas; implementación no iniciada por este trabajo. |
 
 ## Cobertura de los puntos revisados
@@ -75,7 +77,7 @@ La lectura por rol está en README; PATTERNS §8 orienta la elección por necesi
 
 ## Siguiente punto de reanudación
 
-Cuando se autorice implementar, comenzar por [CONTRACTS](CONTRACTS.md) y C-01A/C-03 de [ACCEPTANCE](ACCEPTANCE.md). Convertir el diseño a tipos/schemas y recorrido de F-1, incluyendo confianza y mediciones; mantener las garantías de recuperación previstas. Contrastar referencias con integraciones reales cuando haya datos. El usuario ha pedido planear antes de programar.
+Continuar F-1 con [CONTRACTS](CONTRACTS.md) y C-01A/C-03 de [ACCEPTANCE](ACCEPTANCE.md). Convertir el diseño a tipos/schemas y recorrido de F-1, incluyendo confianza y mediciones; mantener las garantías de recuperación previstas. Contrastar referencias con integraciones reales cuando haya datos. La implementación y los checkpoints por fase ya están autorizados.
 
 Baseline reproducido sobre HEAD `392303b`, con los cambios documentales del worktree, macOS y `rustc 1.98.1` / `cargo 1.98.1`. La ejecución inicial aislada no podía preparar dependencias; las pruebas se completaron después con acceso autorizado. La CI existente usa all-features y un job SFTP separado. El manifiesto del core declara Criterion opcional bajo `benchmarks`; el target de benchmark no declara `required-features`. Antes de medir rendimiento, corregir la configuración de ese target y habilitar su soporte async compatible, volver a comprobar Clippy y registrar el resultado. El formato pendiente debe tratarse en un cambio explícito de código, sin confundirlo con deuda introducida por esta documentación.
 

@@ -36,6 +36,7 @@ chrono = { version = "0.4", default-features = false, features = [
 criterion = { version = "0.5", default-features = false, features = [
     "html_reports",
     "cargo_bench_support",
+    "async_tokio",
 ] }
 futures = "0.3"
 jsonpath-rust = "1.0.4"

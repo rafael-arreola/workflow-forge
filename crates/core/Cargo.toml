@@ -37,3 +37,4 @@ schemars = { workspace = true }
 [[bench]]
 name = "workflow_bench"
 harness = false
+required-features = ["benchmarks"]
