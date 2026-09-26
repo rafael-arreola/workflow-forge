@@ -1,5 +1,12 @@
 # workflow-forge
 
+> **Architecture refactoring in planning (2026-09-26).** The target product is an
+> agnostic integration engine, available as a Rust library and a service, with
+> public contracts for modules, extensions and visual composition. Start with the
+> [documentation map](docs/README.md), [PRD](docs/PRD.md),
+> [architecture](docs/ARCHITECTURE.md) and [technical design](docs/TDD.md).
+> The examples and API below describe the existing prototype, not the target architecture.
+
 [![CI](https://github.com/rafael-arreola/workflow-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/rafael-arreola/workflow-forge/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
@@ -309,7 +316,9 @@ The execution contract is versioned independently from the crates:
 - [`schemas/1.0/extension.schema.json`](schemas/1.0/extension.schema.json) —
   what a task manifest / catalog looks like.
 
-Design decisions and rationale live in [`DESIGN.md`](DESIGN.md).
+The target design lives in [ARCHITECTURE](docs/ARCHITECTURE.md) and
+[TDD](docs/TDD.md). See the [documentation map](docs/README.md) for the active
+specification and implementation roadmap.
 
 ## Workspace
 
@@ -327,10 +336,10 @@ a manifest and integration tests against the real executor.
 
 ## Roadmap
 
-- v1.x extensions: `crypto` (HMAC, PGP), `storage` (S3-compatible), `smtp`, `db`
-- WASM extensions (installable without recompiling)
-- Durable execution (event-sourced executor behind a storage trait)
-- Visual editor (the graph model + schemas make it possible)
+The active [refactoring roadmap](docs/ROADMAP.md) connects the product requirements
+to implementation phases and acceptance checks. See [PROJECT](docs/PROJECT.md)
+for evidence of current progress and the [PRD decision register](docs/PRD.md#7-registro-canónico-de-decisiones-pendientes)
+for choices still open, including the editor, extension loading and durable backend.
 
 ## License
 

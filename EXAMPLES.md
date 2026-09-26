@@ -1,5 +1,9 @@
 # workflow-forge — Examples
 
+> These examples describe the existing prototype. The target refactoring is
+> specified in the [documentation map](docs/README.md); its API and document format
+> may change before a public release.
+
 What can you build **today** with the existing code? Every example below runs
 against the current engine and official extensions — no vaporware. Copy the
 JSON, register the default extensions, and run it.
