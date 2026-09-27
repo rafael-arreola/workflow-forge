@@ -1,6 +1,6 @@
 # Workflow Forge — diseño técnico
 
-Fecha: 2026-09-26. *Technical Design Document* de la refactorización. Desarrolla el [PRD](PRD.md) dentro de los límites de [ARCHITECTURE](ARCHITECTURE.md). Los mecanismos, nombres y estados siguientes son **diseño propuesto**, no API implementada. Las decisiones pendientes conservan su autoridad en el PRD.
+Fecha: 2026-09-26. *Technical Design Document* de la refactorización. Desarrolla el [PRD](PRD.md) dentro de los límites de [ARCHITECTURE](ARCHITECTURE.md). Fija el diseño objetivo; CONTRACTS, HTTP e INTEGRATIONS concretan los contratos por perfil y PROJECT registra la implementación verificada. Las decisiones pendientes conservan su autoridad en el PRD.
 
 ## 1. Convenciones y mapa técnico
 
@@ -93,7 +93,7 @@ Propuesta: DAG de control con iteración explícita y acotada, evitando ciclos a
 
 Validar/preparar no invoca conectores de negocio. Puede resolver recursos de catálogo/schema autorizados según configuración. En runtime se valida input antes de invocar y output antes de publicarlo. Un output inválido después de un efecto no convierte la operación en segura para reintento.
 
-Diagnóstico lógico: código estable, severidad, ubicación de nodo/arista/campo y detalle saneado. La API y el editor consumen el mismo resultado. El esquema completo de diagnóstico se cierra con P-05/P-06.
+Diagnóstico lógico: código estable, phase, ubicación de nodo/campo/dato y detalle saneado, con clasificación y retryable cuando corresponden. CONTRACTS concreta `Diagnostic`/`ForgeError`; HTTP conserva sus campos estructurados y normaliza mensajes libres. El editor puede consumir esos mismos diagnósticos.
 
 ## 6. TDD-05 — coordinación y control de flujo
 
@@ -226,7 +226,7 @@ Decisión base P-09: `signal` se dirige a una espera identificada y tiene ID de 
 
 Para hacer viable el pre-registro, F-3 define el recorrido de control **reservar espera → iniciar trabajo → esperar resultado**. El coordinador reserva identidad/correlación y deadline antes del despacho, y entrega al adaptador de inicio esa referencia como dato de input. Una señal para esa reserva ya conocida puede conservarse antes de que el control llegue a esperar; su consumo requiere además que se haya confirmado el paso de inicio. La reserva admite un único resultado bajo su schema y deduplicación, con tamaño/retención acotados; no es un buzón abierto de señales sin destinatario. «Temprana» rechazada significa que aún no existe reserva.
 
-El vencimiento se cuenta desde la reserva. Si el inicio falla de manera conocida, se cierra la reserva sin continuar; si queda incierto, se preservan la reserva y evidencia mientras se resuelve TDD-06. Recibir un callback no autoriza saltarse esa resolución. Una reserva, un intento de inicio y un consumo son identidades distintas dentro del mismo run. [CONTRACTS §11](CONTRACTS.md#esperas-durables) concreta `await_signal`/`timer`, comando, estados, cuotas y migración implementados; PROJECT registra sus pruebas y los pendientes de cierre F-3. Usar controles del engine evita permisos de escritura de estado dentro de los conectores.
+El vencimiento se cuenta desde la reserva. Si el inicio falla de manera conocida, se cierra la reserva sin continuar; si queda incierto, se preservan la reserva y evidencia mientras se resuelve TDD-06. Recibir un callback no autoriza saltarse esa resolución. Una reserva, un intento de inicio y un consumo son identidades distintas dentro del mismo run. [CONTRACTS §11](CONTRACTS.md#esperas-durables) concreta `await_signal`/`timer`, comando, estados, cuotas y migración implementados; PROJECT registra sus pruebas y límites. Usar controles del engine evita permisos de escritura de estado dentro de los conectores.
 
 Validar acceso, correlación, estado y payload antes de consumir. Repetir la misma señal devuelve la recepción previa sin continuar otra vez. Consumo y transición deben ser atómicos. La carrera entre señal y expiración se resuelve por transición condicional: solo una gana; la otra recibe un resultado definido. Señales tardías no reabren estados terminales.
 
@@ -246,23 +246,24 @@ Separar artefacto en preparación, publicado/referenciado y elegible para limpie
 
 ## 11. TDD-10 — librería y servicio
 
-Superficie lógica propuesta; no son todavía firmas Rust ni rutas HTTP:
+Superficie lógica de `WorkflowApplication`; los tipos están en el protocolo y las rutas/DTOs en HTTP:
 
 | Operación | Resultado y obligación |
 |---|---|
-| `catalog` | Descriptores/revisiones disponibles y capacidades habilitadas. |
-| `validate` / `prepare` | Diagnósticos o plan preparado; sin efectos de negocio. |
+| `catalog` / `capabilities` | Descriptores/revisiones disponibles y capacidades habilitadas. |
+| `prepare` / `prepare_json` | Diagnósticos o plan preparado; sin efectos de negocio. |
 | `start` | Run identificado y aceptación bajo el perfil solicitado. |
 | `status` / `result` | Estado y resultado confirmado, con error explícito si aún no está listo o expiró. |
 | `cancel` | Solicitud de cancelación identificable; no promesa de reversión remota. |
 | `signal` | Acuse de recepción/duplicado/rechazo conforme a TDD-08. |
 | `inspect_effect` / `reconcile` | Consultar evidencia y solicitar resolución autorizada; comandos, precondiciones y auditoría de TDD-06. |
+| `write_artifact` / `read_artifact` | Transferencias del host bajo scope/grants y propiedad de instancia, sin exponer el proveedor. |
 
-La librería puede añadir un método de conveniencia que inicia y espera el resultado. El servidor traduce estas capacidades a HTTP/JSON, con DTOs concretos por cerrar en P-05; no interpreta otra spec ni implementa retries adicionales alrededor de `start`. La desconexión del cliente no cancela el run; cancelar requiere comando explícito. El servicio usa durabilidad por defecto y publica cualquier perfil efímero elegido expresamente.
+La librería ofrece `wait` para esperar un run aceptado. El servidor traduce estas capacidades a HTTP/JSON, con DTOs y rutas definidos en [HTTP](HTTP.md) bajo P-05; no interpreta otra spec ni implementa retries adicionales alrededor de `start`. La desconexión del cliente no cancela el run; cancelar requiere comando explícito. El servicio exige durabilidad por defecto y publica cualquier perfil efímero elegido expresamente.
 
 La solicitud puede incluir clave de recepción. Reutilizarla con contenido diferente produce conflicto; con contenido equivalente devuelve el run previo dentro de su ámbito/ventana definida. Esta deduplicación no reemplaza la idempotencia de operaciones externas.
 
-Autenticación, ámbitos de acceso, paginación, límites, códigos de transporte y schemas completos se cierran antes de implementar la API pública. No se inventa multitenencia por incluir un campo genérico de metadata.
+[HTTP](HTTP.md) concreta P-05 para F-4: autenticación, ámbitos, rutas, DTOs, paginación, límites, errores y lifecycle sobre la fachada pública. [INTEGRATIONS](INTEGRATIONS.md) fija perfiles y revisiones de los conectores HTTP/JSON y archivos/CSV. No se inventa multitenencia por incluir un campo genérico de metadata.
 
 ## 12. TDD-11 — observación y errores
 
@@ -333,6 +334,6 @@ V-18 añade en F-2/F-3 el caso donde una consulta remota devuelve «no encontrad
 
 ## 15. Detalles que deben cerrarse antes de codificar cada contrato
 
-PROJECT distingue diseño de capacidad verificada. CONTRACTS concreta F-1/F-2 y el paquete, codec, DDL, artefactos y esperas F-3, con tipos, cuotas y pruebas. Restan DTOs HTTP según [P-01 a P-09](PRD.md#7-registro-canónico-de-decisiones-pendientes). SQLite tiene evidencia registrada de recuperación, carreras, reconciliación y mediciones locales. Las metas de producción permanecen en P-07; el transporte HTTP sigue pendiente de implementar/verificar.
+PROJECT distingue diseño de capacidad verificada. CONTRACTS concreta F-1/F-2 y el paquete, codec, DDL, artefactos y esperas F-3, con tipos, cuotas y pruebas. HTTP e INTEGRATIONS concretan F-4; sus pruebas se registran en PROJECT. SQLite tiene evidencia de recuperación, carreras, reconciliación y mediciones locales. Las metas de producción permanecen en P-07; un contrato escrito no acredita por sí mismo su implementación.
 
 La [hoja de ruta](ROADMAP.md) exige cerrar los detalles de la fase antes de programarlos. Decidir persistencia no equivale a elegir automáticamente event sourcing, Redis, SQL o workers remotos. Las [referencias de arquitectura](ARCHITECTURE.md#9-referencias-de-diseño) orientan este diseño sin imponer infraestructura.

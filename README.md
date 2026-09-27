@@ -2,7 +2,7 @@
 
 Motor agnóstico de integración en Rust. Las definiciones JSON conectan operaciones mediante contratos JSON Schema; el host decide qué módulos, recursos y transportes habilita.
 
-**En desarrollo, sin versión pública.** `workflow_forge::v2` ejecuta secuencias, decisiones, paralelo, foreach, loop y subworkflows, con retry e inspección/resolución de efectos. Incluye estado/artefactos SQLite, recuperación, señales y timers. F-0 a F-3 están verificadas, con pruebas de caída y mediciones de secuencias e importaciones de 100/10 000 filas en memoria y SQLite. El servicio y la adopción siguen en el [ROADMAP](docs/ROADMAP.md). La [evidencia y los límites](docs/PROJECT.md) distinguen capacidades probadas de diseño pendiente.
+**En desarrollo, sin versión pública.** `workflow_forge::v2` ejecuta secuencias, decisiones, paralelo, foreach, loop y subworkflows, con retry e inspección/resolución de efectos. Incluye estado/artefactos SQLite, recuperación, señales y timers. El servicio HTTP comparte esos contratos y agrega autenticación, consultas y transferencias acotadas; los módulos oficiales integran HTTP/JSON y archivos/CSV. La [evidencia y los límites](docs/PROJECT.md) distinguen pruebas locales de metas de producción y casos reales pendientes en el [ROADMAP](docs/ROADMAP.md).
 
 ## Ejecutar el primer recorrido
 
@@ -63,9 +63,21 @@ El [ejemplo](crates/forge/examples/v2_signal.rs) usa un [workflow de aprobación
 - [Schema de formato 2](schemas/2/workflow.schema.json) y [definición ejecutable](examples/workflows/customer_lookup.v2.json).
 - [Extensión externa](examples/reference-module/src/lib.rs): depende del protocolo y un cliente inyectado, sin importar internos del engine.
 - [PATTERNS](docs/PATTERNS.md): Builder, Adapter, Decorator y reglas de evolución.
+- [HTTP](docs/HTTP.md): arranque del servicio, credenciales, rutas, cuotas y cierre.
+- [INTEGRATIONS](docs/INTEGRATIONS.md): perfiles de conectores, revisiones fijadas y ejemplos de composición.
 - [Kit de conformidad](crates/conformance/src/lib.rs): checks públicos para proveedores sustitutos.
 
 `standard()` instala `forge.data.identity`, `forge.text.trim`, estado/secretos/artefactos en memoria y un observador vacío. La configuración se congela antes del arranque. No se sobrescriben operaciones por orden de registro ni se descargan referencias de schemas desde la red.
+
+## Ejecutar como servicio
+
+Con `WORKFLOW_FORGE_TOKEN` definido por el host (32–4096 bytes ASCII gráficos):
+
+```sh
+cargo run -p workflow-forge-service -- examples/service/config.json
+```
+
+La [configuración de ejemplo](examples/service/config.json) usa SQLite y carga un workflow echo antes de publicar readiness en `127.0.0.1:7070`. El proceso conserva una instancia, autentica Bearer y atiende `POST /v2/runs`; Ctrl-C o SIGTERM inicia el cierre supervisado. [HTTP §6](docs/HTTP.md#6-ejecutable-y-composición-del-host) muestra la petición y las opciones. El perfil efímero requiere elegir `storage.kind = memory` y aceptar `require_durable: false` en el cliente.
 
 ## Organización
 
@@ -76,6 +88,7 @@ El [ejemplo](crates/forge/examples/v2_signal.rs) usa un [workflow de aprobación
 | `modules` | Operaciones y proveedores oficiales. |
 | `forge` | Fachada y composición estándar. |
 | `conformance` | Verificaciones reutilizables de proveedores. |
+| `service` | Adapter HTTP, autenticación y ejecutable de composición/supervisión. |
 | `examples/reference-module` | Extensión independiente del motor. |
 
 El prototipo spec 1.0 (`core`, `extensions`, CLI y [EXAMPLES](EXAMPLES.md)) permanece temporalmente para caracterizar el comportamiento anterior. Su retiro acompaña la migración de consumidores y módulos en F-4/F-5; no se garantiza compatibilidad automática. El namespace `v2` permite identificar la nueva API durante esa transición.

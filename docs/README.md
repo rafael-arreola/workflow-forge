@@ -2,7 +2,7 @@
 
 La documentación define la refactorización de Workflow Forge como motor agnóstico de integración en Rust. La planificación sigue la separación de producto, arquitectura y diseño técnico utilizada en `memory-forge`, adaptada a este proyecto.
 
-**Estado al 2026-09-26:** implementación por fases autorizada. Las capacidades objetivo solo se consideran entregadas con evidencia en PROJECT. F-0 a F-3 cubren el motor en memoria, controles, efectos, persistencia SQLite, recuperación y esperas; sus contratos, pruebas y mediciones están registrados en PROJECT. F-4 continúa con servicio y módulos de integración; F-5 contrasta adopción y objetivos de producción.
+**Estado al 2026-09-26:** implementación por fases autorizada. Las capacidades objetivo solo se consideran entregadas con evidencia en PROJECT. F-0 a F-4 cubren el motor en memoria, controles, efectos, persistencia SQLite, recuperación, esperas, servicio HTTP y módulos de integración; sus contratos, pruebas y mediciones están registrados en PROJECT. F-5 contrasta adopción y objetivos de producción.
 
 ## Recorrido de lectura
 
@@ -15,12 +15,14 @@ La documentación define la refactorización de Workflow Forge como motor agnós
 | [ROADMAP](ROADMAP.md) | ¿En qué orden lo implementaremos? | Fases, dependencias y criterios de salida. |
 | [PROJECT](PROJECT.md) | ¿Qué existe y qué está verificado hoy? | Evidencia, brechas y punto de reanudación. |
 
-Dos anexos permiten avanzar sin leer todo el diseño a la vez:
+Los anexos permiten avanzar sin leer todo el diseño a la vez:
 
 | Anexo | Cuándo leerlo | Autoridad |
 |---|---|---|
 | [CONTRACTS](CONTRACTS.md) | Al implementar o integrar el motor. | Anexo normativo de TDD: formato, mappings, tipos, errores, confianza, persistencia, esperas y límites F-1/F-2/F-3. |
 | [ACCEPTANCE](ACCEPTANCE.md) | Al comprobar generalidad y resultados. | Casos de referencia del PRD, fixtures y protocolo de mediciones; no resultados ejecutados. |
+| [HTTP](HTTP.md) | Al implementar o integrar el servicio. | Anexo normativo de TDD-10/12: autenticación, rutas/DTOs, paginación, cuotas y lifecycle F-4. |
+| [INTEGRATIONS](INTEGRATIONS.md) | Al configurar o extender conectores oficiales. | Anexo normativo de TDD-02/10: perfiles, revisiones y límites de HTTP/JSON y archivos/CSV F-4. |
 
 Para empezar: leer el alcance F-1 en CONTRACTS y recorrer C-01A. Para crear un plugin: las tres fronteras de CONTRACTS y la selección rápida de PATTERNS. Para implementar el runtime: TDD y secuencias de ARCHITECTURE. Para conocer avances: PROJECT.
 

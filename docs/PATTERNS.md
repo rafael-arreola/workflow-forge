@@ -211,6 +211,8 @@ Esto es una función de construcción, no se etiqueta como Factory Method GoF. `
 
 **Cuándo considerar Abstract Factory:** si se necesitan varias familias intercambiables de proveedores que deben compartir transacciones, codec o propiedad. La raíz de composición puede recibir una fábrica de familia; aun así debe verificar las garantías cruzadas. Si solo existe un constructor sencillo, no añadir esa interfaz.
 
+En F-4, las funciones [`http_json_operations`, `file_operations` y `csv_operations`](../crates/modules/src/integrations/mod.rs) producen bundles mediante este patrón. El perfil fija recursos y límites, su hash participa en la revisión y cada instancia guarda solamente configuración/cliente compartido. Los datos y buffers de una invocación viven dentro de `execute`. [INTEGRATIONS](INTEGRATIONS.md) concreta las políticas; las [pruebas HTTP](../crates/service/tests/integrations_http.rs) envuelven la operación en un Decorator y ejecutan invocaciones concurrentes sin cambiar su descriptor.
+
 **Conformidad:** V-05/V-17; requisitos compatibles, conflictos detectados y registro completo o rechazado. Construir recursos técnicos no autoriza ejecutar negocio. Las tareas de fondo deben quedar bajo lifecycle del host, no ocultas en un constructor.
 
 ### PAT-11 — Flyweight: compartir datos inmutables

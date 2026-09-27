@@ -110,6 +110,7 @@ mod lifecycle;
 mod planner;
 mod reconcile;
 mod recovery;
+mod resources;
 mod signals;
 mod state;
 mod steps;

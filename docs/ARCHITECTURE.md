@@ -511,6 +511,8 @@ Un fallo al validar configuración/capacidades impide habilitar la composición.
 
 <a id="instancia-y-arranque"></a>
 
+La implementación F-4 de estas responsabilidades está en [`HostConfig`](../crates/service/src/host.rs), [`ServiceRuntime`](../crates/service/src/runtime.rs) y el [ejecutable](../crates/service/src/main.rs). HTTP §6 muestra el arranque concreto; las secuencias y fragmentos siguientes explican propiedad y comunicación. Los handlers comparten `WorkflowApplication`; ninguna ruta construye otro runtime o abre SQLite directamente.
+
 #### 6.1.1 Qué instancia se crea y quién la conserva
 
 La raíz de composición del servicio crea **una instancia del runtime por configuración y ámbito de ejecución** al arrancar el proceso. Los handlers comparten un handle de esa instancia; no crean un motor por petición ni por workflow. Cada petición de ejecución crea un run independiente dentro de ese runtime.

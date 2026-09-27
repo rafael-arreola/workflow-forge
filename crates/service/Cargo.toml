@@ -1,0 +1,24 @@
+[package]
+name = "workflow-forge-service"
+description = "HTTP adapter and supervised host for Workflow Forge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+workflow-forge = { path = "../forge", version = "0.1.0", default-features = false, features = ["sqlite", "integrations"] }
+axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio"] }
+base64 = "0.22"
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = "0.10"
+subtle = "2.6"
+tokio = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
+uuid = { workspace = true }
+
+[dev-dependencies]
+reqwest = { workspace = true }
+workflow-forge-reference-module = { path = "../../examples/reference-module" }

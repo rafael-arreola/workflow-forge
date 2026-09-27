@@ -319,6 +319,7 @@ pub struct ExecutionEvent {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct Limits {
     pub waits_per_run: usize,
     pub signal_bytes: usize,
@@ -352,6 +353,18 @@ pub struct Limits {
     pub audit_entries: usize,
     pub evidence_bytes: usize,
     pub late_response_grace_ms: u64,
+}
+
+/// Public composition facts; contains no provider objects, credentials or paths.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ApplicationCapabilities {
+    pub protocol_version: u32,
+    pub workflow_format: String,
+    pub checkpoint_format: u32,
+    pub durable: bool,
+    pub artifact_transfers: bool,
+    pub artifacts_durable: bool,
+    pub limits: Limits,
 }
 
 impl Default for Limits {

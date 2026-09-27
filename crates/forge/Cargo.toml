@@ -11,9 +11,10 @@ keywords.workspace = true
 categories.workspace = true
 
 [features]
-default = ["util", "data", "http"]
-full = ["util", "data", "http", "tabular", "sftp", "compress", "sqlite"]
+default = ["util", "data", "http", "integrations"]
+full = ["util", "data", "http", "tabular", "sftp", "compress", "sqlite", "integrations"]
 sqlite = ["workflow-forge-modules/sqlite"]
+integrations = ["workflow-forge-modules/integrations"]
 util = ["dep:workflow-forge-ext-util"]
 data = ["dep:workflow-forge-ext-data"]
 http = ["dep:workflow-forge-ext-http"]

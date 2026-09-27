@@ -64,6 +64,7 @@ pub use workflow_forge_core::testing;
 
 /// Registers all feature-enabled extensions in the registry
 pub fn register_extensions(registry: &TaskRegistry) {
+    let _ = registry; // A consumer can select only the v2 modules.
     #[cfg(feature = "util")]
     workflow_forge_ext_util::register(registry);
     #[cfg(feature = "data")]

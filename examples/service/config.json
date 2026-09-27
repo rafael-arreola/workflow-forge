@@ -1,0 +1,13 @@
+{
+  "listen": "127.0.0.1:7070",
+  "scope": "default",
+  "identities": [{
+    "token_env": "WORKFLOW_FORGE_TOKEN",
+    "actor": "local-operator",
+    "permissions": ["prepare", "start", "read", "cancel", "signal", "reconcile", "stop_tracking"],
+    "resources": ["*"]
+  }],
+  "storage": {"kind": "sqlite", "path": "workflow-forge.sqlite"},
+  "workflows": ["echo.v2.json"],
+  "csv": {}
+}

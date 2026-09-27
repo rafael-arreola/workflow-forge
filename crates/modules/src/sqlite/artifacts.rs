@@ -27,6 +27,9 @@ impl ArtifactStore for SqliteExecutionStore {
     fn durable(&self) -> bool {
         true
     }
+    fn host_access(&self) -> bool {
+        true
+    }
     fn artifact_domain(&self) -> Option<&str> {
         Some(&self.inner.domain)
     }
@@ -36,10 +39,26 @@ impl ArtifactStore for SqliteExecutionStore {
         content: ByteStream,
         media_type: &'a str,
     ) -> PortFuture<'a, ArtifactRef> {
-        Box::pin(self.write_artifact(None, scope, content, media_type))
+        Box::pin(self.write_artifact(None, None, scope, content, media_type))
     }
     fn read<'a>(&'a self, reference: &'a ArtifactRef) -> PortFuture<'a, ByteStream> {
-        Box::pin(self.read_artifact(None, reference))
+        Box::pin(self.read_artifact(None, None, reference))
+    }
+    fn write_for_host<'a>(
+        &'a self,
+        owner: &'a str,
+        scope: &'a str,
+        content: ByteStream,
+        media_type: &'a str,
+    ) -> PortFuture<'a, ArtifactRef> {
+        Box::pin(self.write_artifact(None, Some(owner.to_owned()), scope, content, media_type))
+    }
+    fn read_for_host<'a>(
+        &'a self,
+        owner: &'a str,
+        reference: &'a ArtifactRef,
+    ) -> PortFuture<'a, ByteStream> {
+        Box::pin(self.read_artifact(None, Some(owner.to_owned()), reference))
     }
     fn write_for_run<'a>(
         &'a self,
@@ -48,14 +67,14 @@ impl ArtifactStore for SqliteExecutionStore {
         content: ByteStream,
         media_type: &'a str,
     ) -> PortFuture<'a, ArtifactRef> {
-        Box::pin(self.write_artifact(Some(access.clone()), scope, content, media_type))
+        Box::pin(self.write_artifact(Some(access.clone()), None, scope, content, media_type))
     }
     fn read_for_run<'a>(
         &'a self,
         access: &'a ArtifactAccess,
         reference: &'a ArtifactRef,
     ) -> PortFuture<'a, ByteStream> {
-        Box::pin(self.read_artifact(Some(access.clone()), reference))
+        Box::pin(self.read_artifact(Some(access.clone()), None, reference))
     }
 }
 
@@ -63,6 +82,7 @@ impl SqliteExecutionStore {
     async fn write_artifact(
         &self,
         access: Option<ArtifactAccess>,
+        host_owner: Option<String>,
         scope: &str,
         mut content: ByteStream,
         media_type: &str,
@@ -74,9 +94,10 @@ impl SqliteExecutionStore {
                 "Artifact scope and media type must contain 1 to 256 bytes",
             ));
         }
-        let owner = match &access {
-            Some(access) => access.runtime_owner.clone(),
-            None => self.call(|s| s.current_owner()).await?,
+        let owner = match (host_owner, &access) {
+            (Some(owner), _) => owner,
+            (_, Some(access)) => access.runtime_owner.clone(),
+            _ => self.call(|s| s.current_owner()).await?,
         };
         let mut reference = ArtifactRef {
             id: uuid::Uuid::now_v7().to_string(),
@@ -91,54 +112,78 @@ impl SqliteExecutionStore {
             owner: owner.clone(),
             id: Some(reference.id.clone()),
         };
-        let item = reference.clone();
-        let writer = owner.clone();
-        let run = access.clone();
-        self.call(move |s| {
-            let options = s.options.clone();
-            s.write(&writer, |tx| begin(tx, &item, run.as_ref(), &options))
-        })
-        .await?;
-        let mut sequence = 0_u64;
-        while let Some(chunk) = content.next().await {
-            let chunk = chunk?;
-            if chunk.len() as u64
-                > self
-                    .inner
-                    .options
-                    .max_artifact_bytes
-                    .saturating_sub(reference.bytes)
-            {
-                return Err(exhausted());
-            }
-            // Ignore empty source chunks; storage and reads remain bounded.
-            for bytes in chunk.chunks(CHUNK_BYTES.min(self.inner.options.max_record_bytes / 2)) {
-                let data = bytes.to_vec();
-                let item = reference.clone();
-                let writer = owner.clone();
-                let run = access.clone();
-                self.call(move |s| {
-                    let cap = s.options.max_artifact_bytes;
-                    s.write(&writer, |tx| {
-                        append(tx, &item, run.as_ref(), sequence, data, cap)
+        let result = async {
+            let item = reference.clone();
+            let writer = owner.clone();
+            let run = access.clone();
+            self.call(move |s| {
+                let options = s.options.clone();
+                s.write(&writer, |tx| begin(tx, &item, run.as_ref(), &options))
+            })
+            .await?;
+            let mut sequence = 0_u64;
+            while let Some(chunk) = content.next().await {
+                let chunk = chunk?;
+                if chunk.len() as u64
+                    > self
+                        .inner
+                        .options
+                        .max_artifact_bytes
+                        .saturating_sub(reference.bytes)
+                {
+                    return Err(exhausted());
+                }
+                // Ignore empty source chunks; storage and reads remain bounded.
+                for bytes in chunk.chunks(CHUNK_BYTES.min(self.inner.options.max_record_bytes / 2))
+                {
+                    let data = bytes.to_vec();
+                    let item = reference.clone();
+                    let writer = owner.clone();
+                    let run = access.clone();
+                    self.call(move |s| {
+                        let cap = s.options.max_artifact_bytes;
+                        s.write(&writer, |tx| {
+                            append(tx, &item, run.as_ref(), sequence, data, cap)
+                        })
                     })
-                })
-                .await?;
-                sequence += 1;
-                reference.bytes += bytes.len() as u64;
+                    .await?;
+                    sequence += 1;
+                    reference.bytes += bytes.len() as u64;
+                }
             }
+            let item = reference.clone();
+            let writer = owner.clone();
+            let expiry = now_ms()
+                .saturating_add(self.inner.options.artifact_grace_ms)
+                .min(i64::MAX as u64);
+            self.call(move |s| {
+                s.write(&writer, |tx| {
+                    if let Some(access) = &access {
+                        authorize_run(tx, access, &item.scope, true)?;
+                    }
+                    let changed = tx
+                        .execute(
+                            "UPDATE wf_artifacts SET state='ready',orphan_after_ms=?4 \
+                     WHERE id=?1 AND state='staging' AND bytes=?2 AND chunks=?3",
+                            params![item.id, item.bytes, sequence, expiry],
+                        )
+                        .map_err(db_error)?;
+                    if changed != 1 {
+                        return Err(conflict());
+                    }
+                    Ok(())
+                })
+            })
+            .await?;
+            Ok::<_, ForgeError>(())
         }
-        let item = reference.clone();
-        let writer = owner.clone();
-        let expiry = now_ms()
-            .saturating_add(self.inner.options.artifact_grace_ms)
-            .min(i64::MAX as u64);
-        self.call(move |s| s.write(&writer, |tx| {
-            if let Some(access) = &access { authorize_run(tx, access, &item.scope, true)?; }
-            let changed = tx.execute("UPDATE wf_artifacts SET state='ready',orphan_after_ms=?4 WHERE id=?1 AND state='staging' AND bytes=?2 AND chunks=?3", params![item.id,item.bytes,sequence,expiry]).map_err(db_error)?;
-            if changed != 1 { return Err(conflict()); }
-            Ok(())
-        })).await?;
+        .await;
+        if let Err(mut error) = result {
+            if let Err(cleanup) = staging.cleanup().await {
+                error.diagnostics.extend(cleanup.diagnostics);
+            }
+            return Err(error);
+        }
         staging.id = None;
         Ok(reference)
     }
@@ -146,15 +191,17 @@ impl SqliteExecutionStore {
     async fn read_artifact(
         &self,
         access: Option<ArtifactAccess>,
+        host_owner: Option<String>,
         reference: &ArtifactRef,
     ) -> Result<ByteStream, ForgeError> {
         let item = reference.clone();
         let run = access.clone();
         let (owner, chunks) = self
             .call(move |s| {
-                let owner = match &run {
-                    Some(access) => access.runtime_owner.clone(),
-                    None => s.current_owner()?,
+                let owner = match (host_owner, &run) {
+                    (Some(owner), _) => owner,
+                    (_, Some(access)) => access.runtime_owner.clone(),
+                    _ => s.current_owner()?,
                 };
                 let chunks = s.read_owned(&owner, |tx| check_read(tx, &item, run.as_ref()))?;
                 Ok((owner, chunks))
@@ -213,6 +260,27 @@ struct Staging {
     store: SqliteExecutionStore,
     owner: String,
     id: Option<String>,
+}
+impl Staging {
+    async fn cleanup(&mut self) -> Result<(), ForgeError> {
+        if let Some(id) = self.id.clone() {
+            let owner = self.owner.clone();
+            self.store
+                .call(move |s| {
+                    s.write(&owner, |tx| {
+                        tx.execute(
+                            "DELETE FROM wf_artifacts WHERE id=?1 AND state='staging'",
+                            [id],
+                        )
+                        .map_err(db_error)?;
+                        Ok(())
+                    })
+                })
+                .await?;
+            self.id = None;
+        }
+        Ok(())
+    }
 }
 impl Drop for Staging {
     fn drop(&mut self) {

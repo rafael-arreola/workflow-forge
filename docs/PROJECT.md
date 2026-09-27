@@ -4,13 +4,13 @@ Actualizado: 2026-09-26. Esta página registra evidencia; el producto objetivo e
 
 ## Punto actual
 
-**Implementación autorizada el 2026-09-26:** avanzar F-0 a F-5 en orden y crear un commit por fase. La planificación quedó conservada en `66d39a5`; F-0 en `d5901a1`, F-1 en `00bcad9` y F-2 en `dcb1d34`. F-2 completa los controles, efectos y C-02 en memoria: fmt, ambas variantes de Clippy, 282 pruebas del workspace y mediciones verificadas. La API nueva se encuentra en `workflow_forge::v2`; la CLI y los módulos spec 1.0 permanecen temporalmente durante su migración.
+**Implementación autorizada el 2026-09-26:** avanzar F-0 a F-5 en orden y crear un commit por fase. La planificación quedó conservada en `66d39a5`; F-0 en `d5901a1`, F-1 en `00bcad9`, F-2 en `dcb1d34` y F-3 en `2ed3970`. La API nueva se encuentra en `workflow_forge::v2`; la CLI y los módulos spec 1.0 permanecen temporalmente durante su migración.
 
 F-1 incorpora protocolo público, engine, módulos oficiales, fachada, kit de conformidad y extensión externa. El recorrido C-01A recibe JSON, normaliza un identificador, consulta un cliente inyectado y devuelve un resultado validado. `build` permanece inactivo, `boot` reclama el store y supervisa ejecución, los handles comparten la instancia y `shutdown` cierra admisión y drena.
 
 Los patrones se concretan en código: Builder en la composición, Adapter en la extensión, Factory Function en las contribuciones, Facade en el handle, Command en la invocación y Decorator en la prueba de observación. F-2 añade State para control/efectos, Composite para cuerpos/subworkflows y Strategy de backoff después de clasificar la seguridad de repetición. No se requiere importar internos del engine para extender operaciones o sustituir proveedores. El compilador fija revisiones y rechaza capacidades fuera del perfil implementado.
 
-F-3 también está completa: paquete de recuperación fijado, estado/artefactos SQLite, migraciones, señales/timers y reconciliación durable, con 331 pruebas del workspace y mediciones comparables registradas abajo. La siguiente fase es F-4, servicio y módulos de integración; F-5 cubre adopción. P-01 aún requiere contrastar las referencias con dos sistemas reales del usuario y P-07 cerrar sus metas de despliegue. El éxito de los fixtures no acredita esas integraciones.
+F-3 está completa: paquete de recuperación fijado, estado/artefactos SQLite, migraciones, señales/timers y reconciliación durable, con 331 pruebas del workspace y mediciones comparables registradas abajo. F-4 está completa: servicio HTTP, módulos de integración y ejecutable, con 357 pruebas del workspace y los checks de cierre registrados abajo. F-5 cubre adopción. P-01 aún requiere contrastar las referencias con dos sistemas reales del usuario y P-07 cerrar sus metas de despliegue. El éxito de los fixtures no acredita esas integraciones.
 
 ## Evidencia F-1
 
@@ -235,7 +235,31 @@ Logs locales bajo `/tmp/workflow-forge-f3-measure-uiYwceCq`: `shared-memory-*.lo
 | Proveedor conforme | Kit público, CAS, cuotas y exclusión de propietario en SQLite; sin fallback a memoria. |
 | Medición P-07 aplicable | Cuatro cargas de secuencias en ambos perfiles y C-02 de 100/10 000 filas; investigación de regresiones y límites publicados. |
 
-F-3 queda cerrada con los checks anteriores y un commit de fase. F-4 mantiene pendientes sus rutas, DTOs, autenticación y módulos de integración; los casos reales y metas de producción permanecen en F-5.
+F-3 quedó cerrada en `2ed3970` con los checks anteriores. Los resultados F-4 se registran a continuación; los casos reales y metas de producción permanecen en F-5.
+
+## Evidencia F-4
+
+Los anexos [HTTP](HTTP.md) e [INTEGRATIONS](INTEGRATIONS.md) concretan los contratos adoptados antes de implementar sus adaptadores. El [servicio](../crates/service/src/lib.rs) depende de la fachada pública; no accede a internals del engine ni a tablas SQL. `HostConfig` compone proveedores/módulos y definiciones; `ServiceRuntime` conserva un engine y distribuye clones de su handle.
+
+| Verificación | Evidencia |
+|---|---|
+| V-10, paridad | [C-01A/C-02 y señales](../crates/service/tests/parity.rs) por sockets reales y Rust, tanto con memoria como con SQLite. Resultados/reportes equivalentes, recibos duplicados, conflicto de recepción y errores con las mismas ubicaciones/códigos. |
+| V-19, acceso y cuotas | [Autenticación, grants y DTOs](../crates/service/tests/access.rs): no se toma actor/scope/permisos del body, catálogo filtrado, cursor ligado al actor/instancia/colección/revisión, límites de JSON, respuestas y planes. La autenticación comparte deadline/capacidad de las peticiones. |
+| Artefactos y propiedad | [Streams](../crates/service/tests/streams.rs): carga interrumpida/excesiva/vencida limpia staging en SQLite sin reiniciar, metadatos verificados, streams y handles viejos no siguen al nuevo propietario. Descargas retienen el cupo hasta cerrar el body y un cierre forzado interrumpe I/O. La fachada usa nuevos métodos de host del puerto; proveedores durables deben declararlos expresamente. |
+| V-18, operadores | [Inspección/reconciliación](../crates/service/tests/effects.rs): incertidumbre visible, resolución/deduplicación y auditoría sin repetir el efecto. Mensajes arbitrarios de operaciones y notas libres no aparecen en las vistas de metadata. |
+| V-16, lifecycle | [Supervisión](../crates/service/tests/lifecycle.rs): bind/scope fallidos liberan el store; fallo esencial retira readiness y cierra transporte; Drop y shutdown invalidan handles. Perder la conexión después de aceptación conserva el run y permite recuperar su recibo sin otra invocación. |
+| V-13/PAT-07 | [Observadores](../crates/service/tests/observation.rs): lento, error y panic no alteran 32 resultados independientes ni el cierre. El ejecutable publica solo `ExecutionEvent` mediante un canal acotado; no es un outbox durable. |
+| V-17, HTTP/JSON | [Conectores](../crates/service/tests/integrations_http.rs): clientes compartidos y Decorator sobre el contrato público, revisiones derivadas de perfiles, secretos por puerto, redirects desactivados, bytes reales acotados y ningún retry oculto. Una escritura incierta queda con un intento y exige decisión explícita. |
+| V-17, archivos/CSV | [Lectura/parsing](../crates/service/tests/integrations_files.rs): raíz con capacidad, escape/symlink externo rechazados, archivo confirmado independiente de cambios posteriores, quoting/multilinea/UTF-8, lotes y cuotas. Dieciséis runs concurrentes conservan sus datos. Las reglas de inventario siguen fuera del engine. |
+| Bootstrap y defaults | [Procesos reales](../crates/service/tests/bootstrap.rs): config relativa al archivo, SQLite predeterminado, memoria expresa, arranque fatal ante store/credencial inválidos, SIGTERM con drenado, recibos/resultados conservados tras reiniciar y consulta de runs sin recargar su definición en caché. |
+
+`cargo test --workspace --all-features`: **357 pruebas exitosas, 0 fallidas y 1 SFTP ignorada**, incluyendo doctests. Después de precisar la traducción HTTP a 404 de un artefacto/espera ausente, `cargo test -p workflow-forge-service` vuelve a pasar sus 26 casos. Las ejecuciones usan sockets locales y procesos del ejecutable; no llaman a destinos de producción. Logs locales: `/tmp/workflow-forge-f4-close-workspace-final.log` y `/tmp/workflow-forge-f4-close-service.log`.
+
+`cargo fmt --all --check`, `git diff --check` y Clippy workspace/all-targets con defaults y all-features, `-D warnings`, pasan. Revisión documental: doce documentos, 201 enlaces locales/anchors, cinco bloques JSON y seis archivos JSON parseables; fences balanceados y cero errores. No se renderizó Mermaid. Los checks se ejecutaron con Rust 1.98.1.
+
+Una primera pasada completa detectó que pruebas paralelas de F-3 podían usar el mismo timestamp para sus directorios SQLite; la reserva ahora usa contador y creación atómica, sin depender de resolución del reloj. No cambió el comportamiento del engine por ese ajuste.
+
+Los límites siguen siendo explícitos: un scope y coordinador por instancia, plugins compilados confiables, HTTP sin TLS directo, bearer inicial, escrituras HTTP genéricas `Unsafe` y CSV acotado que se vuelve a analizar por lote. No se acreditan destinos reales, rendimiento HTTP de producción, MSRV 1.85 ni el servidor SFTP externo mediante estas pruebas locales. F-5 debe contrastar P-01/P-07 y medir el overhead del servicio por separado.
 
 ## Evidencia del prototipo
 
@@ -261,7 +285,8 @@ Revisión estática inicial del 2026-09-26; no equivale a una suite ejecutada ni
 | F-1 | Completada: C-01A/C-03, garantías aplicables en memoria, 21 pruebas nuevas y primera medición V-14. |
 | F-2 | Completada en memoria: C-01B/C-02, V-06/V-07/V-18, controles/efectos y comparación de rendimiento. 282 pruebas pasan; fmt y ambas variantes de Clippy limpios. |
 | F-3 | Completada: paquete fijado, estado/artefactos SQLite, migración 3, señales/timers y caídas C-01B/C-02/C-04/V-15/V-18 probadas. 331 pruebas pasan; fmt y ambas variantes de Clippy limpios. Mediciones en memoria/SQLite y regresiones documentadas. |
-| F-4 y F-5 | Pendientes según dependencias y criterios de ROADMAP. |
+| F-4 | Completada: paridad Rust/HTTP, servicio con bootstrap/supervisión, módulos HTTP/JSON y archivos/CSV, observación y permisos. 357 pruebas pasan; fmt y ambas variantes de Clippy limpios. |
+| F-5 | Adopción, consumidor de autoría, contraste real P-01 y metas/mediciones P-07 pendientes. |
 
 ## Cobertura de los puntos revisados
 
@@ -297,7 +322,7 @@ Las diferencias de fmt/Clippy de esta tabla se corrigieron en F-0; no describen 
 
 ## Siguiente punto de reanudación
 
-Comenzar F-4 concretando P-05: rutas/DTOs, autenticación del host, paginación, límites de transporte y bootstrap sobre una instancia compartida. Después implementar servicio y módulos oficiales de HTTP/JSON y archivos/CSV, con paridad Rust/HTTP, supervisión y observación. F-3 ya conserva el paquete, artefactos, migraciones, esperas y reconciliación, con checks y mediciones arriba. Contrastar referencias con integraciones reales cuando haya datos. La implementación y los checkpoints por fase ya están autorizados.
+Continuar F-5 con recetas de adopción, consumidor de autoría, ciclo de vida de extensiones y mediciones comparables. Contrastar las referencias con los casos y objetivos reales de P-01/P-07 antes de cerrar la fase. La implementación y los checkpoints por fase ya están autorizados.
 
 Baseline reproducido sobre HEAD `392303b`, con los cambios documentales del worktree, macOS y `rustc 1.98.1` / `cargo 1.98.1`. La ejecución inicial aislada no podía preparar dependencias; las pruebas se completaron después con acceso autorizado. La CI existente usa all-features y un job SFTP separado. F-0 corrigió las features del target de Criterion, su soporte async y el formato preexistente, antes de medir el motor nuevo.
 

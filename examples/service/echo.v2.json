@@ -1,0 +1,16 @@
+{
+  "format": "forge.workflow/2",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "id": "example.echo",
+  "revision": "r1",
+  "input_schema": true,
+  "output_schema": true,
+  "entry": "echo",
+  "nodes": [{
+    "id": "echo", "kind": "operation",
+    "operation": {"id": "forge.data.identity", "contract": "1", "implementation": "r1"},
+    "config": {}, "input": {"select": {"source": "input", "pointer": ""}}
+  }],
+  "edges": [],
+  "output": {"select": {"source": "node", "node": "echo", "pointer": ""}}
+}

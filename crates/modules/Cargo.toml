@@ -8,6 +8,7 @@ license.workspace = true
 
 [features]
 sqlite = ["dep:rusqlite", "dep:fs2", "dep:sha2", "dep:serde", "dep:tokio"]
+integrations = ["dep:reqwest", "dep:csv", "dep:cap-std", "dep:sha2", "dep:serde", "dep:tokio"]
 
 [dependencies]
 workflow-forge-protocol = { workspace = true }
@@ -19,6 +20,9 @@ tokio = { workspace = true, optional = true }
 rusqlite = { version = "0.39", default-features = false, features = ["bundled", "limits", "fallible_uint"], optional = true }
 fs2 = { version = "0.4.3", optional = true }
 sha2 = { version = "0.10", optional = true }
+reqwest = { workspace = true, optional = true }
+csv = { version = "1.4", optional = true }
+cap-std = { version = "4", optional = true }
 
 [dev-dependencies]
 workflow-forge-conformance = { path = "../conformance" }

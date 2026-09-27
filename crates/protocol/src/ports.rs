@@ -140,6 +140,7 @@ pub trait SecretProvider: Send + Sync {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ArtifactRef {
     pub id: String,
     pub scope: String,
@@ -157,6 +158,11 @@ pub struct ArtifactAccess {
 
 pub trait ArtifactStore: Send + Sync {
     fn durable(&self) -> bool;
+    /// Host transfers must fence the engine instance even before a run exists.
+    /// Durable providers opt in only after implementing both owner-bound methods.
+    fn host_access(&self) -> bool {
+        !self.durable()
+    }
     fn artifact_domain(&self) -> Option<&str> {
         None
     }
@@ -167,6 +173,38 @@ pub trait ArtifactStore: Send + Sync {
         media_type: &'a str,
     ) -> PortFuture<'a, ArtifactRef>;
     fn read<'a>(&'a self, reference: &'a ArtifactRef) -> PortFuture<'a, ByteStream>;
+    fn write_for_host<'a>(
+        &'a self,
+        _owner: &'a str,
+        scope: &'a str,
+        content: ByteStream,
+        media_type: &'a str,
+    ) -> PortFuture<'a, ArtifactRef> {
+        Box::pin(async move {
+            if self.durable() {
+                return Err(ForgeError::new(
+                    "capability.unsupported",
+                    "Durable host artifact access is not implemented",
+                ));
+            }
+            self.write(scope, content, media_type).await
+        })
+    }
+    fn read_for_host<'a>(
+        &'a self,
+        _owner: &'a str,
+        reference: &'a ArtifactRef,
+    ) -> PortFuture<'a, ByteStream> {
+        Box::pin(async move {
+            if self.durable() {
+                return Err(ForgeError::new(
+                    "capability.unsupported",
+                    "Durable host artifact access is not implemented",
+                ));
+            }
+            self.read(reference).await
+        })
+    }
     /// Durable implementations must fence stale owners, pin writes to a live
     /// run and permit reads only of its declared or run-created references.
     fn write_for_run<'a>(

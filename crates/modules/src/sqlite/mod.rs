@@ -17,7 +17,8 @@ mod store;
 mod worker;
 use worker::Worker;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct SqliteOptions {
     pub queue_capacity: usize,
     pub max_database_bytes: u64,
