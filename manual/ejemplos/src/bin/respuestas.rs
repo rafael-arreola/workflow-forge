@@ -47,16 +47,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             assert_eq!(output, expected);
             println!("{output}");
         }
-        // Variante local: sin ruta por defecto, un status distinto produce control.no_match.
+        // Local variant: without a default route, another status produces control.no_match.
         let mut no_route: serde_json::Value =
             serde_json::from_slice(include_bytes!("../../workflows/respuestas.json"))
-                .expect("fixture válido");
+                .expect("valid fixture");
         no_route["revision"] = json!("sin-ruta");
         no_route["nodes"][0]["body"]["nodes"][3]
             .as_object_mut()
             .expect("decision")
             .remove("fallback");
-        let bytes = serde_json::to_vec(&no_route).expect("fixture serializable");
+        let bytes = serde_json::to_vec(&no_route).expect("serializable fixture");
         let alternate = app.prepare_json(access.clone(), &bytes).await?;
         let output = app
             .execute(
@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await;
     let shutdown = runtime.shutdown(ShutdownOptions::default()).await?;
     if shutdown.forced || !shutdown.pending.is_empty() {
-        return Err("Cierre incompleto".into());
+        return Err("Incomplete shutdown".into());
     }
     result?;
     Ok(())

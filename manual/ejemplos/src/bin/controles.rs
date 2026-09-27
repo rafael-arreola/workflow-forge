@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if output != expected {
                 return Err(ForgeError::new(
                     "manual.unexpected",
-                    "Resultado distinto al documentado",
+                    "Result differs from the documented output",
                 ));
             }
             println!("{output}");
@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await;
     let shutdown = runtime.shutdown(ShutdownOptions::default()).await?;
     if shutdown.forced || !shutdown.pending.is_empty() {
-        return Err("El cierre dejó trabajo pendiente".into());
+        return Err("Shutdown left pending work".into());
     }
     outcome?;
     Ok(())

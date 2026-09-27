@@ -3,7 +3,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
-use workflow_forge::v2::*;
+use workflow_forge::prelude::*;
 use workflow_forge_authoring_example::{move_node, one_operation};
 use workflow_forge_reference_module::text::text_operations;
 

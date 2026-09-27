@@ -1,4 +1,4 @@
-//! Una fachada de aplicación reutiliza el plan y limita el trabajo de cada lote.
+//! An application facade reuses its plan and bounds work per batch.
 use futures::{StreamExt, stream};
 use serde_json::{Value, json};
 use workflow_forge::prelude::*;
@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let runtime =
         EngineRuntime::boot(WorkflowBuilder::standard().build()?, BootOptions::default()).await?;
     let outcome = async {
-        // Contexto confiable solo para esta demostración local.
+        // Trusted context only for this local demonstration.
         let access = AccessContext::trusted("default");
         let normalizador = Normalizador::preparar(runtime.application(), access.clone()).await?;
         let host_cancel = CancellationToken::new();
@@ -64,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await;
     let shutdown = runtime.shutdown(ShutdownOptions::default()).await?;
     if shutdown.forced || !shutdown.pending.is_empty() {
-        return Err("Cierre incompleto".into());
+        return Err("Incomplete shutdown".into());
     }
     outcome?;
     Ok(())

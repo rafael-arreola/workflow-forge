@@ -5,6 +5,13 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/workflow-forge-modules"
+include = ["src/**", "tests/**", "README.md", "LICENSE-MIT", "LICENSE-APACHE"]
 
 [features]
 sqlite = ["dep:rusqlite", "dep:fs2", "dep:sha2", "dep:serde", "dep:tokio"]
@@ -25,4 +32,4 @@ csv = { version = "1.4", optional = true }
 cap-std = { version = "4", optional = true }
 
 [dev-dependencies]
-workflow-forge-conformance = { path = "../conformance" }
+workflow-forge-conformance = { path = "../conformance", version = "0.1.0" }

@@ -1,4 +1,4 @@
-//! Lote local: foreach → subworkflow → operación propia; errores por elemento.
+//! Local batch: foreach → subworkflow → custom operation, with per-item failures.
 use serde_json::json;
 use workflow_forge::prelude::*;
 
@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             json!([]),
             json!([{"nombre":"  Ada  "},{"nombre":42},{"nombre":"  Rafael  "}]),
         ] {
-            let expected_len = input.as_array().expect("entrada array").len();
+            let expected_len = input.as_array().expect("array input").len();
             let output = app
                 .execute(
                     access.clone(),
@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     CancellationToken::new(),
                 )
                 .await?;
-            assert_eq!(output.as_array().expect("salida array").len(), expected_len);
+            assert_eq!(output.as_array().expect("array output").len(), expected_len);
             if expected_len == 0 {
                 assert_eq!(output, json!([]));
             } else {
@@ -46,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await;
     let shutdown = runtime.shutdown(ShutdownOptions::default()).await?;
     if shutdown.forced || !shutdown.pending.is_empty() {
-        return Err("Cierre incompleto".into());
+        return Err("Incomplete shutdown".into());
     }
     outcome?;
     Ok(())

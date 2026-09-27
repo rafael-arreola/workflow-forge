@@ -2586,17 +2586,10 @@ dependencies = [
 name = "workflow-forge"
 version = "0.1.0"
 dependencies = [
- "futures",
- "jsonschema",
- "libc",
- "serde",
  "serde_json",
- "tokio",
- "workflow-forge-conformance",
  "workflow-forge-engine",
  "workflow-forge-modules",
  "workflow-forge-protocol",
- "workflow-forge-reference-module",
 ]
 
 [[package]]
@@ -2631,6 +2624,21 @@ dependencies = [
  "tokio-util",
  "uuid",
  "workflow-forge-protocol",
+]
+
+[[package]]
+name = "workflow-forge-examples"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "jsonschema",
+ "libc",
+ "serde",
+ "serde_json",
+ "tokio",
+ "workflow-forge",
+ "workflow-forge-conformance",
+ "workflow-forge-reference-module",
 ]
 
 [[package]]

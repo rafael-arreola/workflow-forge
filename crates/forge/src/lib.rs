@@ -30,10 +30,10 @@
 //! # }
 //! ```
 
-pub mod v2;
-pub use v2::*;
+mod builder;
+pub use builder::*;
 
 /// Public contracts, engine handles and standard composition for host applications.
 pub mod prelude {
-    pub use crate::v2::*;
+    pub use crate::builder::*;
 }

@@ -18,7 +18,7 @@ impl Operation for Saludar {
                     code: "manual.saludos.input".into(),
                     class: ErrorClass::InvalidInput,
                     certainty: EffectCertainty::NotApplied,
-                    message: "Se esperaba un nombre de tipo string".into(),
+                    message: "Expected a string name".into(),
                 });
             };
             let Some(prefijo) = invocation.config["prefijo"].as_str() else {
@@ -26,7 +26,7 @@ impl Operation for Saludar {
                     code: "manual.saludos.config".into(),
                     class: ErrorClass::InvalidInput,
                     certainty: EffectCertainty::NotApplied,
-                    message: "Falta el prefijo de tipo string".into(),
+                    message: "Missing string prefix".into(),
                 });
             };
             Ok(OperationOutput::json(json!(format!("{prefijo}{nombre}"))))
@@ -50,7 +50,7 @@ pub fn operaciones() -> OperationBundle {
         repetition: Repetition::Safe,
         reconciliation: false,
         required_resources: Default::default(),
-        description: "Construye un saludo sin producir efectos externos".into(),
+        description: "Builds a greeting without external effects".into(),
         examples: vec![
             json!({"config":{"prefijo":"Hola, "},"input":"Rafael","output":"Hola, Rafael"}),
         ],

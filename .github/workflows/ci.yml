@@ -21,14 +21,13 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Formato
-        run: cargo fmt --all --check
+      - name: Verify libraries, documentation and proofs of concept
+        run: ./scripts/check.sh
 
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-
-      - name: Tests
-        run: cargo test --workspace --all-features --locked
-
-      - name: SQLite measurement consumer
-        run: cargo test -p workflow-forge --example v2_capacity --features sqlite --locked sqlite_release_batch_observes_results_before_expiry
+      - name: Verify release archives
+        run: >-
+          cargo package --workspace
+          --exclude workflow-forge-examples
+          --exclude workflow-forge-reference-module
+          --exclude workflow-forge-authoring-example
+          --all-features --locked

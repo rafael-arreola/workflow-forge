@@ -1,79 +1,74 @@
-# Workflow Forge — recorridos ejecutables
+# Executable examples
 
-Estos ejemplos usan `workflow_forge::v2` y `forge.workflow/2`; la fachada raíz y `prelude` exponen la misma API. Se ejecutan desde el checkout. [ADOPTION](docs/ADOPTION.md) explica cómo componer el host, crear extensiones y migrar consumidores. [PROJECT](docs/PROJECT.md) conserva las verificaciones y límites reales.
+Run commands from the repository root. All examples use public contracts and local fixtures;
+no external account or deployed engine service is needed. Repository-only host examples live
+in `workflow-forge-examples`, a non-published package separate from the release crates.
 
-## JSON: normalizar, consultar y responder
+| Example | Command suffix for `cargo run -p workflow-forge-examples` | Demonstrates |
+|---|---|---|
+| Customer lookup | `--example v2_customer` | Normalize input, call an injected directory and return `{customer:"C-9",active:true}`. |
+| Outcome routing | `--example v2_outcomes` | Classify response data and handle unexpected input with try/fallback. |
+| Durable receipt | `--features sqlite --example v2_sqlite -- DATABASE` | Local SQLite acceptance and deduplication. |
+| Inventory import | `--example v2_inventory -- 100 3` | Bounded CSV batches, business writes and correlated JSONL reports. |
+| Durable signal | `--features sqlite --example v2_signal -- DATABASE start` then `... DATABASE signal` | Reserve, close, explicitly recover and deliver a signal within five minutes. |
 
-```sh
-cargo run -p workflow-forge --example v2_customer
-```
+Use a fresh database path for a new demonstration and retain it between the two signal commands.
+For receipt deduplication, repeat the same command/input/key within its retention window.
+The examples retain the `v2_` names to identify their workflow-format fixtures, not a second API.
+All Rust imports use the root/prelude facade.
 
-El [host](crates/forge/examples/v2_customer.rs) registra una [extensión externa](examples/reference-module/src/lib.rs) y prepara [customer_lookup.v2.json](examples/workflows/customer_lookup.v2.json). Normaliza `" C-9 "`, consulta un directorio inyectado y devuelve `{"customer":"C-9","active":true}`. Conserva una instancia y espera su cierre. El directorio es una referencia local; sustituir su cliente no cambia el engine.
-
-## Autoría mediante catálogo y JSON Schema
+## Authoring and external modules
 
 ```sh
 cargo run -p workflow-forge-authoring-example --example round_trip
 ```
 
-El [consumidor](examples/authoring-client/src/lib.rs) construye un documento desde el catálogo, conserva metadata visual, exporta/importa y usa preparación pública. El [programa](examples/authoring-client/examples/round_trip.rs) publica el documento JSON en stdout y comprueba `ID-42`. La [operación prefix](examples/reference-module/src/text.rs) muestra un plugin con configuración reusable y datos independientes por invocación. No requiere UI ni imports internos del engine.
+The [authoring consumer](examples/authoring-client/src/lib.rs) builds a workflow from catalog
+metadata, round-trips presentation data, prepares it through the public API and checks `ID-42`.
+The [reference module](examples/reference-module/src/lib.rs) depends only on protocol contracts.
+Its [inventory module](examples/reference-module/src/inventory/mod.rs) keeps domain rules out
+of the engine. Workflow definitions live in [examples/workflows](examples/workflows).
 
-## Estado durable y deduplicación
-
-```sh
-cargo run -p workflow-forge --features sqlite --example v2_sqlite -- /tmp/forge-example.sqlite
-```
-
-El [programa](crates/forge/examples/v2_sqlite.rs) reclama un store SQLite local y pide aceptación durable. Repetir el comando con la misma recepción conserva el RunId dentro de la ventana de deduplicación. Solo un runtime posee el archivo; un error de apertura no cambia el perfil a memoria.
-
-## CSV por lotes, efectos y reporte
+## Progressive manual examples
 
 ```sh
-cargo run --release -p workflow-forge --example v2_inventory -- 100 3
+cargo run --manifest-path manual/ejemplos/Cargo.toml --locked --bin inicio
 ```
 
-[inventory_import.v2.json](examples/workflows/inventory_import.v2.json) procesa un artefacto CSV, aplica filas a un destino inyectado y publica un reporte JSONL correlacionado. El [programa](crates/forge/examples/v2_inventory.rs) mide tres composiciones locales de 100 filas; [la extensión](examples/reference-module/src/inventory/mod.rs) conserva las reglas de negocio fuera del motor. Una escritura incierta bloquea la continuación hasta una resolución; `collect` recoge fallos conocidos. Los módulos genéricos [archivos/CSV](docs/INTEGRATIONS.md) no conocen SKU ni reglas de inventario.
+Replace the binary name with:
 
-## Espera entre arranques
-
-Ejecutar ambos comandos dentro de cinco minutos:
-
-```sh
-cargo run -p workflow-forge --features sqlite --example v2_signal -- /tmp/forge-approval.sqlite start
-cargo run -p workflow-forge --features sqlite --example v2_signal -- /tmp/forge-approval.sqlite signal
-```
-
-El [host](crates/forge/examples/v2_signal.rs) recupera [approval.v2.json](examples/workflows/approval.v2.json), valida la señal y conserva el acuse duplicado. La demostración usa acceso local confiable; el host proporciona cualquier autenticación o transporte externo.
-
-## Resultados, decisiones y salida general
-
-```sh
-cargo run -p workflow-forge --example v2_outcomes
-```
-
-El [ejemplo](crates/forge/examples/v2_outcomes.rs) ejecuta [response_routing.v2.json](examples/workflows/response_routing.v2.json) con respuestas locales: compara status 404 mediante `forge.data.equals`, elige una rama y maneja datos inesperados mediante `try`. No realiza integraciones reales.
-
-## Capacidad, retención y mediciones
-
-```sh
-cargo build --release -p workflow-forge --features sqlite --example v2_measure --example v2_capacity
-target/release/examples/v2_measure 1 1048576 1000 32 --terminal-runs 64
-target/release/examples/v2_capacity saturation 32
-target/release/examples/v2_capacity release 32 1048576
-```
-
-[v2_measure](crates/forge/examples/v2_measure.rs) separa preparación y ejecución de cadenas. [v2_capacity](crates/forge/examples/v2_capacity.rs) comprueba admisión llena y expiración de resultados conservando una instancia viva. Ambos admiten `--sqlite RUTA_NUEVA`; cada experimento durable exige una base nueva. El modo release consulta RSS con `ps`, disponible en macOS/Linux. Usar la herramienta de medición del sistema sobre el binario compilado para registrar además su pico RSS.
-
-Los comandos publican JSON y fallan ante resultados inesperados. [ACCEPTANCE §5](docs/ACCEPTANCE.md#5-medir-temprano-y-publicar-límites-comprobados) define muestras, retención, cuotas y tiempos artificiales; [PROJECT](docs/PROJECT.md) distingue campañas completadas de pendientes. La espera controlada de saturación permite probar límites; su throughput no representa la capacidad máxima.
-
-## Control, fallos y recuperación
-
-| Recorrido | Prueba pública reproducible |
+| Binary | Scenario |
 |---|---|
-| Decisión, paralelo, foreach, loop y subworkflows | [v2_control.rs](crates/forge/tests/v2_control.rs) |
-| Escritura incierta, inspección y reconciliación | [v2_effects.rs](crates/forge/tests/v2_effects.rs) |
-| Caída de proceso con efecto/acuse pendiente | [v2_sqlite.rs](crates/forge/tests/v2_sqlite.rs) |
-| CSV durable entre lotes y publicación de artefacto | [v2_sqlite_inventory.rs](crates/forge/tests/v2_sqlite_inventory.rs) |
-| Resultados HTTP como datos | [v2_http_outcomes.rs](crates/forge/tests/v2_http_outcomes.rs) |
+| `inicio` | One input → trim → output, with explicit shutdown. |
+| `sistema` | Shared application facade, reused plan and bounded concurrent calls. |
+| `cancelacion` | Host cancellation and run deadline, checking exact error codes. |
+| `modulos` | Register a protocol-only extension and connect two operations. |
+| `respuestas` | 200/404/429/other status, missing field and generic fallback. |
+| `importacion` | Foreach + subworkflow + extension, empty batch and partial failure. |
+| `controles` | Decision, parallel, foreach, loop, subworkflow and timer. |
+| `artefactos` | Publish, declare and read bounded bytes by artifact reference. |
+| `durable` | SQLite receipt; pass `-- DATABASE RECEIPT_KEY`. |
+| `senales` | Reserve and deliver a signal inside one host. |
 
-Los escenarios del prototipo que dependían de XLSX, SFTP, compresión o expresiones JSONPath requieren una implementación expresa bajo el protocolo nuevo. El código anterior y sus recetas históricas se conservan en Git, hasta `6806fa0`. No se presenta esa compatibilidad como entregada.
+Existing fixture names and JSON field names remain stable; they are sample business data, not
+engine keywords. The [manual](manual/index.html) explains input/output and host responsibilities.
+
+## Measurement probes
+
+These programs verify their results while reporting timings and retention. The sequence probe
+requires at least 1,000 samples plus warmup; the retention probe uses at least ten cycles. Their output is
+specific to the machine, workload and provider; it is not a production capacity claim.
+
+```sh
+cargo run --release -p workflow-forge-examples --example v2_measure -- 1 1024 1000 2 --terminal-runs 16
+cargo run --release -p workflow-forge-examples --example v2_capacity -- saturation 2
+cargo run --release -p workflow-forge-examples --example v2_capacity -- release 2 1024
+```
+
+Both probes support `--sqlite NEW_DATABASE` with the sqlite feature. Each measurement needs a
+fresh database. Release retention probes query process RSS using `ps` on macOS/Linux. Artificial
+latency used to exercise saturation is not the maximum throughput of the engine.
+
+`python3 scripts/run-examples.py` executes the complete local proof-of-concept set with temporary
+databases. Integration tests additionally cover process crashes, unknown effects, signal races,
+provider behavior and recovery; see [release checks](docs/RELEASING.md).

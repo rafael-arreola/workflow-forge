@@ -1,0 +1,36 @@
+[package]
+name = "workflow-forge-examples"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+default = ["integrations"]
+integrations = ["workflow-forge/integrations"]
+sqlite = ["workflow-forge/sqlite"]
+full = ["sqlite", "integrations"]
+
+[[example]]
+name = "v2_sqlite"
+required-features = ["sqlite"]
+
+[[example]]
+name = "v2_signal"
+required-features = ["sqlite"]
+
+[dependencies]
+workflow-forge = { path = "../../crates/forge", default-features = false }
+
+[dev-dependencies]
+workflow-forge-conformance = { path = "../../crates/conformance" }
+workflow-forge-reference-module = { path = "../../examples/reference-module" }
+jsonschema = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+libc = "0.2"

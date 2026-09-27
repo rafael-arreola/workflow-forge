@@ -24,10 +24,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     .await;
 
-    // Apagar también cuando prepare/execute devuelve un error.
+    // Shut down even when prepare/execute returns an error.
     let shutdown = runtime.shutdown(ShutdownOptions::default()).await?;
     if shutdown.forced || !shutdown.pending.is_empty() {
-        return Err("El cierre dejó trabajo pendiente".into());
+        return Err("Shutdown left pending work".into());
     }
     let output = outcome?;
     assert_eq!(output, json!("Rafael"));

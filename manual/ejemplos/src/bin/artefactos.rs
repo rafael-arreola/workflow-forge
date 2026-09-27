@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
             .await?;
         let mut request = StartRunRequest::new(plan, json!({"source":reference}));
-        // El JSON solo transporta la referencia; esta lista la vincula al run.
+        // JSON carries only the reference; this list attaches it to the run.
         request.options.artifacts.push(reference.clone());
         let output = app
             .execute(access.clone(), request, CancellationToken::new())
@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if downloaded.len() + chunk.len() > 1024 {
                 return Err(ForgeError::new(
                     "manual.limit",
-                    "Archivo mayor al presupuesto del ejemplo",
+                    "File exceeds the example budget",
                 ));
             }
             downloaded.extend(chunk);
@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await;
     let shutdown = runtime.shutdown(ShutdownOptions::default()).await?;
     if shutdown.forced || !shutdown.pending.is_empty() {
-        return Err("El cierre dejó trabajo pendiente".into());
+        return Err("Shutdown left pending work".into());
     }
     println!("{}", outcome?);
     Ok(())

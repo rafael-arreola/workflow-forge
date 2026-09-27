@@ -6,10 +6,8 @@ use workflow_forge::prelude::*;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = std::env::args()
         .nth(1)
-        .ok_or("Uso: durable RUTA_SQLITE CLAVE")?;
-    let key = std::env::args()
-        .nth(2)
-        .ok_or("Falta la clave de recepción")?;
+        .ok_or("Usage: durable DATABASE_PATH RECEIPT_KEY")?;
+    let key = std::env::args().nth(2).ok_or("Missing receipt key")?;
     let store = Arc::new(modules::SqliteExecutionStore::open(
         path,
         modules::SqliteOptions::default(),
@@ -40,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await;
     let shutdown = runtime.shutdown(ShutdownOptions::default()).await?;
     if shutdown.forced || !shutdown.pending.is_empty() {
-        return Err("El cierre dejó trabajo pendiente".into());
+        return Err("Shutdown left pending work".into());
     }
     println!("{}", outcome?);
     Ok(())

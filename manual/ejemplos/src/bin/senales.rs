@@ -28,14 +28,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     return Ok::<_, ForgeError>(wait.id.clone());
                 }
                 if run.state.is_terminal() || run.state == RunState::Blocked {
-                    return Err(ForgeError::new("manual.wait", "No se creó la reserva"));
+                    return Err(ForgeError::new(
+                        "manual.wait",
+                        "The reservation was not created",
+                    ));
                 }
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
         })
         .await
         .map_err(|_| ForgeError::new("manual.timeout", "La reserva no estuvo lista"))??;
-        // En una aplicación real, estos datos llegan por un callback/cola autenticado.
+        // In an application, these values arrive through an authenticated callback or queue.
         app.signal(
             access.clone(),
             SignalCommand {
@@ -56,7 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await;
     let shutdown = runtime.shutdown(ShutdownOptions::default()).await?;
     if shutdown.forced || !shutdown.pending.is_empty() {
-        return Err("El cierre dejó trabajo pendiente".into());
+        return Err("Shutdown left pending work".into());
     }
     println!("{}", outcome?);
     Ok(())

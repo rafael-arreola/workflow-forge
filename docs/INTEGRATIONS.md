@@ -1,37 +1,65 @@
-# Workflow Forge — módulos de integración F-4
+# Official outbound integrations
 
-Anexo normativo de TDD-02/10 para los módulos oficiales. Las garantías de ejecución siguen en [CONTRACTS](CONTRACTS.md); la integración Rust en [EMBEDDING](EMBEDDING.md). [PROJECT](PROJECT.md) distingue contrato de implementación verificada.
+The `integrations` feature exposes factory functions for HTTP/JSON, file reads and CSV parsing.
+The host explicitly creates trusted profiles and registers the resulting `OperationBundle`.
+Registering a module does not execute its operations. Clients/configuration are shared;
+per-invocation data is not. No connector controls workflow successors.
 
-## 1. Composición, identidad y patrones
+## Profile identity
 
-Factory Functions producen `OperationBundle` a partir de perfiles confiables del host. El builder los registra atómicamente como cualquier extensión. Cada operación adapta su cliente/parser al trait `Operation`; el engine no conoce reqwest, CSV ni rutas de archivos. Un Decorator conserva descriptor, contexto, InvocationId, AttemptId y effect key, y solo observa alrededor de `execute`. Las instancias comparten configuración/clientes; los datos de cada invocación son locales.
+HTTP exports `forge.http.<name>` contract 2. File profiles export `forge.files.<name>.read`
+contract 1. Implementation revisions derive from adapter version and the serialized profile's
+SHA-256. Changing URL, method, root, limits or secret reference changes that revision; rotating
+the secret value does not. Obtain exact revisions from descriptors/catalogs rather than guessing
+them. Preserve old profiles when retained runs require their revisions.
 
-Los perfiles HTTP y de archivos fijan `name` y política. Exportan `forge.http.<name>` con contrato `2` y `forge.files.<name>.read` con contrato `1`. La revisión de implementación se deriva de la versión del adaptador y SHA-256 de su perfil serializado. Cambiar URL, método, raíz, límites o referencia de secreto cambia la revisión; rotar el valor secreto no la cambia. Se obtiene la revisión exacta del catálogo/descriptores al crear la definición. El editor debe conservarla: no sustituirla por `latest`. Mantener revisiones antiguas exige conservar sus perfiles junto a los nuevos. El paquete del run continúa usando su revisión fijada.
+## HTTP/JSON
 
-Los perfiles no realizan requests, lecturas de archivos ni trabajo en segundo plano al registrarse. La construcción del cliente HTTP configura un pool compartido; la apertura del directorio de archivos ocurre al invocar la operación. Las rutas locales son de un filesystem administrado por el host. Instalar un módulo concede al proceso ese acceso; no convierte plugins compilados en código aislado.
+`HttpJsonProfile` fixes name, absolute HTTP(S) URL, method, optional bearer secret reference,
+timeout and byte budgets. Configured URLs reject userinfo, query and fragments. Invocation input
+contains a string-map `query` and optional JSON `body` for writes; it cannot change the endpoint,
+method, proxy or headers. GET has no body. Query fields and request JSON are bounded before dispatch.
 
-## 2. HTTP/JSON
+Defaults are 10 seconds, 1 MiB request JSON and 4 MiB response. Redirects, implicit proxies and
+client retries are disabled. Response size counts actual received bytes. Valid JSON responses
+return `{status, body}`, including 4xx/5xx; 204 returns a null body. The workflow decides status
+semantics. Response headers are not returned, and errors omit remote bodies, URLs and secrets.
 
-`HttpJsonProfile` fija nombre, URL absoluta HTTP(S), método, referencia opcional de bearer, plazo y presupuestos. No admite userinfo, query ni fragmentos en la URL configurada. El input tiene `query` como mapa de strings y, en escrituras, `body` JSON; no contiene URL, método, proxy ni cabeceras. GET omite body; POST/PUT/PATCH/DELETE admiten body opcional. El JSON enviado está acotado antes de despachar. La query se codifica con el cliente, con máximo 64 entradas y límites por clave/valor.
+GET is Read/Safe; POST/PUT/PATCH/DELETE are Write/Unsafe. Before dispatch, failure is NotApplied.
+After dispatching a write, timeout, disconnect or an invalid response is Unknown. The generic
+adapter does not infer idempotency from a header and does not provide a business inspector.
+A destination-specific adapter can expose Keyed repetition/reconciliation when justified.
 
-Defaults: 10 s, 1 MiB de request JSON, 4 MiB de respuesta. El cliente desactiva redirects, proxies implícitos y retries internos. El presupuesto de respuesta cuenta bytes realmente recibidos. Acepta respuestas con media type JSON independientemente del status; 204 produce body `null`. El workflow clasifica 2xx/4xx/5xx y decide la ruta. La salida es `{status, body}`. No devuelve las cabeceras de respuesta ni incluye el body remoto, URL o secreto en los mensajes de error.
+Bearer credentials resolve through `OperationContext::secret` and a declared `secret:<name>`
+resource. The host controls allowed destinations. General scope permissions apply to operations
+without secrets; there is no additional per-endpoint ACL hidden in this module.
 
-GET declara `Read/Safe`; las escrituras, `Write/Unsafe`. Un fallo previo a despachar tiene certeza `NotApplied`. Después de despachar una escritura, timeout, desconexión o respuesta que no se puede validar producen `Unknown`; el motor decide bloqueo/reconciliación conforme al contrato. El módulo genérico no asume garantías de idempotencia por la presencia de una cabecera ni declara un inspector de negocio. Un adaptador específico puede implementar `Keyed` e `EffectInspector` cuando su destino los respalde.
+## Files
 
-El bearer se obtiene de `OperationContext::secret` y se declara como `secret:<nombre>` en recursos. El host configura el destino permitido. Las operaciones sin secreto usan los permisos generales de preparación/ejecución de ese ámbito; no existe una ACL adicional por nombre de endpoint en este módulo.
+`FileReadProfile` fixes an absolute root, name, media type and byte limit (4 MiB by default).
+Input `{path}` is relative, at most 1,024 bytes, without `..` or absolute paths. A `cap-std`
+directory handle resolves within the configured root, including symbolic-link boundaries.
+Only regular files are accepted. Bounded chunks stream to the artifact port; output is an
+`ArtifactRef`. Diagnostics do not expose paths/content. The operation is Read/Safe and requires
+`artifacts` access.
 
-## 3. Archivos y CSV
+A repeated read may see changed source content; a confirmed published artifact preserves its
+bytes. There is no arbitrary file-write operation or promise to interrupt an OS syscall.
+Hosts must use local regular files they control. Compiled modules are not sandboxed.
 
-`FileReadProfile` fija raíz absoluta, nombre, media type y límite, 4 MiB por defecto. Input `{path}` relativo, máximo 1 024 bytes, sin componentes `..` ni rutas absolutas. La apertura usa un handle de directorio de `cap-std` para resolver dentro de la raíz, también frente a enlaces simbólicos. Solo se aceptan archivos regulares. La lectura se transmite en fragmentos al puerto de artefactos del contexto, bajo límite real de bytes; la salida es `ArtifactRef`. No publica rutas locales ni contenido como diagnóstico. Declara `Read/Safe` y recurso `artifacts`.
+## CSV batches
 
-El filesystem es una fuente mutable: reintentar una lectura aún no confirmada puede observar contenido nuevo. Una referencia de artefacto publicada y confirmada conserva los bytes del paso. No se implementan escrituras arbitrarias al filesystem ni se promete cancelar una syscall del SO; los hosts deben usar almacenamiento local y archivos regulares bajo su control.
+`csv_operations(CsvOptions)` exports `forge.csv.read_batch`. Input is `{source, offset?, size?}`
+with a same-scope artifact. Output contains `headers`, rows `{index, line, fields, valid_columns}`
+and nullable `next_offset`. Offset counts data records from zero; line is the parser's physical
+line number, including quoted/multiline fields. The module does not interpret domain quantities,
+dates or inventory rules. Column mismatch is recorded per row; invalid UTF-8, headers or budgets
+reject parsing.
 
-`csv_operations(CsvOptions)` exporta `forge.csv.read_batch`. Input `{source, offset?, size?}`, con `ArtifactRef` del mismo ámbito; la salida contiene `headers`, filas `{index, line, fields, valid_columns}` y `next_offset` nullable. El offset cuenta registros de datos, desde cero; `line` es la línea física reportada por el parser y respeta campos entrecomillados/multilínea. No interpreta SKU, cantidades, fechas ni reglas de negocio. Diferente número de columnas queda señalado en la fila; UTF-8, cabeceras o presupuestos inválidos rechazan la lectura.
+Defaults: 4 MiB source, 10,000 records, 128 columns, 16 KiB per field, batch size 100 and maximum
+batch size 1,000. The current parser rereads the bounded source for each batch; it is not a
+constant-memory parser for unlimited input. The engine limits concurrency. Access uses the
+operation context, never execution-store tables. Durable runs need coordinated artifact storage.
 
-Defaults: 4 MiB de fuente, 10 000 registros, 128 columnas, 16 KiB por campo; tamaño de lote 100, máximo 1 000. El módulo usa el parser `csv`, valida la fuente acotada y devuelve únicamente el lote solicitado. Esta primera implementación vuelve a leer/analizar la fuente acotada en cada lote; no se presenta como consumo constante para un archivo ilimitado. La concurrencia la limita el engine. Contenido de archivos/CSV se obtiene mediante `OperationContext`, sin acceso directo al store ni a tablas SQL. Un run durable requiere el proveedor coordinado de artefactos.
-
-## 4. Verificación
-
-Probar clientes reutilizados entre runs, configuración congelada, Decorator transparente, ausencia de redirects/retries, límite sin Content-Length, fallos de escritura con incertidumbre y mensajes sin credenciales. Para archivos: lectura dentro de raíz, rechazo de escape/symlink externo, límite y cancelación sin publicación parcial. Para CSV: comillas, multilinea, cabecera sola, UTF-8, columnas, límites y avance por lotes. Mantener reglas de C-01/C-02 en sus definiciones o extensiones de negocio.
-
-Fuentes primarias: [reqwest ClientBuilder](https://docs.rs/reqwest/latest/reqwest/struct.ClientBuilder.html), [política de retry desactivado](https://docs.rs/reqwest/latest/reqwest/retry/fn.never.html), [csv ReaderBuilder](https://docs.rs/csv/latest/csv/struct.ReaderBuilder.html), [cap-std Dir](https://docs.rs/cap-std/latest/cap_std/fs/struct.Dir.html). Estas APIs implementan mecanismos; las garantías del módulo son las definidas arriba y requieren las pruebas correspondientes.
+See [inventory proof of concept](../examples/host/examples/v2_inventory.rs) for composition with
+a separate business module and [module tests](../crates/modules/tests) for local connector fixtures.

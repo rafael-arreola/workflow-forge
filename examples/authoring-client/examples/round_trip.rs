@@ -1,6 +1,6 @@
 //! Print an authored document on stdout; validation/result metadata goes to stderr.
 use serde_json::json;
-use workflow_forge::v2::*;
+use workflow_forge::prelude::*;
 use workflow_forge_authoring_example::{move_node, one_operation};
 use workflow_forge_reference_module::text::text_operations;
 

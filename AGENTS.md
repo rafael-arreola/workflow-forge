@@ -16,12 +16,12 @@ Read only the documents relevant to the change:
 
 | Document | Responsibility |
 |---|---|
-| [PRD](docs/PRD.md) | Product, scope, and user decisions. |
-| [ARCHITECTURE](docs/ARCHITECTURE.md) | Boundaries, communication, composition, and lifecycle. |
-| [TDD](docs/TDD.md) and [CONTRACTS](docs/CONTRACTS.md) | Technical design, format, guarantees, and invariants. |
-| [PATTERNS](docs/PATTERNS.md) | Patterns, examples, and extension rules. |
-| [ROADMAP](docs/ROADMAP.md) and [PROJECT](docs/PROJECT.md) | Phases, evidence, limitations, and pending work. |
-| [Manual](manual/index.html) | Practical guidance for library integrators. |
+| [EMBEDDING](docs/EMBEDDING.md) | Host ownership, execution, cancellation and recovery. |
+| [ARCHITECTURE](docs/ARCHITECTURE.md) | Boundaries, communication and composition. |
+| [CONTRACTS](docs/CONTRACTS.md) | Format, guarantees and invariants. |
+| [PATTERNS](docs/PATTERNS.md) | Extension design and examples. |
+| [RELEASING](docs/RELEASING.md) | Verification and package/publication checks. |
+| [Manual](manual/index.html) | Progressive embedding recipes. |
 
 Current user instructions take precedence over historical decisions. Distinguish implemented, verified, and proposed behavior. Do not reopen deferred work or repeat completed analysis without a concrete need.
 
@@ -81,12 +81,12 @@ Extensions depend on the protocol and their own dependencies; they must not impo
 - Record commands actually executed, results, and limitations. A description, example, or successful compilation does not verify every guarantee.
 - Communicate in Spanish, briefly explaining what changed, how it was verified, and what remains pending.
 
-## Manual and Diagrams
+## Documentation and examples
 
-- Keep the manual in `manual/index.html` and chapters in `manual/*.html`: Spanish, Tailwind via CDN, simple styling, and a progression from basic to advanced topics.
-- Keep runnable examples in `manual/ejemplos`, which has an independent workspace. Verify only examples affected by API or behavior changes.
-- Use Archify for diagrams and follow the [local maintenance guide](manual/diagramas/README.md). Diagram specifications are not executable engine workflows.
-- **The manual palette overrides the skill's default colors:** white, black, and gray for nodes, arrows, highlights, and animations; light by default, with an optional neutral dark theme.
-- Centralize customization in `manual/diagramas/manual-theme.css` and `apply-theme.py`. When regenerating: deliver with Archify, apply the palette, check the final HTML, and update affected SVG previews and evidence.
-- Preserve provenance: `*.delivery.json` describes the original Archify output; `*.theme.json`, `*.check.json`, and browser evidence describe the customized HTML. Update `verificacion.json` without claiming reviews that were not performed.
-- Documentation must teach the actual API through short snippets and complete references. Do not invent type names, methods, or guarantees.
+- Maintain documentation, code comments and user-facing library messages in English. Communicate task progress to the user in Spanish.
+- Keep the practical manual at `manual/index.html`, with runnable examples in the independent `manual/ejemplos` workspace. Preserve existing sample identifiers/payloads unless a contract change requires migration.
+- Use small inline Mermaid diagrams for maintained documentation, with white/black/gray colors and descriptive captions. Keep the simple CDN-based manual readable on mobile and desktop.
+- Keep repository-only integration tests and proofs of concept in `examples/host`, outside publishable crate dependencies. Never remove a valid behavioral test merely to obtain a passing release check.
+- Do not retain obsolete phase diaries, generated viewer bundles or machine-specific benchmark snapshots as current release documentation. Preserve current contracts and executable evidence.
+- `scripts/check.sh` verifies tests, examples and API docs; `docs/RELEASING.md` describes package checks. Release preparation does not authorize publication.
+- Teach the real public API through short snippets and links to complete examples. Do not invent methods, types or guarantees.
