@@ -81,6 +81,11 @@ pub(crate) struct PreparedCase {
     pub body: Arc<PreparedBody>,
 }
 pub(crate) enum PreparedInstruction {
+    Try {
+        body: Arc<PreparedBody>,
+        catches: Vec<(String, String, Arc<PreparedBody>)>,
+        fallback: (String, Arc<PreparedBody>),
+    },
     Timer {
         duration_ms: u64,
     },

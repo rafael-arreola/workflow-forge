@@ -34,6 +34,7 @@ impl EngineRuntime {
         let (events, mut receiver) = mpsc::channel::<ExecutionEvent>(128);
         let (late, late_receiver) = mpsc::channel(composition.limits.concurrent_attempts);
         let shared = Arc::new(Shared {
+            calls: std::sync::Mutex::new(JoinSet::new()),
             attempts: Arc::new(Semaphore::new(composition.limits.concurrent_attempts)),
             scope_slots: Arc::new(Semaphore::new(composition.limits.active_scopes)),
             composition: composition.clone(),
@@ -52,7 +53,14 @@ impl EngineRuntime {
             for definition in options.definitions {
                 prepare_registered(&shared, definition, None).await?;
             }
-            for mut run in composition.store.unfinished().await? {
+            let unfinished = composition.store.unfinished().await?;
+            if !unfinished.is_empty() && options.recovery == RecoveryPolicy::RejectUnfinished {
+                return Err(ForgeError::new(
+                    "recovery.required",
+                    "Unfinished executions require the host to explicitly select RecoveryPolicy::Resume",
+                ));
+            }
+            for mut run in unfinished {
                 if run.scope != composition.scope {
                     return Err(ForgeError::new(
                         "state.conflict",
@@ -181,6 +189,9 @@ impl EngineRuntime {
             }
         };
         let composition = &self.app.shared.composition;
+        let mut calls =
+            std::mem::take(&mut *self.app.shared.calls.lock().expect("owned calls lock"));
+        calls.shutdown().await;
         let pending = match composition.store.unfinished().await {
             Ok(runs) => runs.into_iter().map(|r| r.id).collect(),
             Err(error) => {
@@ -211,6 +222,12 @@ impl EngineRuntime {
 impl Drop for EngineRuntime {
     fn drop(&mut self) {
         self.app.shared.phase.store(STOPPED, Ordering::Release);
+        self.app
+            .shared
+            .calls
+            .lock()
+            .expect("owned calls lock")
+            .abort_all();
         self.app.shared.cancel.cancel();
         self.supervisor_abort.abort();
         if let Some(supervisor) = self.supervisor.take() {

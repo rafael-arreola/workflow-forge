@@ -115,6 +115,9 @@
         },
         {
           "$ref": "#/$defs/await_signal_node"
+        },
+        {
+          "$ref": "#/$defs/try_node"
         }
       ]
     },
@@ -631,6 +634,60 @@
         },
         "retry": {
           "$ref": "#/$defs/retry"
+        }
+      }
+    },
+    "error_case": {
+      "type": "object",
+      "required": [
+        "id",
+        "code",
+        "body"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "code": {
+          "$ref": "#/$defs/id"
+        },
+        "body": {
+          "$ref": "#/$defs/body"
+        }
+      }
+    },
+    "try_node": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "input",
+        "body",
+        "fallback"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "const": "try"
+        },
+        "input": {
+          "$ref": "#/$defs/binding"
+        },
+        "body": {
+          "$ref": "#/$defs/body"
+        },
+        "catches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/error_case"
+          }
+        },
+        "fallback": {
+          "$ref": "#/$defs/fallback"
         }
       }
     }

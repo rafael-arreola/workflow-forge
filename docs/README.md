@@ -2,7 +2,7 @@
 
 La documentación define la refactorización de Workflow Forge como motor agnóstico de integración en Rust. La planificación sigue la separación de producto, arquitectura y diseño técnico utilizada en `memory-forge`, adaptada a este proyecto.
 
-**Estado al 2026-09-27:** F-0 a F-5 completadas. El motor en memoria, controles, efectos, persistencia SQLite, recuperación, esperas, servicio HTTP, módulos, CLI y consumidor de autoría tienen evidencia en PROJECT. El cierre usa pruebas esenciales y casos borde; las integraciones reales y metas del despliegue quedan para una etapa posterior, cuando el usuario decida integrar sus sistemas.
+**Alcance vigente:** librería Rust embebida, sin servicio ni cliente remoto. El reajuste añade ejecución propia, cancelación del host y rutas de resultado/error. [EMBEDDING](EMBEDDING.md) fija ese contrato; PROJECT registra implementación y evidencia. Las integraciones reales permanecen para una etapa posterior.
 
 ## Recorrido de lectura
 
@@ -21,10 +21,9 @@ Los anexos permiten avanzar sin leer todo el diseño a la vez:
 
 | Anexo | Cuándo leerlo | Autoridad |
 |---|---|---|
+| [EMBEDDING](EMBEDDING.md) | Al integrar la librería y tratar resultados. | Propiedad, ejecución, cancelación, `try` y recuperación explícita. |
 | [CONTRACTS](CONTRACTS.md) | Al implementar o integrar el motor. | Anexo normativo de TDD: formato, mappings, tipos, errores, confianza, persistencia, esperas y límites F-1/F-2/F-3. |
 | [ACCEPTANCE](ACCEPTANCE.md) | Al comprobar generalidad y resultados. | Casos de referencia del PRD, fixtures y protocolo de mediciones; no resultados ejecutados. |
-| [HTTP](HTTP.md) | Al implementar o integrar el servicio. | Anexo normativo de TDD-10/12: autenticación, rutas/DTOs, paginación, cuotas y lifecycle F-4. |
-| [CLI](CLI.md) | Al usar el servicio desde una terminal o script. | Contrato del cliente HTTP: comandos, archivos/streams, límites y salida. |
 | [INTEGRATIONS](INTEGRATIONS.md) | Al configurar o extender conectores oficiales. | Anexo normativo de TDD-02/10: perfiles, revisiones y límites de HTTP/JSON y archivos/CSV F-4. |
 | [ADOPTION](ADOPTION.md) | Al integrar el motor o desarrollar un plugin/editor. | Recetas del producto, consumidor de autoría, versionado/retiro y migración del prototipo. |
 

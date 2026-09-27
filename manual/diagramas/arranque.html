@@ -5282,19 +5282,19 @@ html[data-preset] .card { background: var(--panel); }
         </g>
         </g>
 
-        <g data-edge-from="host" data-edge-to="runtime" data-edge-label="start: aceptar una ejecución" data-edge-key="5" data-edge-id="iniciar">
+        <g data-edge-from="host" data-edge-to="runtime" data-edge-label="execute(access, request, token)" data-edge-key="5" data-edge-id="iniciar">
           <path data-composition-edge-from="host" data-composition-edge-to="runtime" data-composition-edge-id="iniciar" data-composition-points="164,330;898,330" d="M 164 330 L 898 330" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
         <g data-detail="context">
-          <rect x="452.2" y="310" width="157.6" height="16" rx="3" class="c-mask"/>
-          <text x="531" y="320" class="t-backend" font-size="9" text-anchor="middle">start: aceptar una ejecución</text>
+          <rect x="444.4" y="310" width="173.20000000000002" height="16" rx="3" class="c-mask"/>
+          <text x="531" y="320" class="t-backend" font-size="9" text-anchor="middle">execute(access, request, token)</text>
         </g>
         </g>
 
-        <g data-edge-from="host" data-edge-to="runtime" data-edge-label="wait; comprobar estado; result" data-edge-key="6" data-edge-id="observar">
-          <path data-composition-edge-from="host" data-composition-edge-to="runtime" data-composition-edge-id="observar" data-composition-points="164,364;898,364" d="M 164 364 L 898 364" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <g data-edge-from="runtime" data-edge-to="host" data-edge-label="Valor final o error estructurado" data-edge-key="6" data-edge-id="observar">
+          <path data-composition-edge-from="runtime" data-composition-edge-to="host" data-composition-edge-id="observar" data-composition-points="898,364;164,364" d="M 898 364 L 164 364" class="a-default" stroke-width="1.4" stroke-dasharray="3,5" marker-end="url(#arrowhead)"/>
         <g data-detail="context">
-          <rect x="447" y="344" width="168" height="16" rx="3" class="c-mask"/>
-          <text x="531" y="354" class="t-backend" font-size="9" text-anchor="middle">wait; comprobar estado; result</text>
+          <rect x="441.8" y="344" width="178.4" height="16" rx="3" class="c-mask"/>
+          <text x="531" y="354" class="t-muted" font-size="9" text-anchor="middle">Valor final o error estructurado</text>
         </g>
         </g>
 
@@ -5566,10 +5566,10 @@ html[data-preset] .card { background: var(--panel); }
       <div class="card">
         <div class="card-header">
           <div class="card-dot amber"></div>
-          <h3>Comprueba el resultado</h3>
+          <h3>El host controla la ejecución</h3>
         </div>
         <ul>
-          <li>&bull; wait también puede devolver Blocked. result requiere una salida disponible.</li>
+          <li>&bull; Descartar execute solicita cancelación. Recuperar pendientes exige Resume explícito.</li>
         </ul>
       </div>
     </div>

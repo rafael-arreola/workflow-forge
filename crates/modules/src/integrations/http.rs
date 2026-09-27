@@ -108,13 +108,13 @@ pub fn http_json_operations(profiles: Vec<HttpJsonProfile>) -> Result<OperationB
         let descriptor = OperationDescriptor {
             revision: OperationRevision::new(
                 &format!("forge.http.{}", profile.name),
-                "1",
+                "2",
                 &revision(&profile)?,
             ),
             schema_dialect: SCHEMA_DIALECT.into(),
             config_schema: json!({"$schema":SCHEMA_DIALECT,"type":"object","additionalProperties":false}),
             input_schema: json!({"$schema":SCHEMA_DIALECT,"type":"object","properties":properties,"additionalProperties":false}),
-            output_schema: json!({"$schema":SCHEMA_DIALECT,"type":"object","required":["status","body"],"properties":{"status":{"type":"integer","minimum":200,"maximum":299},"body":true},"additionalProperties":false}),
+            output_schema: json!({"$schema":SCHEMA_DIALECT,"type":"object","required":["status","body"],"properties":{"status":{"type":"integer","minimum":100,"maximum":599},"body":true},"additionalProperties":false}),
             effect: if read {
                 EffectKind::Read
             } else {
@@ -223,20 +223,6 @@ impl HttpJson {
             )
         })?;
         let status = response.status();
-        if !status.is_success() {
-            let class =
-                if status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                    ErrorClass::Transient
-                } else {
-                    ErrorClass::Rejected
-                };
-            return Err(failure(
-                "http.status",
-                class,
-                self.certainty(true),
-                "Endpoint returned an unsuccessful status",
-            ));
-        }
         if status == reqwest::StatusCode::NO_CONTENT {
             return Ok(OperationOutput::json(json!({"status":204,"body":null})));
         }

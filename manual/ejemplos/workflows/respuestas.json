@@ -1,0 +1,368 @@
+{
+  "entry": "request_result",
+  "nodes": [
+    {
+      "id": "request_result",
+      "kind": "try",
+      "input": {
+        "select": {
+          "source": "input",
+          "pointer": ""
+        }
+      },
+      "body": {
+        "entry": "missing",
+        "nodes": [
+          {
+            "id": "missing",
+            "kind": "operation",
+            "operation": {
+              "id": "forge.data.equals",
+              "contract": "1",
+              "implementation": "r1"
+            },
+            "config": {},
+            "input": {
+              "object": {
+                "left": {
+                  "select": {
+                    "source": "input",
+                    "pointer": "/status"
+                  }
+                },
+                "right": {
+                  "literal": 404
+                }
+              }
+            }
+          },
+          {
+            "id": "ok",
+            "kind": "operation",
+            "operation": {
+              "id": "forge.data.equals",
+              "contract": "1",
+              "implementation": "r1"
+            },
+            "config": {},
+            "input": {
+              "object": {
+                "left": {
+                  "select": {
+                    "source": "input",
+                    "pointer": "/status"
+                  }
+                },
+                "right": {
+                  "literal": 200
+                }
+              }
+            }
+          },
+          {
+            "id": "limited",
+            "kind": "operation",
+            "operation": {
+              "id": "forge.data.equals",
+              "contract": "1",
+              "implementation": "r1"
+            },
+            "config": {},
+            "input": {
+              "object": {
+                "left": {
+                  "select": {
+                    "source": "input",
+                    "pointer": "/status"
+                  }
+                },
+                "right": {
+                  "literal": 429
+                }
+              }
+            }
+          },
+          {
+            "id": "route",
+            "kind": "decision",
+            "input": {
+              "object": {
+                "missing": {
+                  "select": {
+                    "source": "node",
+                    "pointer": "",
+                    "node": "missing"
+                  }
+                },
+                "response": {
+                  "select": {
+                    "source": "input",
+                    "pointer": ""
+                  }
+                },
+                "ok": {
+                  "select": {
+                    "source": "node",
+                    "pointer": "",
+                    "node": "ok"
+                  }
+                },
+                "limited": {
+                  "select": {
+                    "source": "node",
+                    "pointer": "",
+                    "node": "limited"
+                  }
+                }
+              }
+            },
+            "cases": [
+              {
+                "id": "ok",
+                "when": {
+                  "select": {
+                    "source": "input",
+                    "pointer": "/ok"
+                  }
+                },
+                "body": {
+                  "entry": "valor",
+                  "nodes": [
+                    {
+                      "id": "valor",
+                      "kind": "operation",
+                      "operation": {
+                        "id": "forge.data.identity",
+                        "contract": "1",
+                        "implementation": "r1"
+                      },
+                      "config": {},
+                      "input": {
+                        "literal": {
+                          "resultado": "encontrado"
+                        }
+                      }
+                    }
+                  ],
+                  "edges": [],
+                  "output": {
+                    "select": {
+                      "source": "node",
+                      "pointer": "",
+                      "node": "valor"
+                    }
+                  }
+                }
+              },
+              {
+                "id": "not_found",
+                "when": {
+                  "select": {
+                    "source": "input",
+                    "pointer": "/missing"
+                  }
+                },
+                "body": {
+                  "entry": "valor",
+                  "nodes": [
+                    {
+                      "id": "valor",
+                      "kind": "operation",
+                      "operation": {
+                        "id": "forge.data.identity",
+                        "contract": "1",
+                        "implementation": "r1"
+                      },
+                      "config": {},
+                      "input": {
+                        "literal": {
+                          "resultado": "ausente"
+                        }
+                      }
+                    }
+                  ],
+                  "edges": [],
+                  "output": {
+                    "select": {
+                      "source": "node",
+                      "pointer": "",
+                      "node": "valor"
+                    }
+                  }
+                }
+              },
+              {
+                "id": "limited",
+                "when": {
+                  "select": {
+                    "source": "input",
+                    "pointer": "/limited"
+                  }
+                },
+                "body": {
+                  "entry": "valor",
+                  "nodes": [
+                    {
+                      "id": "valor",
+                      "kind": "operation",
+                      "operation": {
+                        "id": "forge.data.identity",
+                        "contract": "1",
+                        "implementation": "r1"
+                      },
+                      "config": {},
+                      "input": {
+                        "literal": {
+                          "resultado": "posponer"
+                        }
+                      }
+                    }
+                  ],
+                  "edges": [],
+                  "output": {
+                    "select": {
+                      "source": "node",
+                      "pointer": "",
+                      "node": "valor"
+                    }
+                  }
+                }
+              }
+            ],
+            "fallback": {
+              "id": "otro_status",
+              "body": {
+                "entry": "valor",
+                "nodes": [
+                  {
+                    "id": "valor",
+                    "kind": "operation",
+                    "operation": {
+                      "id": "forge.data.identity",
+                      "contract": "1",
+                      "implementation": "r1"
+                    },
+                    "config": {},
+                    "input": {
+                      "literal": {
+                        "resultado": "revisar_status"
+                      }
+                    }
+                  }
+                ],
+                "edges": [],
+                "output": {
+                  "select": {
+                    "source": "node",
+                    "pointer": "",
+                    "node": "valor"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "edges": [
+          {
+            "from": "missing",
+            "to": "ok"
+          },
+          {
+            "from": "ok",
+            "to": "limited"
+          },
+          {
+            "from": "limited",
+            "to": "route"
+          }
+        ],
+        "output": {
+          "select": {
+            "source": "node",
+            "pointer": "/output",
+            "node": "route"
+          }
+        }
+      },
+      "catches": [
+        {
+          "id": "sin_status",
+          "code": "mapping.missing",
+          "body": {
+            "entry": "valor",
+            "nodes": [
+              {
+                "id": "valor",
+                "kind": "operation",
+                "operation": {
+                  "id": "forge.data.identity",
+                  "contract": "1",
+                  "implementation": "r1"
+                },
+                "config": {},
+                "input": {
+                  "literal": {
+                    "resultado": "entrada_incompleta"
+                  }
+                }
+              }
+            ],
+            "edges": [],
+            "output": {
+              "select": {
+                "source": "node",
+                "pointer": "",
+                "node": "valor"
+              }
+            }
+          }
+        }
+      ],
+      "fallback": {
+        "id": "unexpected",
+        "body": {
+          "entry": "valor",
+          "nodes": [
+            {
+              "id": "valor",
+              "kind": "operation",
+              "operation": {
+                "id": "forge.data.identity",
+                "contract": "1",
+                "implementation": "r1"
+              },
+              "config": {},
+              "input": {
+                "literal": {
+                  "resultado": "error_no_previsto"
+                }
+              }
+            }
+          ],
+          "edges": [],
+          "output": {
+            "select": {
+              "source": "node",
+              "pointer": "",
+              "node": "valor"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "edges": [],
+  "output": {
+    "select": {
+      "source": "node",
+      "pointer": "/output",
+      "node": "request_result"
+    }
+  },
+  "format": "forge.workflow/2",
+  "id": "manual.respuestas",
+  "revision": "r1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "input_schema": true,
+  "output_schema": true
+}

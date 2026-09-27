@@ -89,7 +89,7 @@ Trazabilidad: UC-03; V-07/V-08/V-09/V-18. En F-3 estos casos tienen pruebas de c
 
 **Alcance vigente, 2026-09-27:** por instrucción del usuario, el cierre técnico se limita a pruebas esenciales y casos borde. Las matrices de rendimiento, sus repeticiones y la comparación histórica dejan de ser requisitos de cierre. Se conservan los resultados obtenidos; las combinaciones no realizadas quedan diferidas, sin contarlas como aprobadas. Los protocolos de medición de esta sección quedan disponibles para necesidades concretas de capacidad u optimización.
 
-En una decisión posterior del mismo día, el usuario sitúa sus integraciones reales después de comprobar el engine. Los casos de referencia, conformidad, autoría/extensión, paridad, recuperación y verificaciones esenciales permiten cerrar F-5 y crear su commit. P-01/P-07 continúan en la etapa posterior, sin bloquear el cierre técnico ni atribuir sistemas reales o capacidad de producción verificados.
+En una decisión posterior del mismo día, el usuario sitúa sus integraciones reales después de comprobar el engine. Los casos de referencia, conformidad, autoría/extensión, recuperación y verificaciones esenciales permiten cerrar F-5 y crear su commit. P-01/P-07 continúan en la etapa posterior, sin bloquear el cierre técnico ni atribuir sistemas reales o capacidad de producción verificados.
 
 ### Cierre técnico esencial
 
@@ -102,7 +102,7 @@ Usar la suite funcional existente para comprobar estas garantías; no crear otra
 | Efectos | Duplicados, timeout, cancelación, respuesta tardía e incertidumbre conservan identidad y no repiten escrituras sin garantía. |
 | Durabilidad y lifecycle | Reinicio en fronteras de confirmación, señales/timers, readiness y cierre; un store durable fallido no cae a memoria. |
 | Acceso y recursos | Scope/permisos, entrada/artefactos excesivos, cola llena y concurrencia acotada. |
-| Extensión y consumidores | Sustitución mediante contratos públicos, revisión ausente/restaurada, paridad Rust/HTTP y CLI. |
+| Extensión y consumidores | Sustitución mediante contratos públicos, revisión ausente/restaurada, ejecución propia y cancelación del host. |
 
 La verificación de cierre comprende una pasada final de `cargo test --workspace --all-features --locked`, la regresión focalizada del consumidor SQLite de `v2_capacity`, formato, Clippy y verificación documental; PROJECT conserva los resultados ya obtenidos. Solo repetir ante un cambio relevante, fallo o preocupación concreta sin resolver. La regresión del benchmark comprueba comportamiento con pocas ejecuciones y no publica percentiles como si fueran una campaña de rendimiento. P-01/P-07 corresponden a la aceptación posterior con sistemas y metas reales.
 
@@ -116,17 +116,14 @@ Cuando se decida ejecutar una campaña, separar preparación fría, reutilizaci�
 | 1/8/32 runs concurrentes con operación sin I/O y lectura simulada de 10 ms | Uso de capacidad y separación de espera externa. | F-1/F-2 |
 | C-02 con 100/10 000 filas y lotes de 100 | Memoria acotada y correlación; sin cargar todos los outputs indefinidamente. | F-2/F-3 |
 | Store lento/fallido, señales duplicadas y reinicio | No perder aceptados ni confundir telemetría con commit. | F-3 |
-| Misma definición por Rust y HTTP | Overhead del transporte separado de ejecución. | F-4 |
 
 Cada combinación declara el presupuesto utilizado; para medir 100 outputs de 1 MiB se eleva explícitamente la retención del run o se espera rechazo, nunca se desactiva el límite sin registrarlo. La cola se llena hasta su capacidad y una solicitud adicional debe rechazarse antes de acreditar aceptación.
 
 Criterios de estas campañas: resultados correctos bajo concurrencia, ninguna aceptación perdida, rechazo de exceso predecible, observación del consumo al liberar runs/resultados y tiempos medidos reproducibles. La primera medición crea una línea de comparación. Si se estudia una regresión de más del 15% en p95 o memoria, investigar mediante repeticiones equivalentes; ese umbral no obliga a abrir nuevas campañas ni bloquea por sí solo el cierre técnico. Las metas comerciales de latencia/carga siguen en P-07 hasta disponer de escenarios reales.
 
-### Comparación Rust/HTTP en F-5
+### Ejecución embebida y resultados
 
-Una operación identity, el mismo documento/input y límites predeterminados, con perfiles de memoria y SQLite medidos por separado. Cada proceso elige Rust o HTTP sobre loopback; conserva cliente/instancia, realiza 100 calentamientos y al menos 1 000 muestras. Publica preparación inicial, p50/p95/p99 de preparación repetida, aceptación y recorrido completo, throughput, consultas por run y cero resultados/recibos incorrectos. El RSS del proceso HTTP incluye servidor y cliente locales; no representa la memoria de un cliente remoto.
-
-Aceptación termina cuando se recibe `StartReceipt`; el recorrido completo verifica el resultado. Rust usa `wait`, mientras HTTP consulta `/result` y espera 1 ms únicamente tras `not_ready`. Por eso la diferencia de recorrido completo incluye polling y scheduling; no se presenta toda ella como coste de serialización o del socket. No se añaden retries a los comandos. Los tamaños de esta comparación son 1/64 KiB, con concurrencia 1/8/32; la campaña de 1 MiB, saturación, liberación de memoria y latencia externa sigue separada.
+Verificar éxito, error específico, fallback, fallo del handler, deadline global, cancelación y descarte del future. Un arranque predeterminado con pendientes debe rechazarse sin invocar operaciones; recuperación explícita debe conservar selección del handler y deadline. HTTP usa fixtures locales: 2xx/4xx/5xx son datos; transporte/contenido inválido son errores estructurados. Las integraciones reales siguen diferidas.
 
 ### Extensión de la medición de secuencias
 
@@ -136,7 +133,7 @@ Aceptación termina cuando se recibe `StartReceipt`; el recorrido completo verif
 
 Para la campaña durable de payload grande, `--sqlite-bytes 2147483648` declara una cuota de base de 2 GiB, adicional a `--sqlite RUTA_NUEVA`. Los 512 MiB predeterminados no alojan 64 resultados de unos 12–16 MiB más runs activos. El override es exclusivo del benchmark y se publica en `provider_options`; no cambia WAL/FULL/fullfsync, el máximo de registro ni los límites del engine. Sin el argumento se conservan las opciones del proveedor. Rechazar el argumento si no se eligió SQLite. Cada combinación usa una base nueva; registrar tamaño de base/sidecars al terminar y RSS máximo por separado. El tamaño final no acredita el pico de disco.
 
-La ampliación SQLite originalmente prevista en F-5 comprendía 1/10/100 nodos de 1 MiB a concurrencia 1/8/32, más una lectura simulada de 10 ms con un nodo de 1 KiB a las mismas concurrencias: 12 combinaciones nuevas. Las tres combinaciones realizadas se conservan; las otras nueve se difieren por el recorte autorizado. Las cargas pequeñas y comparación de transporte ya tienen campañas separadas. No presentar esta ampliación parcial como el producto cartesiano completo de tamaños, nodos y perfiles.
+La ampliación SQLite originalmente prevista en F-5 comprendía 1/10/100 nodos de 1 MiB a concurrencia 1/8/32, más una lectura simulada de 10 ms con un nodo de 1 KiB a las mismas concurrencias: 12 combinaciones nuevas. Las tres combinaciones realizadas se conservan; las otras nueve se difieren por el recorte autorizado. Las cargas pequeñas tienen campañas históricas separadas. No presentar esta ampliación parcial como el producto cartesiano completo de tamaños, nodos y perfiles.
 
 En el JSON, `max_retained_data_bytes` corresponde a snapshots finales, no al máximo intermedio ni al RSS del proceso. `failed_runs` cuenta resultados inesperados. RSS se obtiene separadamente con la herramienta del sistema. Validar output/identidad y contar bytes finales queda fuera del cronómetro start→wait y dentro del throughput total.
 

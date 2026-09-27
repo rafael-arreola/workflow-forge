@@ -4,8 +4,8 @@
     {
       "diagram_type": "architecture",
       "output": "arquitectura.html",
-      "specification_sha256": "1624d21a20b96f0a5cb3748d7d4d3e6ce8e9ab7ee5d53e998dbef04e2fd45f30",
-      "artifact_sha256": "08834e4d7ce38133eb80de975f215c40fd2036ff2b1ecae72e3fc557f84e0b67",
+      "specification_sha256": "a9b0c6205eb5ffe0dc5bda474abf493a28c87b360350bc3e6e1a117d679691e6",
+      "artifact_sha256": "c97e205c308ac0857d0bb3f24ed3217bf4e4f44a37aabbbbe06be6a7fad66a03",
       "validation": {
         "checksPassed": 9,
         "checkCount": 9,
@@ -35,19 +35,19 @@
           }
         ],
         "reviewer": "image-capable assistant",
-        "observations": "Paleta neutra, buen contraste, geometría conservada y sin texto recortado."
+        "observations": "Revisión del HTML final mediante capturas: contenido embebido, paleta neutra, texto legible y sin cruces ni recortes. execute usa los argumentos reales de la API."
       },
       "correction_rounds": 0,
-      "preview_svg_sha256": "c6465fad76c46caced4965b439eb92ece7a2b11bf21fe171b05562957615b5c0",
-      "source_artifact_sha256": "ea7f5e3ba052db14679bae2cac615f576ef000ed9e30027f1cfebbafefc80ed1",
+      "preview_svg_sha256": "c2e8814db22120e7040760eb9526339972ec57a7d391150f98cebce64ba94658",
+      "source_artifact_sha256": "747259d09f6fd245c9242a02c0ffd808af2da5830e78cb4242543eec6784aece",
       "theme_receipt": "arquitectura.theme.json",
       "artifact_check": "arquitectura.check.json"
     },
     {
       "diagram_type": "sequence",
       "output": "arranque.html",
-      "specification_sha256": "89e5b5fc2747fbe429bb891bcb309f68028d6994d3b12de315bcae20052fc8ee",
-      "artifact_sha256": "a6b974ff8ed2f92ff102ec0103a85455743d39f6ed9b135603705a0732215a96",
+      "specification_sha256": "c256a29fb95633d442b0665fe2a69fcdc71c9cab7f0c1645f5cf2c9b24bcbaf3",
+      "artifact_sha256": "71783e5321bc2acaca7dd6f7f0c047ac1275909c724a31d4c5a5fd86c6d91d63",
       "validation": {
         "checksPassed": 9,
         "checkCount": 9,
@@ -66,22 +66,22 @@
               1440,
               900
             ],
-            "theme": "light"
+            "theme": "dark"
           },
           {
             "viewport": [
               2048,
               1320
             ],
-            "theme": "dark"
+            "theme": "light"
           }
         ],
         "reviewer": "image-capable assistant",
-        "observations": "Paleta neutra, buen contraste, geometría conservada y sin texto recortado."
+        "observations": "Revisión del HTML final mediante capturas: contenido embebido, paleta neutra, texto legible y sin cruces ni recortes. execute usa los argumentos reales de la API."
       },
       "correction_rounds": 0,
-      "preview_svg_sha256": "a7da3ee27867e560fec7ad97347cd2ca1cf1b1388b4df79c4f1f39800873cc47",
-      "source_artifact_sha256": "36fca869b2a3cb323d727f9a84cf76c4b3780d06cb5d0d9eb198ff2ba44c95ea",
+      "preview_svg_sha256": "e4ed2cf683581ccebbd5b9a00ac81279fc0ad17f6fd57a6bc851db28329d58f7",
+      "source_artifact_sha256": "d09ffca108067e26d7b698225f57eeb5187154a75f8bc7f7fbb4d5cf36ed2600",
       "theme_receipt": "arranque.theme.json",
       "artifact_check": "arranque.check.json"
     },
@@ -213,12 +213,12 @@
     }
   ],
   "manual_links": {
-    "html_pages": 22,
-    "local_references": 485,
+    "files": 39,
+    "local_references": 700,
     "errors": []
   },
   "manual_browser": {
-    "evidence": "Supplementary local Chrome inspection of manual pages with embedded SVG previews",
+    "evidence": "Supplementary local Chrome inspection of updated manual pages and SVG previews",
     "checks": [
       {
         "page": "Instancia y arquitectura · Manual de Workflow Forge",
@@ -245,16 +245,11 @@
         "href": "diagramas/arranque.html"
       },
       {
-        "page": "Mover y transformar datos · Manual de Workflow Forge",
+        "page": "Errores, reintentos y efectos · Manual de Workflow Forge",
         "width": 1440,
         "scroll": 1440,
-        "images": [
-          {
-            "src": "diagramas/datos.svg",
-            "loaded": true
-          }
-        ],
-        "href": "diagramas/datos.html"
+        "images": [],
+        "href": null
       },
       {
         "page": "Señales y comunicación entre procesos · Manual de Workflow Forge",
@@ -269,107 +264,11 @@
         "href": "diagramas/senales.html"
       }
     ],
-    "perceptual_review": "Preview images, captions and enlargement links inspected in desktop and mobile layouts."
+    "scope": "Arquitectura y errores a 1440 px; integración y procesos a 390 px. Sin overflow horizontal; imágenes cargadas. No acredita toda interacción de cada página."
   },
   "theme": "Paleta neutra del manual, aplicada por petición explícita del usuario.",
   "palette_browser_audit": [
     {
-      "name": "arquitectura",
-      "theme": "light",
-      "preset": "classic",
-      "bad": []
-    },
-    {
-      "name": "arquitectura",
-      "theme": "light",
-      "preset": "signal-flow",
-      "bad": []
-    },
-    {
-      "name": "arquitectura",
-      "theme": "light",
-      "preset": "blueprint",
-      "bad": []
-    },
-    {
-      "name": "arquitectura",
-      "theme": "light",
-      "preset": "editorial",
-      "bad": []
-    },
-    {
-      "name": "arquitectura",
-      "theme": "dark",
-      "preset": "classic",
-      "bad": []
-    },
-    {
-      "name": "arquitectura",
-      "theme": "dark",
-      "preset": "signal-flow",
-      "bad": []
-    },
-    {
-      "name": "arquitectura",
-      "theme": "dark",
-      "preset": "blueprint",
-      "bad": []
-    },
-    {
-      "name": "arquitectura",
-      "theme": "dark",
-      "preset": "editorial",
-      "bad": []
-    },
-    {
-      "name": "arranque",
-      "theme": "light",
-      "preset": "classic",
-      "bad": []
-    },
-    {
-      "name": "arranque",
-      "theme": "light",
-      "preset": "signal-flow",
-      "bad": []
-    },
-    {
-      "name": "arranque",
-      "theme": "light",
-      "preset": "blueprint",
-      "bad": []
-    },
-    {
-      "name": "arranque",
-      "theme": "light",
-      "preset": "editorial",
-      "bad": []
-    },
-    {
-      "name": "arranque",
-      "theme": "dark",
-      "preset": "classic",
-      "bad": []
-    },
-    {
-      "name": "arranque",
-      "theme": "dark",
-      "preset": "signal-flow",
-      "bad": []
-    },
-    {
-      "name": "arranque",
-      "theme": "dark",
-      "preset": "blueprint",
-      "bad": []
-    },
-    {
-      "name": "arranque",
-      "theme": "dark",
-      "preset": "editorial",
-      "bad": []
-    },
-    {
       "name": "modulos",
       "theme": "light",
       "preset": "classic",
@@ -509,6 +408,102 @@
     },
     {
       "name": "senales",
+      "theme": "dark",
+      "preset": "editorial",
+      "bad": []
+    },
+    {
+      "name": "arquitectura",
+      "theme": "light",
+      "preset": "classic",
+      "bad": []
+    },
+    {
+      "name": "arquitectura",
+      "theme": "light",
+      "preset": "signal-flow",
+      "bad": []
+    },
+    {
+      "name": "arquitectura",
+      "theme": "light",
+      "preset": "blueprint",
+      "bad": []
+    },
+    {
+      "name": "arquitectura",
+      "theme": "light",
+      "preset": "editorial",
+      "bad": []
+    },
+    {
+      "name": "arquitectura",
+      "theme": "dark",
+      "preset": "classic",
+      "bad": []
+    },
+    {
+      "name": "arquitectura",
+      "theme": "dark",
+      "preset": "signal-flow",
+      "bad": []
+    },
+    {
+      "name": "arquitectura",
+      "theme": "dark",
+      "preset": "blueprint",
+      "bad": []
+    },
+    {
+      "name": "arquitectura",
+      "theme": "dark",
+      "preset": "editorial",
+      "bad": []
+    },
+    {
+      "name": "arranque",
+      "theme": "light",
+      "preset": "classic",
+      "bad": []
+    },
+    {
+      "name": "arranque",
+      "theme": "light",
+      "preset": "signal-flow",
+      "bad": []
+    },
+    {
+      "name": "arranque",
+      "theme": "light",
+      "preset": "blueprint",
+      "bad": []
+    },
+    {
+      "name": "arranque",
+      "theme": "light",
+      "preset": "editorial",
+      "bad": []
+    },
+    {
+      "name": "arranque",
+      "theme": "dark",
+      "preset": "classic",
+      "bad": []
+    },
+    {
+      "name": "arranque",
+      "theme": "dark",
+      "preset": "signal-flow",
+      "bad": []
+    },
+    {
+      "name": "arranque",
+      "theme": "dark",
+      "preset": "blueprint",
+      "bad": []
+    },
+    {
+      "name": "arranque",
       "theme": "dark",
       "preset": "editorial",
       "bad": []

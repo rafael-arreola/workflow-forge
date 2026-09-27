@@ -303,10 +303,14 @@ impl WorkflowApplication {
     }
     pub async fn cancel(&self, access: AccessContext, id: RunId) -> Result<(), ForgeError> {
         self.authorize(&access, Permission::Cancel, false)?;
-        transition(&self.shared, &id, |run| {
+        state::update(&self.shared, &id, false, |run| {
+            if run.state.is_terminal() {
+                return Ok(false);
+            }
             run.cancel_requested = true;
             run.state = RunState::Cancelling;
             run.close_waits();
+            Ok(true)
         })
         .await?;
         if let Some(token) = self.shared.cancellations.lock().await.get(&id) {

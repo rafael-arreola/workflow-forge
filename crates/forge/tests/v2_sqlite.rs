@@ -160,7 +160,10 @@ fn store(path: &Path) -> Arc<modules::SqliteExecutionStore> {
 async fn boot(path: &Path, effects: PathBuf) -> EngineRuntime {
     EngineRuntime::boot(
         builder(store(path), effects, "parent").build().unwrap(),
-        BootOptions::default(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
     )
     .await
     .unwrap()
@@ -298,7 +301,10 @@ async fn process_child() {
     });
     let runtime = EngineRuntime::boot(
         builder(wrapped, effects, &mode).build().unwrap(),
-        BootOptions::default(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
     )
     .await
     .unwrap();
@@ -440,7 +446,10 @@ async fn missing_or_changed_plugin_blocks_sqlite_recovery_until_exact_reinstalla
             .execution_store(provider.clone())
             .build()
             .unwrap(),
-        BootOptions::default(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
     )
     .await
     .unwrap();
@@ -465,7 +474,10 @@ async fn missing_or_changed_plugin_blocks_sqlite_recovery_until_exact_reinstalla
         builder(store(&dir.db()), dir.effects(), "incompatible_revision")
             .build()
             .unwrap(),
-        BootOptions::default(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
     )
     .await
     .unwrap();
@@ -512,9 +524,15 @@ async fn durable_profile_rejects_ephemeral_artifact_dependencies_before_acceptan
         )),
     )
     .unwrap();
-    let runtime = EngineRuntime::boot(b.build().unwrap(), BootOptions::default())
-        .await
-        .unwrap();
+    let runtime = EngineRuntime::boot(
+        b.build().unwrap(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
     let error = runtime
         .application()
         .prepare_json(
@@ -540,7 +558,13 @@ async fn cancelled_boot_releases_a_durable_claim_while_its_provider_stays_alive(
     let assembly = builder(wrapped.clone(), dir.effects(), "parent")
         .build()
         .unwrap();
-    let task = tokio::spawn(EngineRuntime::boot(assembly, BootOptions::default()));
+    let task = tokio::spawn(EngineRuntime::boot(
+        assembly,
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
+    ));
     tokio::time::timeout(Duration::from_secs(2), notify.notified())
         .await
         .unwrap();
@@ -618,9 +642,15 @@ async fn abandoning_shutdown_releases_the_store_after_supervisor_join_was_taken(
             inspectors: vec![],
         })
         .unwrap();
-    let runtime = EngineRuntime::boot(builder.build().unwrap(), BootOptions::default())
-        .await
-        .unwrap();
+    let runtime = EngineRuntime::boot(
+        builder.build().unwrap(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
     let app = runtime.application();
     request(&app, json!(7)).await.unwrap();
     tokio::time::timeout(Duration::from_secs(2), started.notified())

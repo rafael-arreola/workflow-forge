@@ -781,9 +781,15 @@ async fn reclaiming_memory_after_supervisor_failure_does_not_redispatch_an_unsaf
             .code(),
         "store.injected"
     );
-    let recovered = EngineRuntime::boot(builder().build().unwrap(), BootOptions::default())
-        .await
-        .unwrap();
+    let recovered = EngineRuntime::boot(
+        builder().build().unwrap(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
     let run = tokio::time::timeout(
         Duration::from_secs(2),
         recovered.application().wait(access(), id),
@@ -1122,5 +1128,29 @@ async fn loop_resumption_advances_cursor_without_repeating_confirmed_iteration()
         blocked.invocations["/nodes/loop/iterations/0/nodes/create"].id,
         blocked.invocations["/nodes/loop/iterations/1/nodes/create"].id
     );
+    runtime.shutdown(ShutdownOptions::default()).await.unwrap();
+}
+
+#[tokio::test]
+async fn workflow_fallback_cannot_hide_an_uncertain_write_or_repeat_it() {
+    let remote = Arc::new(Remote::default());
+    let runtime = boot(remote.clone(), Behavior::UnknownApplied, Repetition::Unsafe).await;
+    let mut value = serde_json::to_value(definition()).unwrap();
+    let protected = json!({"entry":value["entry"],"nodes":value["nodes"],"edges":value["edges"],"output":value["output"]});
+    value["entry"] = json!("guard");
+    value["edges"] = json!([]);
+    value["nodes"] = json!([{"id":"guard","kind":"try","input":{"select":{"source":"input","pointer":""}},"body":protected,"catches":[],"fallback":{"id":"unsafe","body":{"entry":"mask","nodes":[{"id":"mask","kind":"operation","operation":{"id":"forge.data.identity","contract":"1","implementation":"r1"},"config":{},"input":{"literal":"hidden"}}],"edges":[],"output":{"literal":"hidden"}}}}]);
+    value["output"] = json!({"select":{"source":"node","node":"guard","pointer":"/output"}});
+    let run = start_with(
+        &runtime.application(),
+        serde_json::from_value(value).unwrap(),
+        input(),
+    )
+    .await;
+    assert_eq!(run.state, RunState::Blocked);
+    assert!(run.output.is_none());
+    assert_eq!(run.error.unwrap().code(), "effect.unknown");
+    assert!(!run.invocations.keys().any(|key| key.contains("/catch/")));
+    assert_eq!(remote.state.lock().unwrap().calls.len(), 1);
     runtime.shutdown(ShutdownOptions::default()).await.unwrap();
 }

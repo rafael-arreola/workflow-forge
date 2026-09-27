@@ -43,26 +43,15 @@ cargo run -p workflow-forge --features sqlite --example v2_signal -- /tmp/forge-
 cargo run -p workflow-forge --features sqlite --example v2_signal -- /tmp/forge-approval.sqlite signal
 ```
 
-El [host](crates/forge/examples/v2_signal.rs) recupera [approval.v2.json](examples/workflows/approval.v2.json), valida la señal y conserva el acuse duplicado. La demostración usa acceso local confiable; [HTTP](docs/HTTP.md) aporta la frontera autenticada de un servicio.
+El [host](crates/forge/examples/v2_signal.rs) recupera [approval.v2.json](examples/workflows/approval.v2.json), valida la señal y conserva el acuse duplicado. La demostración usa acceso local confiable; el host proporciona cualquier autenticación o transporte externo.
 
-## Servicio HTTP
-
-Con `WORKFLOW_FORGE_TOKEN` definido por el host:
+## Resultados, decisiones y salida general
 
 ```sh
-cargo run -p workflow-forge-service -- examples/service/config.json
+cargo run -p workflow-forge --example v2_outcomes
 ```
 
-La [configuración](examples/service/config.json) carga un echo y usa SQLite. [HTTP §6](docs/HTTP.md#6-ejecutable-y-composición-del-host) detalla credenciales, petición, rutas relativas y apagado; [INTEGRATIONS](docs/INTEGRATIONS.md) muestra cómo agregar perfiles HTTP/JSON, archivos y CSV. El ejecutable registra solo metadata de eventos.
-
-Con ese servicio en ejecución y la credencial en otra terminal:
-
-```sh
-cargo run -p workflow-forge-cli -- validate examples/service/echo.v2.json
-cargo run -p workflow-forge-cli -- run examples/service/echo.v2.json --input '{"hello":"world"}'
-```
-
-La [CLI](docs/CLI.md) usa las mismas rutas. `--no-wait` devuelve el recibo; `wait`, `status`, `waits`, `signal`, `inspect` y `reconcile` continúan el seguimiento con ese RunId. La salida del cliente no cancela el trabajo aceptado.
+El [ejemplo](crates/forge/examples/v2_outcomes.rs) ejecuta [response_routing.v2.json](examples/workflows/response_routing.v2.json) con respuestas locales: compara status 404 mediante `forge.data.equals`, elige una rama y maneja datos inesperados mediante `try`. No realiza integraciones reales.
 
 ## Capacidad, retención y mediciones
 
@@ -85,6 +74,6 @@ Los comandos publican JSON y fallan ante resultados inesperados. [ACCEPTANCE §5
 | Escritura incierta, inspección y reconciliación | [v2_effects.rs](crates/forge/tests/v2_effects.rs) |
 | Caída de proceso con efecto/acuse pendiente | [v2_sqlite.rs](crates/forge/tests/v2_sqlite.rs) |
 | CSV durable entre lotes y publicación de artefacto | [v2_sqlite_inventory.rs](crates/forge/tests/v2_sqlite_inventory.rs) |
-| Paridad Rust/HTTP con memoria y SQLite | [parity.rs](crates/service/tests/parity.rs) |
+| Resultados HTTP como datos | [v2_http_outcomes.rs](crates/forge/tests/v2_http_outcomes.rs) |
 
 Los escenarios del prototipo que dependían de XLSX, SFTP, compresión o expresiones JSONPath requieren una implementación expresa bajo el protocolo nuevo. El código anterior y sus recetas históricas se conservan en Git, hasta `6806fa0`. No se presenta esa compatibilidad como entregada.

@@ -341,7 +341,10 @@ async fn inventory_process_child() {
         builder(&path, ports.clone(), ports.clone())
             .build()
             .unwrap(),
-        BootOptions::default(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
     )
     .await
     .unwrap();
@@ -405,7 +408,10 @@ async fn c02_recovers_between_pages_during_streaming_and_after_publication_witho
             builder(&dir.0, store.clone(), store.clone())
                 .build()
                 .unwrap(),
-            BootOptions::default(),
+            BootOptions {
+                recovery: RecoveryPolicy::Resume,
+                ..Default::default()
+            },
         )
         .await
         .unwrap();
@@ -471,7 +477,10 @@ async fn c02_recovers_between_pages_during_streaming_and_after_publication_witho
             builder(&dir.0, reopened.clone(), reopened.clone())
                 .build()
                 .unwrap(),
-            BootOptions::default(),
+            BootOptions {
+                recovery: RecoveryPolicy::Resume,
+                ..Default::default()
+            },
         )
         .await
         .unwrap();
@@ -507,7 +516,10 @@ async fn durable_flags_without_a_shared_coordinator_are_rejected_before_dispatch
     let other = sqlite(&dir.0);
     let runtime = EngineRuntime::boot(
         builder(&dir.0, state, other).build().unwrap(),
-        BootOptions::default(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
     )
     .await
     .unwrap();

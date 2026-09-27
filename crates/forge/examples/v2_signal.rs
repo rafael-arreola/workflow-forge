@@ -22,7 +22,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?);
     let runtime = EngineRuntime::boot(
         WorkflowBuilder::standard().execution_store(store).build()?,
-        BootOptions::default(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
     )
     .await?;
     let app = runtime.application();

@@ -6,12 +6,12 @@
   "input": "/Users/rafael-arreola/sites/rafael-arreola/workflow-forge/manual/diagramas/arranque.json",
   "output": "/Users/rafael-arreola/sites/rafael-arreola/workflow-forge/manual/diagramas/arranque.html",
   "specification": {
-    "sha256": "89e5b5fc2747fbe429bb891bcb309f68028d6994d3b12de315bcae20052fc8ee",
-    "bytes": 2529
+    "sha256": "c256a29fb95633d442b0665fe2a69fcdc71c9cab7f0c1645f5cf2c9b24bcbaf3",
+    "bytes": 2578
   },
   "artifact": {
-    "sha256": "36fca869b2a3cb323d727f9a84cf76c4b3780d06cb5d0d9eb198ff2ba44c95ea",
-    "bytes": 801833
+    "sha256": "d09ffca108067e26d7b698225f57eeb5187154a75f8bc7f7fbb4d5cf36ed2600",
+    "bytes": 801897
   },
   "validation": {
     "checksPassed": 9,

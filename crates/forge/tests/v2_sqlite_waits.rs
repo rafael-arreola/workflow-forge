@@ -307,7 +307,10 @@ async fn signal_process_child() {
         builder(&path, wrapper.clone(), inner.clone(), true)
             .build()
             .unwrap(),
-        BootOptions::default(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
     )
     .await
     .unwrap();
@@ -364,7 +367,10 @@ async fn process_recovery_preserves_reservation_signal_receipt_consumption_and_a
             builder(&dir.0, inner.clone(), inner.clone(), false)
                 .build()
                 .unwrap(),
-            BootOptions::default(),
+            BootOptions {
+                recovery: RecoveryPolicy::Resume,
+                ..Default::default()
+            },
         )
         .await
         .unwrap();
@@ -413,7 +419,10 @@ async fn process_recovery_preserves_reservation_signal_receipt_consumption_and_a
             builder(&dir.0, inner.clone(), inner, false)
                 .build()
                 .unwrap(),
-            BootOptions::default(),
+            BootOptions {
+                recovery: RecoveryPolicy::Resume,
+                ..Default::default()
+            },
         )
         .await
         .unwrap();
@@ -435,7 +444,10 @@ async fn a_timer_keeps_its_original_deadline_after_shutdown_and_boot() {
             .execution_store(inner.clone())
             .build()
             .unwrap(),
-        BootOptions::default(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
     )
     .await
     .unwrap();
@@ -453,7 +465,10 @@ async fn a_timer_keeps_its_original_deadline_after_shutdown_and_boot() {
             .execution_store(store(&dir.0))
             .build()
             .unwrap(),
-        BootOptions::default(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
     )
     .await
     .unwrap();

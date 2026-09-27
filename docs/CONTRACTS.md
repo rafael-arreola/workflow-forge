@@ -22,7 +22,7 @@ Una espera larga usa el control de esperas de F-3; un disparador no vive dentro 
 
 F-1 entrega una librería embebible, en memoria, con secuencias de operaciones puras o lecturas declaradas repetibles. Incluye catálogo, composición predeterminada, sustitución de proveedores, validación, mappings, diagnóstico, consulta/cancelación, lifecycle y una extensión externa de ejemplo. El paquete oficial inicial ofrece `forge.data.identity` y `forge.text.trim`; el kit de pruebas ofrece una lectura simulada. `forge.text.trim` recibe/devuelve string, elimina whitespace inicial/final según `str::trim` de la implementación fijada, es pura y admite únicamente config vacía. Otras normalizaciones se agregan como operaciones o configuraciones versionadas.
 
-Se puede recibir JSON, normalizar campos, consultar una fuente mediante una extensión y construir una respuesta. Cada invocación tiene un solo intento por defecto en esta entrega. Una solicitud de efectos de escritura, retry automático, ramas, lotes, subworkflows, durabilidad o esperas devuelve `capability.unsupported` al preparar, nunca una aproximación silenciosa. F-2/F-3 añaden esas capacidades; F-4 añade el servicio. El objetivo completo del producto se conserva.
+Se puede recibir JSON, normalizar campos, consultar una fuente mediante una extensión y construir una respuesta. Cada invocación tiene un solo intento por defecto en esta entrega. Una solicitud de efectos de escritura, retry automático, ramas, lotes, subworkflows, durabilidad o esperas devuelve `capability.unsupported` al preparar, nunca una aproximación silenciosa. F-2/F-3 añaden esas capacidades; F-4 añade módulos oficiales. El objetivo completo del producto se conserva.
 
 Aceptación: C-01A, C-03 y las verificaciones F-1 de ROADMAP. La extensión externa usa únicamente contratos públicos, sin privilegios frente al módulo oficial. La composición `standard()` registra operaciones locales y proveedores en memoria; no abre conexiones externas ni obtiene credenciales por sí sola.
 
@@ -173,9 +173,9 @@ F-2 concreta los límites de ramas/iteraciones/profundidad; F-3 agrega cuotas pe
 
 ## 8. Qué se decide después sin invalidar F-1
 
-El checkpoint, SQL y esperas de F-3 se concretan en §10–11; rutas y DTOs HTTP se fijan antes de F-4; cifras objetivo de producción, con las cargas reales durante la etapa de integración posterior al cierre del engine (P-01/P-07). La referencia durable es SQLite local para un coordinador, reemplazable por un proveedor conforme; embedding simple usa memoria por defecto. La elección aprovecha las [transacciones de SQLite](https://www.sqlite.org/transactional.html), y PROJECT registra su conformidad y pruebas de caída del TDD.
+El checkpoint, SQL y esperas de F-3 se concretan en §10–11; cifras objetivo de producción, con las cargas reales durante la etapa de integración posterior al cierre del engine (P-01/P-07). La referencia durable es SQLite local para un coordinador, reemplazable por un proveedor conforme; embedding simple usa memoria por defecto. La elección aprovecha las [transacciones de SQLite](https://www.sqlite.org/transactional.html), y PROJECT registra su conformidad y pruebas de caída del TDD.
 
-El servicio inicial usará HTTP/JSON, acceso autenticado provisto por el host y aceptación consultable por `RunId`; desconectarse no cancela el run. El editor completo permanece como entrega separada. Estas decisiones se registran con sus límites y pendientes en P-01 a P-09; no existen defaults ocultos adicionales en los ejemplos.
+El host Rust controla ejecución y cancelación mediante la librería, según [EMBEDDING](EMBEDDING.md). El editor completo permanece como entrega separada. Estas decisiones se registran con sus límites y pendientes en P-01 a P-09; no existen defaults ocultos adicionales en los ejemplos.
 
 ## 9. Contrato de ampliación F-2 — control estructurado y efectos
 
@@ -339,10 +339,10 @@ let mut request = StartRunRequest::new(plan, json!({"source": &source}));
 request.options.require_durable = true;
 request.options.artifacts = vec![source];
 let receipt = app.start(access, request).await?;
-// El servicio conserva runtime y comparte clones de app durante su vida.
+// El host conserva runtime y comparte clones de app durante su vida.
 ```
 
-Builder compone, Adapter implementa los puertos y `ArtifactAccess` conserva la autoridad del Command; no se incorpora un localizador global. `shutdown(...).await` sigue siendo la frontera de cierre del servicio. [Pruebas del proveedor](../crates/modules/tests/sqlite_artifacts.rs) y [caídas C-02](../crates/forge/tests/v2_sqlite_inventory.rs) cubren estas fronteras; PROJECT registra sus resultados. La política de intentos cuenta los interrumpidos: el fixture durable fija tres intentos para operaciones repetibles de lectura/reporte. Recuperarse no agrega intentos ilimitados ni repite efectos `unsafe` sin resolución.
+Builder compone, Adapter implementa los puertos y `ArtifactAccess` conserva la autoridad del Command; no se incorpora un localizador global. `shutdown(...).await` sigue siendo la frontera de cierre del motor dentro del host. [Pruebas del proveedor](../crates/modules/tests/sqlite_artifacts.rs) y [caídas C-02](../crates/forge/tests/v2_sqlite_inventory.rs) cubren estas fronteras; PROJECT registra sus resultados. La política de intentos cuenta los interrumpidos: el fixture durable fija tres intentos para operaciones repetibles de lectura/reporte. Recuperarse no agrega intentos ilimitados ni repite efectos `unsafe` sin resolución.
 
 <a id="esperas-durables"></a>
 ## 11. Contrato F-3 — esperas, callbacks y timers
@@ -418,3 +418,7 @@ La conformidad debe comprobar reserva desconocida, señal antes/después de conf
 Las pruebas durables terminan procesos después de reservar, aceptar señal y consumirla antes de despachar el sucesor. Deben verificar deadline original al reiniciar, paquete/schema retirado de autoría, adjuntos retenidos, migración, GC de terminales y ausencia de repetición de un inicio confirmado. La evidencia ejecutada y los pendientes de fase se registran en PROJECT.
 
 El [ejemplo `v2_signal`](../crates/forge/examples/v2_signal.rs) inicia una reserva y cierra el host; otra ejecución entrega el callback contra el mismo SQLite. Usa la fachada para componer/arrancar y Command para entregar la señal. State gobierna reserva/consumo; los controles existentes mantienen Composite. La extensión opcional de inicio sigue siendo un Adapter de `Operation`; no necesita importar el store ni el coordinador.
+
+## 12. Contrato embebido y rutas de resultado
+
+[EMBEDDING](EMBEDDING.md) es el anexo normativo del reajuste: `execute`, cancelación del host, recuperación explícita, `try` con fallback, utilidad de igualdad y contrato HTTP 2. Sustituye toda referencia histórica a un servicio. Los límites, revisiones, errores e identidades de los apartados anteriores siguen aplicando. La ampliación `try` forma parte de `forge.workflow/2` y de su schema, en este proyecto sin versión pública.

@@ -64,7 +64,10 @@ async fn inconclusive_competing_and_unauthorized_resolutions_preserve_the_durabl
         builder(store(&dir.db()), dir.effects(), "non-quiescent")
             .build()
             .unwrap(),
-        BootOptions::default(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
     )
     .await
     .unwrap();

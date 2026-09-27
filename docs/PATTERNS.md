@@ -78,7 +78,7 @@ Arquitectura hexagonal, inyección de dependencias y registro de catálogo son m
 
 **Ejemplo:** E-04 delega desde el handler al handle. E-10 conserva `EngineRuntime` en el host y comparte handles de la misma instancia. La fachada facilita adoptar el motor sin borrar la distinción entre aceptación y finalización.
 
-**Límite:** no duplicar coordinación en métodos de conveniencia ni ocultar defaults durables/efímeros. Una fachada no es un objeto global que expone cada servicio interno. **Conformidad:** V-10/V-16; embedding y servicio conservan las mismas garantías.
+**Límite:** no duplicar coordinación en métodos de conveniencia ni ocultar defaults durables/efímeros. Una fachada no es un objeto global que expone cada servicio interno. **Conformidad:** V-10/V-16; la fachada conserva las garantías del engine.
 
 ### PAT-05 — Command: intención identificada
 
@@ -130,7 +130,7 @@ El resultado es una decisión que aún debe confirmarse atómicamente con la se�
 
 **Participantes aquí:** engine emisor, `ExecutionObserver` como contrato y adaptadores de logs/métricas como consumidores. E-08 muestra un evento con identidad y revisión, separado del checkpoint.
 
-**Ejemplo:** un observador registra duración de intentos y otro notifica al servicio. Si se pierde una notificación, el servicio consulta `status`. Si se necesita entrega durable de eventos, se añade un outbox con acuse/reentrega, no una suposición sobre el callback.
+**Ejemplo:** un observador registra duración de intentos y otro notifica al host. Si se pierde una notificación, el host consulta `status`. Si se necesita entrega durable de eventos, se añade un outbox con acuse/reentrega, no una suposición sobre el callback.
 
 **Límite:** observadores no autorizan transiciones, reintentan operaciones ni mutan el catálogo. Sus fallos no cambian resultados de negocio ya confirmados. **Conformidad:** V-13; observador lento/fallido y consulta independiente del stream.
 
@@ -211,7 +211,7 @@ Esto es una función de construcción, no se etiqueta como Factory Method GoF. `
 
 **Cuándo considerar Abstract Factory:** si se necesitan varias familias intercambiables de proveedores que deben compartir transacciones, codec o propiedad. La raíz de composición puede recibir una fábrica de familia; aun así debe verificar las garantías cruzadas. Si solo existe un constructor sencillo, no añadir esa interfaz.
 
-En F-4, las funciones [`http_json_operations`, `file_operations` y `csv_operations`](../crates/modules/src/integrations/mod.rs) producen bundles mediante este patrón. El perfil fija recursos y límites, su hash participa en la revisión y cada instancia guarda solamente configuración/cliente compartido. Los datos y buffers de una invocación viven dentro de `execute`. [INTEGRATIONS](INTEGRATIONS.md) concreta las políticas; las [pruebas HTTP](../crates/service/tests/integrations_http.rs) envuelven la operación en un Decorator y ejecutan invocaciones concurrentes sin cambiar su descriptor.
+En F-4, las funciones [`http_json_operations`, `file_operations` y `csv_operations`](../crates/modules/src/integrations/mod.rs) producen bundles mediante este patrón. El perfil fija recursos y límites, su hash participa en la revisión y cada instancia guarda solamente configuración/cliente compartido. Los datos y buffers de una invocación viven dentro de `execute`. [INTEGRATIONS](INTEGRATIONS.md) concreta las políticas; las [pruebas HTTP embebidas](../crates/forge/tests/v2_http_outcomes.rs) verifican que estados HTTP llegan como datos y que los errores de contenido conservan su código.
 
 **Conformidad:** V-05/V-17; requisitos compatibles, conflictos detectados y registro completo o rechazado. Construir recursos técnicos no autoriza ejecutar negocio. Las tareas de fondo deben quedar bajo lifecycle del host, no ocultas en un constructor.
 
@@ -342,3 +342,7 @@ Quien usa el motor necesita conocer el documento, el catálogo y la fachada. Qui
 Regla práctica de revisión: explicar primero **qué recibe, qué devuelve y quién decide el siguiente paso**. Elegir el patrón después. Si una función y un parámetro resuelven la variación, conservarlos. Agregar una interfaz cuando exista una frontera de sustitución concreta, no para anticipar todas las posibilidades.
 
 La prueba C-03 de [ACCEPTANCE](ACCEPTANCE.md) recorre una extensión completa y pequeña; [CONTRACTS](CONTRACTS.md) contiene su frontera pública. La generalidad se demuestra sustituyendo módulos y componiendo pasos, sin exigir que el integrador configure fábricas, buses o jerarquías para cada operación.
+
+## Propiedad y recuperación de errores
+
+Facade ofrece `execute` con cancelación del host. Command conserva identidades; State conserva la selección de un handler. Composite permite envolver una operación o el cuerpo completo en `try`; su fallback obligatorio evita errores sin ruta definida dentro del control. Un handler fallido se propaga al ámbito exterior, sin recursión implícita. Strategy no puede autorizar repetir efectos inciertos. [EMBEDDING](EMBEDDING.md) y [v2_outcomes](../crates/forge/examples/v2_outcomes.rs) muestran sus contratos y un recorrido completo.

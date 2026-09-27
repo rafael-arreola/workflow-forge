@@ -42,6 +42,16 @@ fn unavailable() -> ForgeError {
 #[derive(Default)]
 pub struct BootOptions {
     pub definitions: Vec<WorkflowDefinition>,
+    pub recovery: RecoveryPolicy,
+}
+
+/// Loading a library must not implicitly resume business work from an earlier host.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RecoveryPolicy {
+    #[default]
+    RejectUnfinished,
+    /// Explicitly resume recoverable work under its original deadlines and revisions.
+    Resume,
 }
 pub struct ShutdownOptions {
     pub timeout: Duration,
@@ -74,6 +84,7 @@ impl StartRunRequest {
 }
 
 struct Shared {
+    calls: std::sync::Mutex<JoinSet<()>>,
     composition: Arc<Composition>,
     phase: AtomicU8,
     admission: Mutex<()>,
@@ -104,6 +115,7 @@ pub struct EngineRuntime {
 mod application;
 mod control;
 mod coordinator;
+mod execute;
 mod groups;
 mod invocation;
 mod lifecycle;

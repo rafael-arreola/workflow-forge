@@ -219,6 +219,10 @@ fn initial_frame(
     limits: &Limits,
 ) -> Result<ControlFrame, ForgeError> {
     match instruction {
+        PreparedInstruction::Try { .. } => Ok(ControlFrame::Try {
+            handler: None,
+            error: None,
+        }),
         PreparedInstruction::Decision { cases, fallback } => {
             for case in cases {
                 if planner::boolean(&case.when, input, limits)? {
@@ -290,6 +294,82 @@ async fn run_control(
 ) -> Result<Value, StepError> {
     let limits = &scope.shared.composition.limits;
     match (&node.instruction, frame) {
+        (
+            PreparedInstruction::Try {
+                body,
+                catches,
+                fallback,
+            },
+            ControlFrame::Try { handler, error },
+        ) => {
+            let (selected, error) = match (handler, error) {
+                (Some(handler), Some(error)) => (handler, error),
+                (None, None) => {
+                    let child = scope.child(
+                        &node.id,
+                        &["try"],
+                        input.clone(),
+                        scope.cancellation.child_token(),
+                    );
+                    match execute_body(child, body.clone()).await {
+                        Ok(output) => return Ok(json!({"outcome":"success", "output":output})),
+                        Err(StepError::Execution(error)) if catchable(&error) => {
+                            // Host cancellation and the run deadline always outrank workflow recovery.
+                            let run = state::view(&scope.shared, &scope.run_id, None).await?.head;
+                            planner::node(
+                                None,
+                                run.cancel_requested || scope.cancellation.is_cancelled(),
+                                now_ms() >= run.deadline_at_ms,
+                            )?;
+                            let code = error
+                                .diagnostics
+                                .first()
+                                .and_then(|d| d.operation_error.as_ref())
+                                .map_or(error.code(), |e| e.code.as_str());
+                            let selected = catches
+                                .iter()
+                                .find(|(_, candidate, _)| candidate == code)
+                                .map_or(&fallback.0, |(id, _, _)| id)
+                                .clone();
+                            update_frame(
+                                scope,
+                                key,
+                                &ControlFrame::Try {
+                                    handler: Some(selected.clone()),
+                                    error: Some(error.clone()),
+                                },
+                            )
+                            .await?;
+                            (selected, error)
+                        }
+                        Err(error) => return Err(error),
+                    }
+                }
+                _ => {
+                    return Err(ForgeError::new(
+                        "state.conflict",
+                        "Saved error handler is incomplete",
+                    )
+                    .into());
+                }
+            };
+            let body = catches
+                .iter()
+                .find(|(id, _, _)| id == &selected)
+                .map(|(_, _, body)| body)
+                .or_else(|| (fallback.0 == selected).then_some(&fallback.1))
+                .ok_or_else(|| {
+                    ForgeError::new("state.conflict", "Saved error handler is unavailable")
+                })?;
+            let child = scope.child(
+                &node.id,
+                &["catch", &selected],
+                json!({"input":input,"error":error}),
+                scope.cancellation.child_token(),
+            );
+            let output = execute_body(child, body.clone()).await?;
+            Ok(json!({"outcome":"handled", "handler":selected,"output":output}))
+        }
         (
             PreparedInstruction::Decision { cases, fallback },
             ControlFrame::Decision { selected },
@@ -475,4 +555,20 @@ pub(super) async fn update_frame(
     .await
     .map_err(steps::transition_error)
     .map(|_| ())
+}
+
+// Uncertain effects and host/resource boundaries cannot become workflow success.
+fn catchable(error: &ForgeError) -> bool {
+    !error.diagnostics.iter().any(|d| {
+        matches!(
+            d.code.as_str(),
+            "effect.unknown" | "operation.cancelled" | "resource.limit" | "access.denied"
+        ) || d.operation_error.as_ref().is_some_and(|e| {
+            e.certainty != EffectCertainty::NotApplied
+                || matches!(
+                    e.class,
+                    ErrorClass::Cancelled | ErrorClass::Internal | ErrorClass::Resource
+                )
+        })
+    })
 }

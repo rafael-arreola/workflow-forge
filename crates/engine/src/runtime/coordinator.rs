@@ -20,6 +20,12 @@ pub(super) async fn supervise(
     let mut jobs = JoinSet::new();
     let mut active = BTreeSet::new();
     loop {
+        {
+            let mut calls = shared.calls.lock().expect("owned calls lock");
+            while let Some(result) = calls.try_join_next() {
+                result.map_err(|_| unavailable())?;
+            }
+        }
         let c = &shared.composition;
         let pending = c.store.unfinished_heads().await?;
         for run in pending.iter().filter(|r| {
@@ -67,6 +73,7 @@ pub(super) async fn supervise(
             });
         }
         if shared.phase.load(Ordering::Acquire) == DRAINING
+            && shared.calls.lock().expect("owned calls lock").is_empty()
             && jobs.is_empty()
             && late_jobs.is_empty()
             && late_receiver.is_empty()

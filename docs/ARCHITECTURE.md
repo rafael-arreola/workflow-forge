@@ -12,7 +12,7 @@ Se toma de `memory-forge` la presentación mediante límites de módulos, receta
 
 ## 1. Decisiones y principios
 
-**Confirmado:** Rust, librería y servicio, protocolos públicos, módulos predeterminados y extensiones, composición integrada sustituible y mecanismos que permitan recuperación. Se permite romper compatibilidad.
+**Confirmado:** Rust, librería embebida, protocolos públicos, módulos predeterminados y extensiones, composición integrada sustituible y mecanismos que permitan recuperación. Se permite romper compatibilidad.
 
 **Diseño propuesto:** arquitectura de puertos y adaptadores, compilación de definiciones a planes con referencias fijadas, coordinador con estado serializable y proveedores de infraestructura con pruebas de conformidad. Los nombres de crates son propuestos; este documento no ordena crear un crate por cada trait.
 
@@ -20,7 +20,7 @@ Se toma de `memory-forge` la presentación mediante límites de módulos, receta
 |---|---|---|
 | ARC-01 | El núcleo depende de contratos y no de conectores, base de datos, transporte ni UI. | PRD-EXT-001 |
 | ARC-02 | Módulos oficiales y externos implementan la misma frontera pública. | PRD-EXT-001, PRD-COMP-001 |
-| ARC-03 | Librería y servicio componen el mismo coordinador y validador. | PRD-API-001 |
+| ARC-03 | El host Rust usa una única fachada de ejecución bajo su propiedad. | PRD-API-001 |
 | ARC-04 | La revisión preparada fija semántica, catálogo y dependencias del run. | PRD-EVOL-001 |
 | ARC-05 | Transiciones autoritativas y observación tienen responsabilidades distintas. | PRD-DUR-001, PRD-OBS-001 |
 | ARC-06 | El núcleo define garantías; el proveedor demuestra cómo las satisface. | PRD-DUR-001, PRD-RES-001 |
@@ -28,7 +28,7 @@ Se toma de `memory-forge` la presentación mediante límites de módulos, receta
 
 ### 1.1 Decisiones para mantener el diseño pequeño
 
-La primera entrega permite transformar/consultar JSON en una secuencia y ampliarla con operaciones. El motor completo añade coordinación, efectos, recuperación y servicio por fases. La simplicidad se conserva colocando cada cambio en su frontera:
+La primera entrega permite transformar/consultar JSON en una secuencia y ampliarla con operaciones. El motor completo añade coordinación, efectos y recuperación explícita por fases. La simplicidad se conserva colocando cada cambio en su frontera:
 
 | Decisión adoptada | Alternativa considerada | Motivo y consecuencia |
 |---|---|---|
@@ -37,7 +37,7 @@ La primera entrega permite transformar/consultar JSON en una secuencia y ampliar
 | JSON Schema 2020-12 y bindings estructurados pequeños. | DSL implícito y lenguaje de scripting dentro del mapping. | El autor distingue datos y expresiones; transformaciones complejas usan operaciones. Rompe el formato anterior deliberadamente. P-06. |
 | `Operation` con future boxed en la frontera. | API genérica distinta por cada conector. | Catálogo heterogéneo y contratos iguales; optimizar internals solo con medición. TDD-02. |
 | Memoria para embedding y SQLite local como referencia durable. | Exigir un servicio de base de datos en toda adopción. | Perfiles sencillos y sustituibles; SQLite se limita a un coordinador propietario y debe probar recuperación. P-04. |
-| HTTP/JSON como primer servicio; UI separada. | Resolver transporte/editor junto con todo el engine. | Permite consumidores independientes sobre la misma fachada, sin acoplar ejecución al ciclo de una petición. P-02/P-05. |
+| Librería Rust; UI y transportes del host. | Mantener un servidor oficial. | Reduce el alcance al motor embebido y permite construir un editor externo. P-02/P-05. |
 
 Estas decisiones son revisables mediante evidencia y actualización de contratos; no amplían silenciosamente las garantías de una composición. Los detalles abiertos viven en PRD, no en tablas paralelas de pendientes.
 
@@ -48,8 +48,8 @@ Las flechas siguientes significan **depende de**, no orden de ejecución:
 ```mermaid
 flowchart TD
     App[Aplicación Rust] --> Facade[workflow-forge: fachada]
-    Client[Cliente o editor] --> Server[forge-server: adaptador de servicio]
-    Server --> Facade
+    Editor[Editor del host] --> Definition[Definición JSON]
+    Definition --> App
     Facade --> Engine[forge-engine]
     Facade --> Official[Módulos oficiales]
     App --> External[Extensiones del anfitrión]
@@ -65,13 +65,13 @@ flowchart TD
 | Módulos oficiales | Operaciones y proveedores predeterminados. | Privilegios especiales sobre el engine. |
 | Extensiones | Capacidades implementadas por terceros sobre protocolos. | Acceso obligatorio al contexto interno o escritura directa de estados del run. |
 | Fachada | Composición por defecto, builder, selección de capacidades y exportaciones públicas. | Una segunda implementación del runtime. |
-| Servicio | Transporte, ciclo de vida, contexto de acceso y traducción de solicitudes/respuestas. | Otro formato semántico de workflow ni reintentos ocultos del motor. |
+| Host Rust | Transporte propio, recursos, acceso, inicio/cancelación y cierre de la instancia. | Acceso directo a estados internos del coordinador. |
 
 La raíz de composición crea clientes y proveedores, valida su compatibilidad e inyecta dependencias. No hay un registro global mutable de servicios. «All in one» significa facilidad de adopción; las dependencias opcionales pueden seleccionarse por features.
 
 ### 2.1 Organización de responsabilidades en el repositorio
 
-Árbol de responsabilidades ilustrativo. F-1/F-2 ya tienen crates `protocol`, `engine`, `modules`, `forge` y `conformance`; algunas responsabilidades son archivos o módulos bajo `engine/src/runtime`, no carpetas separadas. El servicio corresponde a F-4:
+Árbol de responsabilidades ilustrativo. F-1/F-2 ya tienen crates `protocol`, `engine`, `modules`, `forge` y `conformance`; algunas responsabilidades son archivos o módulos bajo `engine/src/runtime`, no carpetas separadas. Las dependencias son Rust dentro del proceso:
 
 ```text
 crates/
@@ -89,11 +89,6 @@ crates/
     data/ http/ ...   operaciones oficiales
     memory/ ...       proveedores oficiales de infraestructura
   forge/src/          fachada y builder de composición
-apps/
-  server/src/
-    composition/     conexiones y recursos del servicio
-    transport/       handlers y traducción de DTOs de transporte
-    lifecycle/       arranque, admisión y apagado
 ```
 
 `protocol` define el significado de la comunicación; `engine` implementa la coordinación. Los módulos concretos implementan los puertos. SQLite ocupará un módulo oficial de estado durable sin introducir SQL en el engine. Los módulos se comunican a través del engine o de dependencias inyectadas por el host; una operación no busca a otra en un registro global para eludir el workflow.
@@ -104,8 +99,7 @@ apps/
 
 | Emisor → receptor | Contrato / información | Forma y confirmación | Responsable ante fallo |
 |---|---|---|---|
-| Cliente → transporte | Solicitud de catálogo, preparación, inicio, consulta o señal. | HTTP/JSON inicial; recepción y resultado son hitos distintos. | Transporte traduce errores; no vuelve a iniciar por su cuenta. |
-| Transporte o host → engine | Definición/input o comando tipado, contexto de acceso y opciones. | Llamada Rust en el proceso de la primera topología. | Engine aplica validación, admisión y política. |
+| Host Rust → engine | Definición/input o comando tipado, contexto de acceso y opciones. | Llamada Rust en el proceso de la primera topología. | Engine aplica validación, admisión y política. |
 | Compilador → catálogo | Referencia exacta de operación/perfil/subworkflow. | Lectura de snapshot; produce referencia fijada o diagnóstico. | Compilador rechaza referencias ausentes/ambiguas. |
 | Coordinador → scheduler | Trabajo listo identificado y límites. | Coordinación interna; elegir trabajo no acredita ejecución. | Coordinador conserva el estado autoritativo. |
 | Coordinador → `ExecutionStore` | Intención o transición con revisión esperada. | I/O asíncrono; esperar commit en modo durable. | Engine resuelve conflicto/fallo sin despachar trabajo no autorizado. |
@@ -115,7 +109,7 @@ apps/
 | Coordinador → observador | Evento de cambio con identidad y secuencia. | Notificación, sin convertirse en autorización para avanzar. | Adaptador de observación aplica su política; estado se consulta al engine. |
 | Recovery → coordinador | Run/checkpoint y revisiones recuperadas. | Reingresa por las mismas transiciones que una ejecución viva. | Coordinador bloquea lo incierto o incompatible. |
 
-No todo intercambio necesita una cola, socket o bus. En embedding y en el servicio inicial, los puertos son llamadas Rust; las fronteras externas son el transporte y los conectores. Si se distribuyen workers, un adaptador nuevo deberá resolver entrega, reclamo y respuestas tardías manteniendo estos contratos.
+No todo intercambio necesita una cola, socket o bus. Los puertos son llamadas Rust; los conectores realizan I/O externo. Distribuir workers queda fuera de este producto.
 
 ### 2.3 Propiedad y duración de dependencias
 
@@ -282,6 +276,8 @@ La secuencia muestra modo durable y camino satisfactorio. En memoria, los commit
 
 ### 4.3 Recuperar una caída sin duplicar decisiones
 
+Este recorrido solo se activa cuando el host selecciona `RecoveryPolicy::Resume`; el arranque predeterminado rechaza pendientes.
+
 ```mermaid
 sequenceDiagram
     participant R as Recovery
@@ -356,23 +352,21 @@ Un callback se dirige al adaptador de entrada, que traduce y autoriza antes de s
 
 Un trabajo externo debe devolver un identificador/recurso rastreable y separar «iniciar trabajo» de «esperar resultado». Registrar una espera después de lanzar el trabajo puede perder un callback temprano: antes de habilitar esa integración se debe usar una correlación preestablecida con espera registrada o un protocolo de reentrega del destino. Un inbox anticipado sería otra capacidad futura. Ningún fragmento supone que ese problema desaparece por usar async.
 
-### 4.5 Librería y servicio: una sola entrada de aplicación
+### 4.5 Ejecución propia y tratamiento de resultados
 
-Ejemplo E-04 — delegación del handler. `WorkflowApplication` es el handle público propuesto del engine, construido por la fachada; no un segundo coordinador en el servidor:
+El host llama a `WorkflowApplication::execute(access, request, cancellation)` para obtener el valor o error final. Su future solicita cancelación al descartarse; la aceptación y limpieza siguen supervisadas. No hay polling HTTP ni otro coordinador. `start`/`wait` permanece para el host que necesita recibos deduplicados y seguimiento explícito.
 
-```rust
-async fn start_run(
-    app: &WorkflowApplication,
-    access: AccessContext,
-    request: StartRunRequest,
-) -> Result<StartReceipt, PublicError> {
-    app.start(access, request).await.map_err(PublicError::from)
-}
+Una operación devuelve datos conforme a schema o un error con código, clase y certeza. Un `decision` elige la primera condición verdadera; `try` ejecuta un cuerpo y selecciona un handler por código o su fallback obligatorio. Para manejo global se envuelve el cuerpo raíz. Un fallo del handler se propaga al ámbito exterior.
+
+```text
+Host → execute → cuerpo del workflow → operación HTTP
+                                   ← {status, body} o error estructurado
+                   → comparación → decision → siguiente cuerpo
+                   → try/catch/fallback si falla una operación
+Host ← resultado o error final
 ```
 
-El transporte autentica/traduce su request y convierte `StartReceipt` al protocolo seleccionado. El engine recibe un contexto ya acreditado por el host y aplica las políticas de acceso configuradas; un caller no obtiene permiso por enviar un campo `tenant` o `user` en JSON. La librería llama al mismo handle desde Rust. [HTTP](HTTP.md) concreta las rutas, tipos wire y lifecycle adoptados en P-05; la arquitectura no acopla el engine al framework del adaptador.
-
-`StartReceipt` confirma aceptación con `RunId`, no éxito del workflow. La vida del run está bajo el host/runtime; no depende de mantener abierto el future del handler. Una desconexión no invoca `cancel` por accidente. El host debe mantener vivo el runtime y cumplir su protocolo de apagado. TDD-10/12; V-10/V-14.
+El módulo HTTP no decide que 404 significa fracaso del negocio. La utilidad `forge.data.equals` permite comparar datos y alimentar un `decision`. La selección de un handler se persiste antes de ejecutarlo, conservando identidad y recuperación. Los límites y efectos inciertos prevalecen sobre handlers. [EMBEDDING](EMBEDDING.md) fija los detalles y [v2_outcomes](../crates/forge/examples/v2_outcomes.rs) ejecuta un recorrido completo con datos locales.
 
 ## 5. Extensibilidad y patrones
 
@@ -449,7 +443,7 @@ let plan = app.prepare(access.clone(), definition).await?;
 let receipt = app.start(access, StartRunRequest::new(plan, input)).await?;
 ```
 
-`standard()` elige módulos oficiales documentados, no servicios globales. `build()` rechaza proveedores incompatibles o IDs/revisiones en conflicto y devuelve una composición inactiva. `boot()` inicializa y supervisa el motor; `prepare()` fija lo usado por ese plan. El host conserva `runtime` hasta completar el apagado, aunque comparta clones de `app`. P-04 elige memoria para embedding y SQLite para servicio durable; los proveedores del fragmento pueden sustituirlos bajo sus garantías. Sustituir estado sin sustituir artefactos temporales puede incumplir recuperación y debe diagnosticarse. `StartRunRequest::new` usa las opciones predeterminadas descritas en CONTRACTS.
+`standard()` elige módulos oficiales documentados, no servicios globales. `build()` rechaza proveedores incompatibles o IDs/revisiones en conflicto y devuelve una composición inactiva. `boot()` inicializa y supervisa el motor; `prepare()` fija lo usado por ese plan. El host conserva `runtime` hasta completar el apagado, aunque comparta clones de `app`. P-04 elige memoria por defecto y permite SQLite cuando el host requiere persistencia; los proveedores del fragmento pueden sustituirlos bajo sus garantías. Sustituir estado sin sustituir artefactos temporales puede incumplir recuperación y debe diagnosticarse. `StartRunRequest::new` usa las opciones predeterminadas descritas en CONTRACTS.
 
 ### 5.3 Receta C — implementar otro backend
 
@@ -486,156 +480,41 @@ if retry_decision.permitted() {
 
 La clasificación del error, presupuesto/deadline y seguridad de repetición se resuelven antes. El backoff no puede convertir `Unknown` en fallo seguro ni regenerar la identidad del efecto. Jitter/reloj se inyectan o materializan al decidir y se guarda el vencimiento; no recalcular otro azar al recuperar una espera ya programada.
 
-## 6. Despliegue y recursos
+## 6. Composición y recursos del host
 
-**Embedding:** el host configura el builder, registra capacidades y llama al motor. **Servicio:** un host oficial expone la misma superficie lógica y administra su ciclo de vida. La primera topología propuesta es un proceso coordinador; distribuir workers es una ampliación separada.
-
-El perfil efímero usa estado en memoria y declara pérdida ante reinicio. El perfil durable requiere persistencia compatible, artefactos recuperables e implementaciones disponibles por revisión. El motor rechaza combinaciones incapaces de cumplir las garantías solicitadas. P-04 adopta memoria en embedding y SQLite local en el servicio durable; otros proveedores respetan los mismos puertos. El puerto de artefactos conserva contenido persistente y coordina su propiedad con el store según TDD-09. Un mismo backend puede implementar ambos puertos: SQLite usa clones del mismo proveedor/actor, como concreta CONTRACTS §10.3.
-
-Blobs y secretos se obtienen mediante puertos. El acceso a esos recursos depende del contexto del host. El diseño de acceso del servicio se cierra antes de exponerlo, conforme a P-05/P-08. Un módulo compilado dentro del proceso no está aislado frente a comportamiento arbitrario.
-
-### 6.1 Arranque y apagado como parte del contrato
-
-```mermaid
-flowchart LR
-    Config[Configurar proveedores] --> Build[Construir y validar composición]
-    Build --> Versions[Comprobar codecs y revisiones]
-    Versions --> Recover[Recuperar trabajo y diagnosticar bloqueos]
-    Recover --> Admit[Habilitar admisión]
-    Admit --> Drain[Detener admisión y drenar]
-    Drain --> Persist[Conservar pendientes e incertidumbre]
-    Persist --> Close[Cerrar recursos]
-```
-
-Un fallo al validar configuración/capacidades impide habilitar la composición. Runs individuales con revisiones ausentes quedan diagnosticados como bloqueados; la política del host decide si admite otros runs válidos. Cerrar el runtime sin completar el drenado deja trabajo recuperable solo si el perfil soporta persistencia. Los pools y secretos viven mientras haya trabajo autorizado que los requiera.
+La aplicación Rust construye clientes, pools y proveedores, registra bundles y conserva una instancia del motor. `standard()` usa memoria; el host puede inyectar SQLite coordinado para estado y artefactos. Persistencia no implica recuperación automática. Los módulos son código compilado y confiable, sin aislamiento de proceso.
 
 <a id="instancia-y-arranque"></a>
 
-La implementación F-4 de estas responsabilidades está en [`HostConfig`](../crates/service/src/host.rs), [`ServiceRuntime`](../crates/service/src/runtime.rs) y el [ejecutable](../crates/service/src/main.rs). HTTP §6 muestra el arranque concreto; las secuencias y fragmentos siguientes explican propiedad y comunicación. Los handlers comparten `WorkflowApplication`; ninguna ruta construye otro runtime o abre SQLite directamente.
+### 6.1 Arranque y apagado como parte del contrato
 
-#### 6.1.1 Qué instancia se crea y quién la conserva
-
-La raíz de composición del servicio crea **una instancia del runtime por configuración y ámbito de ejecución** al arrancar el proceso. Los handlers comparten un handle de esa instancia; no crean un motor por petición ni por workflow. Cada petición de ejecución crea un run independiente dentro de ese runtime.
-
-| Objeto propuesto | Lo crea / conserva | Función y duración |
+| Objeto | Propietario | Responsabilidad |
 |---|---|---|
-| `ServiceConfig` | Bootstrap del servicio. | Configuración validada: perfil, proveedores, módulos habilitados, origen de definiciones, límites y apagado. |
-| `EngineAssembly` | `WorkflowBuilder::build()`. | Dependencias conectadas y catálogo fijado para el arranque; todavía no hay scheduler activo. |
-| `EngineRuntime` | `EngineRuntime::boot(...)`. | Dueño del coordinador, tareas supervisadas, recuperación, timers y ciclo de vida; lo conserva el host. |
-| `WorkflowApplication` | `runtime.application()`. | Handle clonable para preparar/iniciar/consultar/señalar; todos los clones apuntan a la misma instancia. |
-| `AppState` | Adaptador del servicio. | Aloja el handle y estado del transporte; se comparte con handlers. No posee otro scheduler. |
-| `PreparedWorkflow` | Compilador durante boot o una preparación posterior. | Plan por revisión, reutilizable por múltiples runs. No es la instancia del motor. |
-
-Es una instancia explícita, no un Singleton global. Un host puede componer varias instancias independientes si define sus ámbitos, recursos y propiedad de almacenamiento. Dos procesos no adquieren derecho a coordinar el mismo store por tener la misma configuración: deben respetar exclusión o el protocolo de propietarios admitido por el backend.
-
-`EngineRuntime` tampoco es el executor async de Rust. La aplicación provee el entorno async compatible; el engine administra sus tareas dentro de él. Crear un pool de conexiones o arrancar el servidor no sustituye llamar a `boot()`.
-
-#### 6.1.2 Secuencia completa del servicio
-
-```mermaid
-sequenceDiagram
-    participant M as Bootstrap del servicio
-    participant C as Raíz de composición
-    participant P as Proveedores y catálogo
-    participant R as EngineRuntime
-    participant H as Transporte y handlers
-    M->>M: cargar y validar ServiceConfig
-    M->>C: compose(config)
-    C->>P: abrir recursos y registrar módulos habilitados
-    C->>C: cargar definiciones iniciales por revisión
-    C-->>M: EngineAssembly y BootOptions
-    M->>R: boot(assembly, options)
-    R->>P: comprobar codecs, acceso y propiedad de ejecución
-    R->>R: preparar definiciones y reconstruir pendientes
-    R->>R: iniciar scheduler, timers y supervisión
-    R-->>M: runtime listo y reporte de recuperación
-    M->>H: enlazar transporte con runtime.application()
-    H-->>M: transporte listo
-    M->>M: publicar readiness y supervisar
-    H->>R: start mediante handle compartido
-    Note over M,R: shutdown o fallo crítico
-    M->>R: cerrar admisión
-    M->>H: dejar de aceptar peticiones
-    M->>R: drenar y conservar estado dentro del plazo
-    R-->>M: reporte de cierre
-```
-
-`boot()` vuelve cuando las tareas esenciales están supervisadas y la recuperación inicial dejó el trabajo pendiente en un estado conocido; no espera que terminen todos los workflows históricos. Puede haber runs bloqueados con diagnóstico y otros capaces de avanzar. Las definiciones iniciales configuradas como obligatorias deben prepararse correctamente antes de devolver una instancia lista. Un bloqueo individual histórico se trata según la política del host, como indica la sección 6.1.
-
-Las operaciones ejecutables se registran antes de cargar/preparar definiciones que las referencien. Cargar una definición no la ejecuta: habilita su revisión para futuras invocaciones. La primera composición recibe documentos desde el host; el servicio los carga de un directorio configurado al arrancar. Un repositorio/API de publicación podrá sustituir ese origen manteniendo revisiones. La configuración selecciona módulos compilados disponibles, no convierte un nombre arbitrario en código instalable. Los timers recuperados pertenecen a runs existentes; iniciar runs por cron es otra capacidad de entrada.
-
-#### 6.1.3 Fragmento de creación de la instancia
-
-Ejemplo E-09 — raíz de composición propuesta en `apps/server/src/composition/`. Los helpers representan decisiones del host y omiten su implementación:
+| `WorkflowBuilder` / `EngineBuilder` | Bootstrap Rust | Registrar módulos/proveedores y límites. |
+| `EngineAssembly` | Host hasta boot | Composición inactiva; construir no ejecuta negocio. |
+| `EngineRuntime` | Host durante su vida | Supervisar tareas, admisión y cierre. |
+| `WorkflowApplication` | Handles del host | Catálogo, preparación, ejecución y señales. |
+| `PreparedWorkflow` | Host y ejecución | Plan fijado y reutilizable. |
+| `CancellationToken` | Host | Cancelar una llamada propia o un grupo de llamadas. |
 
 ```rust
-async fn compose(cfg: &ServiceConfig) -> Result<EngineAssembly, BootError> {
-    let providers = open_providers(&cfg.providers).await?;
-    let mut builder = WorkflowBuilder::standard()
-        .execution_store(providers.executions)
-        .artifact_store(providers.artifacts)
-        .secret_provider(providers.secrets)
-        .limits(cfg.limits.clone());
-
-    register_enabled_modules(&mut builder, &cfg.modules).await?;
-    builder.build()
-}
-
-let cfg = ServiceConfig::load_and_validate()?;
-let assembly = compose(&cfg).await?;
-let definitions = load_startup_definitions(&cfg.workflows).await?;
-let options = cfg.boot_options().with_definitions(definitions);
-let runtime = EngineRuntime::boot(assembly, options).await?;
+let runtime = EngineRuntime::boot(builder.build()?, BootOptions::default()).await?;
+let app = runtime.application();
+let result = async {
+    let plan = app.prepare(access.clone(), definition).await?;
+    app.execute(access, StartRunRequest::new(plan, input), cancellation).await
+}.await;
+let shutdown = runtime.shutdown(ShutdownOptions::default()).await;
+// Conservar resultado y cierre; ninguno debe ocultar el fallo del otro.
 ```
 
-El fragmento muestra orden, no un formato de configuración completo. `register_enabled_modules` construye operaciones con clientes inyectados; no despacha trabajo de negocio. Toda tarea/conexión abierta durante composición pertenece a un propietario que la cierra si el arranque falla. El builder estándar y los módulos configurados deben detectar registros duplicados; no sobrescriben implementaciones silenciosamente. La carga de secretos se resuelve con referencias y no vuelca valores en logs de configuración.
+Orden: construir proveedores → registrar módulos → build → boot → preparar → ejecutar → shutdown. El executor Tokio pertenece al host. `BootOptions.definitions` permite preparar definiciones obligatorias durante boot; cargarlas no las ejecuta. El host decide de dónde obtiene JSON y cómo recibe señales; el engine no crea webhooks ni URLs.
 
-#### 6.1.4 Compartir el motor y supervisar su vida
+`BootOptions::default()` rechaza trabajo pendiente con `recovery.required`. Si el host elige `RecoveryPolicy::Resume`, el motor recupera las revisiones originales antes de admitir nuevos runs. Los deadlines no se reinician. Persistir datos no concede permiso para ejecutar al siguiente arranque.
 
-Ejemplo E-10 — continuación de E-09 en el bootstrap; `serve`, `supervise` y `finish_shutdown` pertenecen al host, no a las operaciones del workflow:
+`shutdown` cierra admisión, drena con plazo y cancela/aborta tareas si debe forzar el cierre; informa pendientes. `Drop` solicita cancelación y aborta tareas, pero no sustituye el cierre asíncrono. Los handles dejan de admitir trabajo al cerrarse el runtime. Las operaciones deben cooperar con cancelación y no bloquear hilos ni dejar tareas propias sin supervisión.
 
-```rust
-struct AppState {
-    workflows: WorkflowApplication, // handle clonable, no runtime nuevo
-}
-
-let state = Arc::new(AppState { workflows: runtime.application() });
-let mut server = match serve(cfg.transport.clone(), state).await {
-    Ok(server) => server,
-    Err(error) => {
-        let cleanup = runtime.shutdown(cfg.shutdown.clone()).await;
-        return Err(BootError::transport_with_cleanup(error, cleanup));
-    }
-};
-
-let outcome = supervise(&runtime, &server, shutdown_signal()).await;
-runtime.close_admission();
-let transport_stop = server.stop_accepting().await;
-let engine_stop = runtime.shutdown(cfg.shutdown.clone()).await;
-finish_shutdown(outcome, transport_stop, engine_stop)
-```
-
-`serve` entrega un handle supervisable después de enlazar el transporte; no bloquea hasta que el servidor termine. `supervise` espera una señal de cierre, un fallo del servidor o un fallo crítico del engine. Si cualquiera falla, siempre se ejecuta la limpieza de los demás; `finish_shutdown` conserva el error original y cualquier fallo de cierre. Los detalles de tipo/framework siguen siendo ilustrativos.
-
-La readiness del servicio exige engine listo y transporte enlazado; un proceso vivo durante recovery solo acredita liveness. Si falla una tarea esencial, se retira readiness y se cierra admisión, sin dejar handlers enviando trabajo a un scheduler muerto. El estado de ciclo de vida del engine debe ser consultable por el supervisor; las notificaciones son ayuda, no la única evidencia.
-
-Cerrar admisión rechaza nuevos `start` y nuevas preparaciones que creen carga, mientras las consultas y operaciones de control permitidas durante drenado siguen una política explícita. Aceptar una señal durante drenado solo es válido si su acuse y continuación pendiente pueden conservarse según el perfil. Cancelar un run y apagar el motor son comandos distintos: en durable se puede detener el host y dejar runs recuperables sin marcarlos como cancelados.
-
-La caída de `EngineRuntime` por `Drop` no puede prometer una operación async de drenado: el host debe llamar y esperar `shutdown()`. Los clones de `WorkflowApplication` no mantienen un scheduler huérfano ni reinician el motor; después del cierre devuelven un error de ciclo de vida. La fachada puede ofrecer facilidades de uso, pero debe conservar esta propiedad explícita.
-
-#### 6.1.5 Fallos de arranque y comportamiento verificable
-
-| Punto de fallo | Respuesta requerida |
-|---|---|
-| Configuración inválida, módulo ausente o IDs duplicados | Diagnóstico y salida antes de aceptar ejecuciones. |
-| Store inaccesible, codec incompatible o propiedad no adquirida | Fallar boot y cerrar recursos iniciados; sin fallback silencioso a memoria. |
-| Definición inicial obligatoria inválida | Diagnóstico por workflow/nodo; no arrancar parcialmente sin política declarada. |
-| Run histórico con revisión ausente | Bloquear ese run; aplicar la política publicada de readiness/arranque. |
-| Error al enlazar el transporte después de boot | Apagar el engine y conservar pendientes durables; no dejar tareas huérfanas. |
-| Scheduler o tarea esencial deja de funcionar | Retirar readiness, cerrar admisión y notificar al supervisor. |
-| Vence el plazo de apagado | Reportar drenado incompleto y evidencia disponible; no fingir cancelación de efectos remotos. |
-
-F-1 implementa `EngineRuntime::boot(assembly, BootOptions)`, `application()` y `shutdown(ShutdownOptions)`. `BootOptions.definitions` prepara definiciones obligatorias antes de readiness; `ShutdownOptions.timeout` limita el drenado. El host debe esperar el apagado asíncrono: descartar el runtime aborta tareas, pero no sustituye la liberación ordenada del store. El [host ejecutable](../crates/forge/examples/v2_customer.rs) muestra el recorrido completo. F-3 verifica recuperación durable y el [host SQLite](../crates/forge/examples/v2_sqlite.rs) muestra su composición; el bootstrap del servicio corresponde a F-4. El mecanismo de construcción y propiedad también aplica a embedding, aunque no exista transporte.
+[EMBEDDING](EMBEDDING.md) describe carreras de aceptación, propiedad de `execute` frente a `start`, retorno de efectos inciertos y límites del determinismo. El [host mínimo](../crates/forge/examples/v2_customer.rs) es ejecutable. El [host SQLite](../crates/forge/examples/v2_sqlite.rs) muestra sustitución de proveedores.
 
 ### 6.2 Observación y lectura de estado
 
@@ -664,7 +543,6 @@ El consumidor usa revisión/identidad para reconocer mensajes repetidos y vuelve
 | `core/task`, `io`, `observe` | Contratos públicos + implementaciones | Dividir traits/DTOs de proveedores concretos. |
 | `extensions/*` | Módulos oficiales | Adaptar al mismo contrato exigido a terceros. |
 | `forge` | Fachada | Mantener facilidad de adopción y hacer explícitas sustituciones. |
-| `cli` | Consumidor HTTP del servicio | Adapter de terminal/archivos a comandos públicos; el runtime pertenece al servicio. |
 
 Este mapeo conserva la dirección de refactorización, no implica equivalencia entre todas las operaciones antiguas y nuevas. F-1 a F-4 implementaron las nuevas fronteras; F-5 retiró el motor anterior al sustituir sus consumidores. [ADOPTION §5](ADOPTION.md#5-migrar-desde-el-prototipo) enumera las diferencias y conectores aún sin reemplazo. [PROJECT](PROJECT.md) conserva la evidencia por fase.
 
@@ -689,7 +567,7 @@ Antes de cerrar una fase, comprobar que sus ejemplos conservan estas relaciones:
 | E-01 Invocación/operación | TDD-01/02/06 | V-04/V-07: extensión sustituible e identidad estable entre intentos. |
 | E-02 Autoría | TDD-03/04 | V-01/V-03/V-11: round-trip, dependencias y errores localizados. |
 | E-03 Commit condicional | TDD-07 | V-08/V-15: conflicto, acuse perdido y revisión fijada. |
-| E-04 Handler | TDD-10/12 | V-10: paridad y vida del run independiente de la petición. |
+| E-04 Handler | TDD-10/12 | V-10: llamada propia, resultado y cancelación controlados por el host. |
 | E-05 Adaptador | TDD-02/06 | V-02/V-04/V-07: contrato y clasificación de efecto incierto. |
 | E-06 Builder | TDD-02/09 | V-05/V-12: sustitución y compatibilidad de recursos. |
 | E-07 Backoff | TDD-06/07 | V-07/V-08: decisión de repetición y timer persistido. |
@@ -703,7 +581,7 @@ Estos ejemplos orientan implementación y revisión; no reemplazan la suite ni a
 
 | Diseño anterior | Dirección vigente |
 |---|---|
-| Librería primero; servidor indefinidamente posterior. | Librería y servicio forman parte del producto confirmado. |
+| Librería y servicio como superficies del producto. | Librería Rust embebida; servicio y cliente retirados por decisión del usuario. |
 | Ejecución únicamente efímera como fundamento. | Contratos que permitan modos efímero y durable desde el diseño. |
 | Observadores como futura base suficiente del journal. | Persistencia autoritativa separada de observación; conformidad de recuperación. |
 | Formato/API 1.0 como base a preservar. | Libertad de rediseño prepublicación; comportamiento útil se conserva mediante pruebas. |

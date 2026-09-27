@@ -1,20 +1,18 @@
 # Workflow Forge — guía de adopción y extensiones
 
-Esta guía usa el formato `forge.workflow/2`. La fachada raíz, `workflow_forge::prelude` y `workflow_forge::v2` exponen la misma API. [CONTRACTS](CONTRACTS.md), [HTTP](HTTP.md) e [INTEGRATIONS](INTEGRATIONS.md) definen sus garantías; [PROJECT](PROJECT.md) registra qué está comprobado. Los ejemplos son locales y no acreditan destinos ni capacidad de producción.
+Esta guía usa el formato `forge.workflow/2`. La fachada raíz, `workflow_forge::prelude` y `workflow_forge::v2` exponen la misma API. [CONTRACTS](CONTRACTS.md), [EMBEDDING](EMBEDDING.md) e [INTEGRATIONS](INTEGRATIONS.md) definen sus garantías; [PROJECT](PROJECT.md) registra qué está comprobado. Los ejemplos son locales y no acreditan destinos ni capacidad de producción.
 
 ## 1. Elegir y conservar la instancia
 
 | Necesidad | Composición |
 |---|---|
 | Llamar desde un servicio Rust existente | `WorkflowBuilder` → `build` → `EngineRuntime::boot`; conservar el runtime y compartir `WorkflowApplication`. |
-| Atender clientes HTTP | `ServiceRuntime` conserva el engine y el transporte. El ejecutable usa `HostConfig` y SQLite por defecto. |
-| Consumir un host desde una terminal/script | `forge --server URL` usa HTTP y una credencial del entorno; [CLI](CLI.md) publica el contrato. |
 | Recorridos efímeros locales | `WorkflowBuilder::standard()` usa memoria; una caída pierde su estado. |
 | Recuperar runs y artefactos | Instalar el mismo `Arc<SqliteExecutionStore>` en los puertos de estado y artefactos; pedir `require_durable`. |
 
 Una instancia corresponde a un scope y un propietario del store. Construirla una vez durante el arranque; clonar el handle por petición. La configuración, los módulos y los schemas se registran antes de `build`. El arranque valida la composición y recupera lo aceptado antes de habilitar admisión. El host espera `shutdown`; soltar el objeto no acredita drenado.
 
-El [host mínimo](../crates/forge/examples/v2_customer.rs), el [host durable](../crates/forge/examples/v2_sqlite.rs) y el [bootstrap HTTP](HTTP.md#6-ejecutable-y-composición-del-host) son programas/configuraciones completos. Sus permisos confiables de demostración no sustituyen el autenticador de un servicio expuesto.
+El [host mínimo](../crates/forge/examples/v2_customer.rs) y el [host durable](../crates/forge/examples/v2_sqlite.rs) son programas completos. El host conserva el runtime y proporciona permisos y cancelación. [EMBEDDING](EMBEDDING.md) explica la llamada `execute`, el manejo de resultados y la recuperación explícita.
 
 ## 2. Crear una extensión mediante contratos públicos
 
@@ -96,7 +94,7 @@ Secuencia de retiro:
 4. Retirar el código cuando no quede trabajo que deba reanudarse con esa revisión y se cumpla la política de retención del implementador. Un recibo todavía vigente mantiene su reserva y no autoriza ejecutar otra vez un trabajo cuyo resultado expiró.
 5. Si falta accidentalmente una revisión, restaurar su implementación exacta y reiniciar el runtime. Un bloqueo de dependencia puede recuperarse; una escritura incierta sigue requiriendo inspección/reconciliación. No actualizar manualmente el checkpoint para fingir otra implementación.
 
-[Recuperación de paquetes](../crates/forge/tests/v2_recovery_package.rs) y [recuperación SQLite](../crates/forge/tests/v2_sqlite.rs) comprueban revisión ausente/reinstalada, cambio de contrato bajo la misma revisión y conservación de paquetes aceptados. Su éxito no garantiza semántica de un SDK externo cambiado sin versionar. La lista de runs de un producto y la política de despliegue pertenecen al host; el servicio actual consulta RunIds conocidos, no ofrece un inventario global de deployments.
+[Recuperación de paquetes](../crates/forge/tests/v2_recovery_package.rs) y [recuperación SQLite](../crates/forge/tests/v2_sqlite.rs) comprueban revisión ausente/reinstalada, cambio de contrato bajo la misma revisión y conservación de paquetes aceptados. Su éxito no garantiza semántica de un SDK externo cambiado sin versionar. La lista de runs de un producto y la política de despliegue pertenecen al host; la librería permite consultar RunIds conocidos.
 
 ## 5. Migrar desde el prototipo
 
@@ -111,7 +109,7 @@ No hay conversión automática entre spec 1.0 y formato 2. Las [recetas actuales
 | Retry por error/timeout | Clasificación de certeza/repetición antes de aplicar backoff. |
 | Objetos binarios en memoria | `ArtifactRef`, puertos, cuotas y propiedad/retención declaradas. |
 
-El motor `core`, los seis crates `extensions/*`, schemas 1.0, ejemplos y pruebas exclusivos del prototipo se retiraron después de disponer de consumidores Rust/HTTP/CLI sobre formato 2. La historia hasta `6806fa0` conserva sus fuentes y ejemplos. `forge` ahora requiere un servicio: validar prepara allí y ejecutar obtiene un recibo de ese host. Para embedding usar la fachada Rust.
+El motor `core`, los seis crates `extensions/*`, schemas 1.0, ejemplos y pruebas exclusivos del prototipo se retiraron al introducir el formato 2. La historia hasta `6806fa0` conserva sus fuentes y ejemplos. El servicio y su cliente se retiraron posteriormente para concentrar el producto en la fachada Rust embebida.
 
 La fachada mantiene `integrations` por defecto y permite `--no-default-features` para contratos, engine y proveedores de memoria sin conectores HTTP/archivos/CSV. `sqlite` agrega el proveedor durable; `full` habilita `sqlite` e `integrations`. Las features antiguas `util/data/http/tabular/sftp/compress/testing`, `Task`, `WorkflowExecutor`, `default_registry` y el DSL JSONPath se eliminaron.
 

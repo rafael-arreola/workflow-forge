@@ -163,7 +163,10 @@ async fn supervisor_failure_removes_readiness_and_shutdown_still_releases_owners
             .execution_store(store)
             .build()
             .unwrap(),
-        BootOptions::default(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
     )
     .await
     .unwrap();
@@ -463,4 +466,50 @@ async fn a_cancel_committed_before_final_result_is_rechecked_after_cas_conflict(
         Some(json!("already-computed"))
     );
     runtime.shutdown(ShutdownOptions::default()).await.unwrap();
+}
+
+#[tokio::test]
+async fn owned_call_dropped_during_acceptance_is_cancelled_after_acceptance_settles() {
+    let store = Arc::new(HookStore::default());
+    store.hold_create.store(true, Ordering::SeqCst);
+    let runtime = EngineRuntime::boot(
+        WorkflowBuilder::standard()
+            .execution_store(store.clone())
+            .build()
+            .unwrap(),
+        BootOptions::default(),
+    )
+    .await
+    .unwrap();
+    let app = runtime.application();
+    let mut workflow = definition();
+    workflow.nodes[0].instruction = Instruction::Timer {
+        duration_ms: 60_000,
+    };
+    let plan = app.prepare(access(), workflow).await.unwrap();
+    let caller = app.clone();
+    let request = tokio::spawn(async move {
+        caller
+            .execute(
+                access(),
+                StartRunRequest::new(plan, json!(42)),
+                CancellationToken::new(),
+            )
+            .await
+    });
+    tokio::time::timeout(Duration::from_secs(2), store.created.notified())
+        .await
+        .unwrap();
+    let id = store.saved.lock().unwrap().clone().unwrap();
+    request.abort();
+    let _ = request.await;
+    store.release_create.notify_one();
+    let run = tokio::time::timeout(Duration::from_secs(2), app.wait(access(), id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(run.state, RunState::Cancelled);
+    let report = runtime.shutdown(ShutdownOptions::default()).await.unwrap();
+    assert!(!report.forced);
+    assert!(report.pending.is_empty());
 }

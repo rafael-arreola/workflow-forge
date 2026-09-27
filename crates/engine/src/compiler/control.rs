@@ -254,6 +254,48 @@ impl<'a> Compiler<'a> {
     ) -> Result<PreparedInstruction, ForgeError> {
         let limits = &self.composition.limits;
         match &node.instruction {
+            Instruction::Try {
+                body,
+                catches,
+                fallback,
+            } => {
+                if catches.len().saturating_add(1) > limits.group_branches || fallback.id.is_empty()
+                {
+                    return Err(ForgeError::new(
+                        "definition.invalid",
+                        "Error handlers require a bounded set and a named fallback",
+                    ));
+                }
+                let mut ids = BTreeSet::from([fallback.id.clone()]);
+                let mut codes = BTreeSet::new();
+                let body = self.inline(body, depth + 1, document_nodes, metadata)?;
+                let mut compiled = Vec::new();
+                for case in catches {
+                    if case.id.is_empty()
+                        || case.code.is_empty()
+                        || !ids.insert(case.id.clone())
+                        || !codes.insert(case.code.clone())
+                    {
+                        return Err(ForgeError::new(
+                            "definition.invalid",
+                            "Error handler identities and codes must be nonempty and unique",
+                        ));
+                    }
+                    compiled.push((
+                        case.id.clone(),
+                        case.code.clone(),
+                        self.inline(&case.body, depth + 1, document_nodes, metadata)?,
+                    ));
+                }
+                Ok(PreparedInstruction::Try {
+                    body,
+                    catches: compiled,
+                    fallback: (
+                        fallback.id.clone(),
+                        self.inline(&fallback.body, depth + 1, document_nodes, metadata)?,
+                    ),
+                })
+            }
             Instruction::Timer { duration_ms } => {
                 if *duration_ms > limits.wait_timeout_ms {
                     return Err(ForgeError::new(

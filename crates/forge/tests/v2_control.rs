@@ -590,3 +590,207 @@ async fn expanded_plan_accounts_for_schema_payload_and_nested_depth_before_run()
     assert!(observed.calls.lock().unwrap().is_empty());
     runtime.shutdown(ShutdownOptions::default()).await.unwrap();
 }
+
+fn guarded(action: &str) -> Value {
+    json!({"id":"guard","kind":"try","input":select(""),
+        "body":body(operation("work",action,select(""))),
+        "catches":[{"id":"rejected","code":"test.control.rejected","body":body(operation("handled","echo",select("")))}],
+        "fallback":{"id":"other","body":body(operation("fallback","echo",select("")))}})
+}
+
+#[tokio::test]
+async fn try_routes_success_exact_errors_and_fallback_without_repeating_the_operation() {
+    let (builder, observed) = builder(Limits::default(), false);
+    let runtime = boot(builder).await;
+    let app = runtime.application();
+    let success = run(&app, definition("success", guarded("echo")), json!(42)).await;
+    assert_eq!(
+        success.output,
+        Some(json!({"outcome":"success","output":42}))
+    );
+    for (id, exact) in [("exact", true), ("fallback", false)] {
+        let mut guard = guarded("fail");
+        if !exact {
+            guard["catches"] = json!([]);
+        }
+        let result = run(&app, definition(id, guard), json!({"value":42})).await;
+        assert_eq!(result.state, RunState::Succeeded, "{:?}", result.error);
+        let output = result.output.unwrap();
+        assert_eq!(output["outcome"], "handled");
+        assert_eq!(output["handler"], if exact { "rejected" } else { "other" });
+        assert_eq!(output["output"]["input"]["value"], 42);
+        assert_eq!(
+            output["output"]["error"]["diagnostics"][0]["operation_error"]["code"],
+            "test.control.rejected"
+        );
+    }
+    assert_eq!(observed.calls.lock().unwrap().len(), 5);
+    runtime.shutdown(ShutdownOptions::default()).await.unwrap();
+}
+
+#[tokio::test]
+async fn try_requires_a_fallback_and_unique_codes_and_propagates_handler_failure() {
+    let (builder, _) = builder(Limits::default(), false);
+    let runtime = boot(builder).await;
+    let app = runtime.application();
+    let mut node = guarded("fail");
+    node.as_object_mut().unwrap().remove("fallback");
+    assert!(serde_json::from_value::<NodeDefinition>(node).is_err());
+    let mut node = guarded("fail");
+    let mut duplicate = node["catches"][0].clone();
+    duplicate["id"] = json!("duplicate");
+    node["catches"].as_array_mut().unwrap().push(duplicate);
+    assert_eq!(
+        app.prepare(access(), definition("duplicate", node))
+            .await
+            .err()
+            .unwrap()
+            .code(),
+        "definition.invalid"
+    );
+    let mut node = guarded("fail");
+    node["catches"][0]["body"] = body(operation("handler", "fail", select("")));
+    let failed = run(&app, definition("handler-failure", node), Value::Null).await;
+    assert_eq!(failed.state, RunState::Failed);
+    assert_eq!(failed.invocations.len(), 3);
+    runtime.shutdown(ShutdownOptions::default()).await.unwrap();
+}
+
+#[tokio::test]
+async fn owned_execution_returns_output_and_cancels_on_host_request_or_future_drop() {
+    let (builder, observed) = builder(Limits::default(), false);
+    let runtime = boot(builder).await;
+    let app = runtime.application();
+    let plan = app
+        .prepare(
+            access(),
+            definition("owned", operation("work", "echo", select(""))),
+        )
+        .await
+        .unwrap();
+    let result = app
+        .execute(
+            access(),
+            StartRunRequest::new(plan.clone(), json!(42)),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(result, json!(42));
+    for drop_future in [false, true] {
+        let cancellation = CancellationToken::new();
+        let token = cancellation.clone();
+        let handle = app.clone();
+        let request = StartRunRequest::new(plan.clone(), json!({"delay_ms":60_000}));
+        let task = tokio::spawn(async move { handle.execute(access(), request, token).await });
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while observed.active.load(Ordering::SeqCst) == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        if drop_future {
+            task.abort();
+            let _ = task.await;
+        } else {
+            cancellation.cancel();
+            let error = tokio::time::timeout(Duration::from_secs(2), task)
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap_err();
+            assert_eq!(error.code(), "operation.cancelled");
+        }
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while observed.active.load(Ordering::SeqCst) != 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+    }
+    let report = runtime.shutdown(ShutdownOptions::default()).await.unwrap();
+    assert!(!report.forced);
+    assert!(report.pending.is_empty());
+}
+
+#[tokio::test]
+async fn try_cannot_catch_the_global_deadline() {
+    let (builder, observed) = builder(
+        Limits {
+            run_timeout_ms: 25,
+            ..Default::default()
+        },
+        false,
+    );
+    let runtime = boot(builder).await;
+    let failed = run(
+        &runtime.application(),
+        definition("deadline", guarded("echo")),
+        json!({"delay_ms":60_000}),
+    )
+    .await;
+    assert_eq!(failed.state, RunState::Failed);
+    assert_eq!(failed.error.unwrap().code(), "operation.timeout");
+    assert_eq!(observed.calls.lock().unwrap().len(), 1);
+    runtime.shutdown(ShutdownOptions::default()).await.unwrap();
+}
+
+#[tokio::test]
+async fn boot_requires_explicit_recovery_and_resumes_a_selected_error_handler() {
+    let store = Arc::new(modules::MemoryExecutionStore::default());
+    let (builder, observed) = builder(Limits::default(), false);
+    let runtime = boot(builder.execution_store(store.clone())).await;
+    let app = runtime.application();
+    let mut node = guarded("fail");
+    node["catches"][0]["body"] =
+        body(json!({"id":"pause","kind":"timer","duration_ms":100,"input":select("/input")}));
+    let plan = app
+        .prepare(access(), definition("recovery-handler", node))
+        .await
+        .unwrap();
+    let id = app
+        .start(access(), StartRunRequest::new(plan, json!(42)))
+        .await
+        .unwrap()
+        .run_id;
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while app.status(access(), id.clone()).await.unwrap().state != RunState::Waiting {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    runtime.shutdown(ShutdownOptions::default()).await.unwrap();
+    let (builder, after) = self::builder(Limits::default(), false);
+    let rejected = EngineRuntime::boot(
+        builder.execution_store(store.clone()).build().unwrap(),
+        BootOptions::default(),
+    )
+    .await;
+    assert_eq!(rejected.err().unwrap().code(), "recovery.required");
+    assert_eq!(observed.calls.lock().unwrap().len(), 1);
+    assert!(after.calls.lock().unwrap().is_empty());
+    let (builder, after) = self::builder(Limits::default(), false);
+    let runtime = EngineRuntime::boot(
+        builder.execution_store(store).build().unwrap(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    let run = tokio::time::timeout(
+        Duration::from_secs(2),
+        runtime.application().wait(access(), id),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(run.state, RunState::Succeeded, "{:?}", run.error);
+    assert_eq!(run.output.unwrap()["handler"], "rejected");
+    assert!(after.calls.lock().unwrap().is_empty());
+    runtime.shutdown(ShutdownOptions::default()).await.unwrap();
+}

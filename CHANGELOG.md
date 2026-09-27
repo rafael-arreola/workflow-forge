@@ -20,10 +20,14 @@ under `schemas/2/`); a crate version bump does not imply a format bump.
 
 - Use the installed Rust 1.98 series, pinned to 1.98.1 in the workspace and CI.
 - The Rust facade and prelude expose the format-2 engine. The `v2` namespace
-  re-exports the same implementation. Protocols, engine, modules, service and CLI
+  re-exports the same implementation. Protocols, engine, modules and the facade
   have separate responsibilities; see [adoption](docs/ADOPTION.md).
-- `forge` is an authenticated HTTP client. The service owns accepted runs;
-  closing the CLI does not cancel them. See the [CLI contract](docs/CLI.md).
+- Retired the HTTP execution service and CLI: the product is a Rust-only embedded library.
+- Added owned `execute` with host cancellation and supervised cleanup. Boot rejects
+  unfinished work by default; recovery requires explicit `RecoveryPolicy::Resume`.
+- Added workflow `try`/catches/fallback and the `forge.data.equals` utility.
+- HTTP operation contract 2 exposes JSON response status/body for workflow-owned
+  routing, including 4xx/5xx. See [embedding and outcomes](docs/EMBEDDING.md).
 - Retired the spec-1 engine, extensions, schemas, examples, features and SFTP CI
   job after migrating current consumers. There is no automatic conversion of
   legacy documents or implementations of retired XLSX/SFTP/compression modules.

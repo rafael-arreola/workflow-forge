@@ -75,14 +75,15 @@
       "from": "host",
       "to": "runtime",
       "y": 330,
-      "label": "start: aceptar una ejecución"
+      "label": "execute(access, request, token)"
     },
     {
       "id": "observar",
-      "from": "host",
-      "to": "runtime",
+      "from": "runtime",
+      "to": "host",
       "y": 364,
-      "label": "wait; comprobar estado; result"
+      "label": "Valor final o error estructurado",
+      "variant": "return"
     },
     {
       "id": "cerrar",
@@ -111,9 +112,9 @@
     },
     {
       "dot": "amber",
-      "title": "Comprueba el resultado",
+      "title": "El host controla la ejecución",
       "items": [
-        "wait también puede devolver Blocked. result requiere una salida disponible."
+        "Descartar execute solicita cancelación. Recuperar pendientes exige Resume explícito."
       ]
     }
   ]

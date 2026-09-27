@@ -100,6 +100,13 @@ impl<'de> Deserialize<'de> for NodeDefinition {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Instruction {
+    /// Scoped error handling; wrap the whole workflow body for a general handler.
+    Try {
+        body: BodyDefinition,
+        #[serde(default)]
+        catches: Vec<ErrorCase>,
+        fallback: FallbackCase,
+    },
     Operation {
         operation: OperationRevision,
         config: Value,
@@ -189,6 +196,14 @@ pub struct DecisionCase {
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct ErrorCase {
+    pub id: String,
+    /// Exact operation error code, or engine diagnostic code if no operation error exists.
+    pub code: String,
+    pub body: BodyDefinition,
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FallbackCase {
     pub id: String,
     pub body: BodyDefinition,
@@ -232,6 +247,17 @@ impl Instruction {
     }
     fn normalize(&mut self) {
         match self {
+            Self::Try {
+                body,
+                catches,
+                fallback,
+            } => {
+                body.normalize();
+                for case in catches {
+                    case.body.normalize();
+                }
+                fallback.body.normalize();
+            }
             Self::Decision { cases, fallback } => {
                 for case in cases {
                     case.body.normalize();

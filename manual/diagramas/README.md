@@ -4,7 +4,7 @@ Diagramas creados con Archify 2.17 y adaptados a la paleta neutra del manual por
 
 | Diagrama | Tipo Archify | Capítulos | Evidencia del contenido |
 |---|---|---|---|
-| [Arquitectura](arquitectura.html) | `architecture` | Arquitectura | [Composición](../../crates/forge/src/v2.rs), [runtime](../../crates/engine/src/runtime/lifecycle.rs), [API](../../crates/engine/src/runtime/application.rs) |
+| [Arquitectura](arquitectura.html) | `architecture` | Arquitectura | [Composición](../../crates/forge/src/v2.rs), [runtime](../../crates/engine/src/runtime/lifecycle.rs), [ejecución propia](../../crates/engine/src/runtime/execute.rs) |
 | [Arranque y cierre](arranque.html) | `sequence` | Integración | [Programa completo](../ejemplos/src/bin/inicio.rs) |
 | [Módulos](modulos.html) | `workflow` | Módulos | [Contrato](../../crates/protocol/src/operation.rs), [extensión de saludo](../ejemplos/modulo-saludos/src/lib.rs) |
 | [Datos](datos.html) | `dataflow` | Workflows y datos | [Definición ejecutable](../ejemplos/workflows/saludo.json) |
@@ -41,3 +41,5 @@ node "$HOME/.agents/skills/archify/bin/archify.mjs" visual-check manual/diagrama
 No continúes al siguiente comando si el anterior falla. Usa el tipo de la tabla para cada archivo. Después de entregar, actualiza la vista SVG desde el visor en tema claro y comprueba su lectura dentro del capítulo. Revisa las capturas y renueva `verificacion.json` con los hashes actuales. Para cambiar colores, edita `manual-theme.css` y vuelve a generar y adaptar el HTML. El recibo de `deliver` acredita la salida original; `theme.json`, `check.json` y la evidencia visual corresponden a la salida final adaptada. No edites el HTML final manualmente, para conservar esta trazabilidad.
 
 Esta revisión cubre diagramas, enlaces y su presentación. No repite las pruebas del motor ni acredita nuevas integraciones reales.
+
+La revisión de embedding actualizó arquitectura y arranque para mostrar `execute` y cancelación del host. Las especificaciones de módulos, datos y señales siguen describiendo los contratos vigentes; su evidencia anterior se conserva para esos archivos sin cambios.

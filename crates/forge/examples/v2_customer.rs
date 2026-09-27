@@ -15,10 +15,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let access = AccessContext::trusted("default");
     let result = async {
         let plan = app.prepare_json(access.clone(),include_bytes!("../../../examples/workflows/customer_lookup.v2.json")).await?;
-        let receipt = app.start(access.clone(),StartRunRequest::new(plan,json!({"request_id":"req-17","customer":" C-9 ","items":[{"sku":"A-1","quantity":2}]}))).await?;
-        let run = app.wait(access.clone(),receipt.run_id.clone()).await?;
-        println!("run {}: {:?}",run.id,run.state);
-        println!("{}",app.result(access,receipt.run_id).await?);
+        let output = app.execute(access, StartRunRequest::new(plan,json!({"request_id":"req-17","customer":" C-9 ","items":[{"sku":"A-1","quantity":2}]})), CancellationToken::new()).await?;
+        println!("{output}");
         Ok::<_,ForgeError>(())
     }.await;
     let shutdown = runtime.shutdown(ShutdownOptions::default()).await;

@@ -77,9 +77,15 @@ fn register(
         .unwrap();
 }
 async fn boot(builder: WorkflowBuilder) -> EngineRuntime {
-    EngineRuntime::boot(builder.build().unwrap(), BootOptions::default())
-        .await
-        .unwrap()
+    EngineRuntime::boot(
+        builder.build().unwrap(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap()
 }
 async fn wait(app: &WorkflowApplication, id: RunId) -> RunSnapshot {
     tokio::time::timeout(Duration::from_secs(5), app.wait(access(), id))

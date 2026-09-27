@@ -7,8 +7,8 @@
   "visualReview": "pending",
   "artifact": {
     "path": "/Users/rafael-arreola/sites/rafael-arreola/workflow-forge/manual/diagramas/arquitectura.html",
-    "sha256": "08834e4d7ce38133eb80de975f215c40fd2036ff2b1ecae72e3fc557f84e0b67",
-    "bytes": 803051
+    "sha256": "c97e205c308ac0857d0bb3f24ed3217bf4e4f44a37aabbbbe06be6a7fad66a03",
+    "bytes": 803044
   },
   "state": {
     "detail": "read",
@@ -95,8 +95,8 @@
         "overflowX": false,
         "overflowY": false,
         "ok": true,
-        "readerWidth": 1336,
-        "diagramWidth": 1306,
+        "readerWidth": 1364,
+        "diagramWidth": 1334,
         "viewBoxWidth": 1120,
         "minimumProjectedNodeTextPx": 9,
         "minimumProjectedNodeText": "Conserva el runtime",
@@ -225,8 +225,8 @@
         "overflowX": false,
         "overflowY": false,
         "ok": true,
-        "readerWidth": 1336,
-        "diagramWidth": 1306,
+        "readerWidth": 1364,
+        "diagramWidth": 1334,
         "viewBoxWidth": 1120,
         "minimumProjectedNodeTextPx": 9,
         "minimumProjectedNodeText": "Conserva el runtime",
@@ -354,8 +354,8 @@
         "overflowX": false,
         "overflowY": false,
         "ok": true,
-        "readerWidth": 1336,
-        "diagramWidth": 1306,
+        "readerWidth": 1364,
+        "diagramWidth": 1334,
         "viewBoxWidth": 1120,
         "minimumProjectedNodeTextPx": 9,
         "minimumProjectedNodeText": "Conserva el runtime",

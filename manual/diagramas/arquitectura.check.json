@@ -1,6 +1,91 @@
 {
-  "command": "archify check arquitectura.html",
   "exit_code": 0,
-  "stdout": "{\n  \"ok\": true,\n  \"file\": \"/Users/rafael-arreola/sites/rafael-arreola/workflow-forge/manual/diagramas/arquitectura.html\",\n  \"checks\": [\n    {\n      \"name\": \"single_svg\",\n      \"ok\": true,\n      \"details\": [\n        \"found 1 <svg> block(s)\"\n      ]\n    },\n    {\n      \"name\": \"finite_svg\",\n      \"ok\": true,\n      \"details\": []\n    },\n    {\n      \"name\": \"orthogonal_arrows\",\n      \"ok\": true,\n      \"details\": []\n    },\n    {\n      \"name\": \"label_route_clearance\",\n      \"ok\": true,\n      \"details\": []\n    },\n    {\n      \"name\": \"relationship_crossings\",\n      \"ok\": true,\n      \"details\": []\n    },\n    {\n      \"name\": \"relationship_corridors\",\n      \"ok\": true,\n      \"details\": []\n    },\n    {\n      \"name\": \"container_border_runs\",\n      \"ok\": true,\n      \"details\": []\n    },\n    {\n      \"name\": \"route_rhythm\",\n      \"ok\": true,\n      \"details\": []\n    },\n    {\n      \"name\": \"legend_clearance\",\n      \"ok\": true,\n      \"details\": []\n    }\n  ],\n  \"composition\": {\n    \"schemaVersion\": 1,\n    \"profile\": \"showcase\",\n    \"status\": \"pass\",\n    \"summary\": {\n      \"errors\": 0,\n      \"warnings\": 0\n    },\n    \"metrics\": {\n      \"properCrossings\": 0,\n      \"ambiguousCorridors\": 0,\n      \"containerBorderRuns\": 0,\n      \"labelRouteClearanceIssues\": 0,\n      \"minLabelRouteClearance\": 84,\n      \"desktopReadabilityIssues\": 0,\n      \"minProjectedNodeTextPx\": null,\n      \"maxBends\": 0,\n      \"routesOverSuggestedBends\": 0,\n      \"maxStretch\": 1,\n      \"routesOverSuggestedStretch\": 0,\n      \"minSegmentPx\": 142,\n      \"minInteriorSegmentPx\": null,\n      \"shortSegmentCount\": 0,\n      \"shortEndpointSegmentCount\": 0,\n      \"shortInteriorSegmentCount\": 0,\n      \"microSegmentCount\": 0\n    },\n    \"suggestedLimits\": {\n      \"bendsPerRelationship\": 2,\n      \"stretch\": 1.35,\n      \"segmentPx\": 16,\n      \"microSegmentPx\": 8\n    },\n    \"issues\": []\n  }\n}\n",
-  "stderr": ""
+  "stdout": {
+    "ok": true,
+    "file": "/Users/rafael-arreola/sites/rafael-arreola/workflow-forge/manual/diagramas/arquitectura.html",
+    "checks": [
+      {
+        "name": "single_svg",
+        "ok": true,
+        "details": [
+          "found 1 <svg> block(s)"
+        ]
+      },
+      {
+        "name": "finite_svg",
+        "ok": true,
+        "details": []
+      },
+      {
+        "name": "orthogonal_arrows",
+        "ok": true,
+        "details": []
+      },
+      {
+        "name": "label_route_clearance",
+        "ok": true,
+        "details": []
+      },
+      {
+        "name": "relationship_crossings",
+        "ok": true,
+        "details": []
+      },
+      {
+        "name": "relationship_corridors",
+        "ok": true,
+        "details": []
+      },
+      {
+        "name": "container_border_runs",
+        "ok": true,
+        "details": []
+      },
+      {
+        "name": "route_rhythm",
+        "ok": true,
+        "details": []
+      },
+      {
+        "name": "legend_clearance",
+        "ok": true,
+        "details": []
+      }
+    ],
+    "composition": {
+      "schemaVersion": 1,
+      "profile": "showcase",
+      "status": "pass",
+      "summary": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "metrics": {
+        "properCrossings": 0,
+        "ambiguousCorridors": 0,
+        "containerBorderRuns": 0,
+        "labelRouteClearanceIssues": 0,
+        "minLabelRouteClearance": 84,
+        "desktopReadabilityIssues": 0,
+        "minProjectedNodeTextPx": null,
+        "maxBends": 0,
+        "routesOverSuggestedBends": 0,
+        "maxStretch": 1,
+        "routesOverSuggestedStretch": 0,
+        "minSegmentPx": 142,
+        "minInteriorSegmentPx": null,
+        "shortSegmentCount": 0,
+        "shortEndpointSegmentCount": 0,
+        "shortInteriorSegmentCount": 0,
+        "microSegmentCount": 0
+      },
+      "suggestedLimits": {
+        "bendsPerRelationship": 2,
+        "stretch": 1.35,
+        "segmentPx": 16,
+        "microSegmentPx": 8
+      },
+      "issues": []
+    }
+  }
 }

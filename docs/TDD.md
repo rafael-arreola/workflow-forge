@@ -1,6 +1,6 @@
 # Workflow Forge — diseño técnico
 
-Fecha: 2026-09-26. *Technical Design Document* de la refactorización. Desarrolla el [PRD](PRD.md) dentro de los límites de [ARCHITECTURE](ARCHITECTURE.md). Fija el diseño objetivo; CONTRACTS, HTTP e INTEGRATIONS concretan los contratos por perfil y PROJECT registra la implementación verificada. Las decisiones pendientes conservan su autoridad en el PRD.
+Fecha: 2026-09-26. *Technical Design Document* de la refactorización. Desarrolla el [PRD](PRD.md) dentro de los límites de [ARCHITECTURE](ARCHITECTURE.md). Fija el diseño objetivo; CONTRACTS, EMBEDDING e INTEGRATIONS concretan los contratos por perfil y PROJECT registra la implementación verificada. Las decisiones pendientes conservan su autoridad en el PRD.
 
 ## 1. Convenciones y mapa técnico
 
@@ -19,7 +19,7 @@ La [arquitectura ampliada](ARCHITECTURE.md#recorridos) muestra intercambios y fr
 | TDD-07 | Estado, persistencia y recuperación. |
 | TDD-08 | Esperas, timers y señales. |
 | TDD-09 | Secretos, artefactos y contexto. |
-| TDD-10 | Superficies de librería y servicio. |
+| TDD-10 | Superficies de librería Rust. |
 | TDD-11 | Errores y observación. |
 | TDD-12 | Capacidad, eficiencia y ciclo de vida. |
 
@@ -101,7 +101,7 @@ Propuesta: DAG de control con iteración explícita y acotada, evitando ciclos a
 
 Validar/preparar no invoca conectores de negocio. Puede resolver recursos de catálogo/schema autorizados según configuración. En runtime se valida input antes de invocar y output antes de publicarlo. Un output inválido después de un efecto no convierte la operación en segura para reintento.
 
-Diagnóstico lógico: código estable, phase, ubicación de nodo/campo/dato y detalle saneado, con clasificación y retryable cuando corresponden. CONTRACTS concreta `Diagnostic`/`ForgeError`; HTTP conserva sus campos estructurados y normaliza mensajes libres. El editor puede consumir esos mismos diagnósticos.
+Diagnóstico lógico: código estable, phase, ubicación de nodo/campo/dato y detalle saneado, con clasificación y retryable cuando corresponden. CONTRACTS concreta `Diagnostic`/`ForgeError`; el host recibe esos campos estructurados. El editor puede consumir esos mismos diagnósticos.
 
 ## 6. TDD-05 — coordinación y control de flujo
 
@@ -138,6 +138,12 @@ let plan = app.prepare(access.clone(), customer_batch).await?;
 ```
 
 El fragmento asume módulos y proveedores ya registrados. Una extensión implementa la consulta; la definición `customer_batch` puede repetirla mediante `foreach` y `subworkflow`. Agregar otro proveedor conserva este recorrido y no requiere modificar `planner`.
+
+### Control de errores y salida genérica
+
+`Instruction::Try` contiene un `BodyDefinition`, `catches` con IDs/códigos únicos y un `fallback` obligatorio. El compilador valida todos los cuerpos, recursos, profundidad y referencias antes de admitir el plan. El runtime ejecuta el cuerpo; ante un error capturable guarda `ControlFrame::Try { handler, error }` antes del handler. Su input contiene entrada original y `ForgeError`. Una recuperación posterior salta directamente al handler elegido; un fallo allí se propaga hacia fuera.
+
+Los retries de la operación preceden a la selección del handler. Suspensión, fallos de infraestructura, cancelación, presupuesto y certeza incierta no se convierten en éxito. Sin handler el error estructurado se devuelve al host. La salida etiquetada y las reglas exactas se mantienen en [EMBEDDING](EMBEDDING.md).
 
 ## 7. TDD-06 — invocaciones y efectos
 
@@ -252,28 +258,17 @@ Separar artefacto en preparación, publicado/referenciado y elegible para limpie
 
 [CONTRACTS §10.3](CONTRACTS.md#artefactos-durables) concreta el proveedor coordinado: `StartOptions.artifacts` declara entradas que se fijan con la aceptación; `ArtifactAccess` delimita propietario/run en cada acceso; el mismo actor SQLite conserva bytes y sus propietarios. Las operaciones no obtienen acceso al store de ejecución por esa vía. Las garantías se verifican mediante migración, retención compartida, propietario obsoleto y caídas reales de C-02.
 
-## 11. TDD-10 — librería y servicio
+## 11. TDD-10 — librería Rust embebida
 
-Superficie lógica de `WorkflowApplication`; los tipos están en el protocolo y las rutas/DTOs en HTTP:
+El host construye `EngineRuntime`, comparte `WorkflowApplication` y cierra el runtime antes de detener su executor. El producto no incorpora servicio ni cliente CLI. Los recursos y transportes de entrada pertenecen al host.
 
-| Operación | Resultado y obligación |
-|---|---|
-| `catalog` / `capabilities` | Descriptores/revisiones disponibles y capacidades habilitadas. |
-| `prepare` / `prepare_json` | Diagnósticos o plan preparado; sin efectos de negocio. |
-| `start` | Run identificado y aceptación bajo el perfil solicitado. |
-| `status` / `result` | Estado y resultado confirmado, con error explícito si aún no está listo o expiró. |
-| `cancel` | Solicitud de cancelación identificable; no promesa de reversión remota. |
-| `signal` | Acuse de recepción/duplicado/rechazo conforme a TDD-08. |
-| `inspect_effect` / `reconcile` | Consultar evidencia y solicitar resolución autorizada; comandos, precondiciones y auditoría de TDD-06. |
-| `write_artifact` / `read_artifact` | Transferencias del host bajo scope/grants y propiedad de instancia, sin exponer el proveedor. |
+`execute(access, StartRunRequest, CancellationToken)` es la llamada principal y devuelve `Result<Value, ForgeError>`. Descarta la obligación de gestionar un recibo para el caso común. Un guard de cancelación vincula la vida del future a la llamada; un conjunto de tareas propiedad del runtime supervisa admisión y limpieza, incluso si el caller abandona durante la aceptación. `execute` no permite `receipt_key` para no apropiarse de trabajo deduplicado ajeno.
 
-La librería ofrece `wait` para esperar un run aceptado. El servidor traduce estas capacidades a HTTP/JSON, con DTOs y rutas definidos en [HTTP](HTTP.md) bajo P-05; no interpreta otra spec ni implementa retries adicionales alrededor de `start`. La desconexión del cliente no cancela el run; cancelar requiere comando explícito. El servicio exige durabilidad por defecto y publica cualquier perfil efímero elegido expresamente.
+`start`/`wait`/`cancel` siguen disponibles para casos explícitos de señales y deduplicación. La separación entre aceptación y finalización conserva sentido dentro del proceso; no implica un servicio. El host que elige esta API asume el seguimiento y la cancelación.
 
-La solicitud puede incluir clave de recepción. Reutilizarla con contenido diferente produce conflicto; con contenido equivalente devuelve el run previo dentro de su ámbito/ventana definida. Esta deduplicación no reemplaza la idempotencia de operaciones externas.
+`BootOptions.recovery` vale `RejectUnfinished` por defecto. Pendientes producen `recovery.required` sin invocar operaciones y liberando propiedad del store. Solo `Resume` autoriza la recuperación con revisiones y deadlines originales. Un resultado `Blocked` vuelve como error a `execute`, con incertidumbre preservada.
 
-[HTTP](HTTP.md) concreta P-05 para F-4: autenticación, ámbitos, rutas, DTOs, paginación, límites, errores y lifecycle sobre la fachada pública. [INTEGRATIONS](INTEGRATIONS.md) fija perfiles y revisiones de los conectores HTTP/JSON y archivos/CSV. No se inventa multitenencia por incluir un campo genérico de metadata.
-
-En F-5 la [CLI](CLI.md) pasa a consumir ese contrato HTTP. No construye otro runtime ni interpreta otra spec. El ejecutable del servicio conserva la composición y los runs aceptados; la librería sigue siendo la superficie embebida. Catálogo, preparación, acuses, señales, reconciliación y artefactos mantienen los DTOs del mismo motor, también al cerrar el cliente.
+[EMBEDDING](EMBEDDING.md) fija propiedad, resultados, handlers y límites. [INTEGRATIONS](INTEGRATIONS.md) define los módulos salientes HTTP/JSON y archivos/CSV.
 
 ## 12. TDD-11 — observación y errores
 
@@ -295,7 +290,7 @@ Preparar schemas, expresiones e índices una vez por revisión; reutilizar plane
 
 **Ajuste autorizado el 2026-09-27:** V-14 conserva pruebas funcionales esenciales y casos borde de admisión, cuotas, concurrencia y expiración, incluida la conservación de runs aceptados. Las matrices de rendimiento restantes, sus repeticiones y la comparación con fases anteriores son opcionales ante una necesidad de capacidad real; no condicionan el cierre técnico de F-5. Conservar resultados y límites históricos sin atribuir éxito a combinaciones omitidas. Los casos y objetivos reales de P-01/P-07 siguen pendientes.
 
-Por decisión posterior del usuario del mismo 2026-09-27, P-01/P-07 se atenderán después de comprobar el engine. El cierre de F-5 y su commit se apoyan en casos de referencia, conformidad, autoría/extensión, paridad, recuperación y pruebas esenciales ya verificadas en PROJECT. Las integraciones y metas reales no son condiciones de ese cierre ni se presentan como comprobadas.
+Por decisión posterior del usuario del mismo 2026-09-27, P-01/P-07 se atenderán después de comprobar el engine. El cierre de F-5 y su commit se apoyan en casos de referencia, conformidad, autoría/extensión, recuperación y pruebas esenciales ya verificadas en PROJECT. Las integraciones y metas reales no son condiciones de ese cierre ni se presentan como comprobadas.
 
 Durante cierre del host: detener nuevas admisiones, aplicar política de drenado y conservar transiciones/esperas pendientes en modo durable. El plazo de apagado no acredita que un destino haya cancelado su trabajo. Al reiniciar, recuperar antes de ofrecer garantías de estado consistente.
 
@@ -313,7 +308,7 @@ Estados propuestos de lifecycle del motor, distintos de estados de run: `Built �
 
 ## 14. Matriz de trazabilidad y verificación
 
-Son criterios de aceptación; PROJECT registra los resultados ejecutados. Cada caso debe observar comportamiento, incluyendo fallos inyectados en fronteras relevantes. El ajuste del 2026-09-27 conserva la suite funcional de contratos/errores, recuperación/efectos, cuotas/concurrencia y paridad. Una pasada final y las regresiones focalizadas justificadas por cambios o fallos cubren la verificación restante; no se exige completar campañas de rendimiento.
+Son criterios de aceptación; PROJECT registra los resultados ejecutados. Cada caso debe observar comportamiento, incluyendo fallos inyectados en fronteras relevantes. El ajuste del 2026-09-27 conserva la suite funcional de contratos/errores, recuperación/efectos, cuotas/concurrencia. Una pasada final y las regresiones focalizadas justificadas por cambios o fallos cubren la verificación restante; no se exige completar campañas de rendimiento.
 
 | Requisito | Contratos | Verificación de aceptación |
 |---|---|---|
@@ -326,11 +321,11 @@ Son criterios de aceptación; PROJECT registra los resultados ejecutados. Cada c
 | PRD-EFFECT-001 | TDD-06 | V-07: efecto remoto confirmado con respuesta perdida; deduplicación/reconciliación y respuesta tardía. V-18: evidencia insuficiente, no aplicación definitiva, output inválido, acceso, resolución duplicada/concurrente y cierre con incertidumbre registrada. |
 | PRD-DUR-001 | TDD-07 | V-08: reinicios en cada frontera de la tabla; conflictos de revisión y propietario vencido cuando aplique. |
 | PRD-WAIT-001 | TDD-08 | V-09: reinicio durante espera; señal duplicada, desconocida, inválida, tardía y carrera con timer. |
-| PRD-API-001 | TDD-10 | V-10: mismos casos por librería/API; recepción duplicada y desconexión. |
+| PRD-API-001 | TDD-10 | V-10: resultado/error de `execute`, cancelación del host y descarte durante admisión/ejecución. |
 | PRD-VIS-001 | TDD-02, TDD-03, TDD-04 | V-11: consumidor de catálogo construye flujo y ubica errores sin acceso al engine interno. |
 | PRD-RES-001 | TDD-09 | V-12: exportación sin secretos, streaming y recuperación de referencia después de reinicio. |
 | PRD-OBS-001 | TDD-11 | V-13: estado correcto con observador lento/fallido y diagnósticos saneados. |
-| PRD-OPS-001 | TDD-12 | V-14: cuotas, concurrencia, expiración y saturación sin pérdida de aceptación mediante pruebas funcionales y casos borde; medición reproducible opcional ante una necesidad de capacidad real. V-16: construcción sin admisión, boot con recuperación, handles compartidos, readiness, fallos parciales y apagado supervisado. |
+| PRD-OPS-001 | TDD-12 | V-14: cuotas, concurrencia, expiración y saturación sin pérdida de aceptación mediante pruebas funcionales y casos borde; medición reproducible opcional ante una necesidad de capacidad real. V-16: construcción sin admisión, boot sin reanudación implícita y recuperación seleccionada, handles compartidos, readiness, fallos parciales y apagado supervisado. |
 | PRD-EVOL-001 | TDD-01, TDD-07 | V-15: cambio de catálogo no altera run; revisión ausente bloquea recuperación explícitamente. |
 
 Casos mínimos adicionales de V-19, desde F-1:
@@ -348,6 +343,6 @@ V-18 añade en F-2/F-3 el caso donde una consulta remota devuelve «no encontrad
 
 ## 15. Detalles que deben cerrarse antes de codificar cada contrato
 
-PROJECT distingue diseño de capacidad verificada. CONTRACTS concreta F-1/F-2 y el paquete, codec, DDL, artefactos y esperas F-3, con tipos, cuotas y pruebas. HTTP e INTEGRATIONS concretan F-4; sus pruebas se registran en PROJECT. SQLite tiene evidencia de recuperación, carreras, reconciliación y mediciones locales. Las metas de producción permanecen en P-07 para la etapa posterior al cierre del engine; un contrato escrito no acredita por sí mismo su implementación.
+PROJECT distingue diseño de capacidad verificada. CONTRACTS concreta F-1/F-2 y el paquete, codec, DDL, artefactos y esperas F-3, con tipos, cuotas y pruebas. EMBEDDING e INTEGRATIONS concretan integración y módulos; sus pruebas se registran en PROJECT. SQLite tiene evidencia de recuperación, carreras, reconciliación y mediciones locales. Las metas de producción permanecen en P-07 para la etapa posterior al cierre del engine; un contrato escrito no acredita por sí mismo su implementación.
 
 La [hoja de ruta](ROADMAP.md) exige cerrar los detalles de la fase antes de programarlos. Decidir persistencia no equivale a elegir automáticamente event sourcing, Redis, SQL o workers remotos. Las [referencias de arquitectura](ARCHITECTURE.md#9-referencias-de-diseño) orientan este diseño sin imponer infraestructura.

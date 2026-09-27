@@ -50,11 +50,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let outcome = async {
         for (definition, input, expected) in cases {
             let plan = app.prepare_json(access.clone(), definition).await?;
-            let receipt = app
-                .start(access.clone(), StartRunRequest::new(plan, input))
+            let output = app
+                .execute(
+                    access.clone(),
+                    StartRunRequest::new(plan, input),
+                    CancellationToken::new(),
+                )
                 .await?;
-            app.wait(access.clone(), receipt.run_id.clone()).await?;
-            let output = app.result(access.clone(), receipt.run_id).await?;
             if output != expected {
                 return Err(ForgeError::new(
                     "manual.unexpected",

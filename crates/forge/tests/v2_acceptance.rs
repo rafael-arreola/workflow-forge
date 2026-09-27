@@ -443,7 +443,7 @@ async fn bundle_registration_is_atomic_and_rejects_unsupported_protocol() {
         "capability.unsupported"
     );
     let runtime = boot(builder).await;
-    assert_eq!(runtime.application().catalog(&access()).unwrap().len(), 3);
+    assert_eq!(runtime.application().catalog(&access()).unwrap().len(), 4);
     runtime.shutdown(ShutdownOptions::default()).await.unwrap();
 }
 
@@ -513,6 +513,7 @@ async fn failed_boot_releases_store_and_double_ownership_is_rejected() {
             .unwrap(),
         BootOptions {
             definitions: vec![invalid],
+            ..Default::default()
         },
     )
     .await;

@@ -22,11 +22,10 @@
 //! let access = AccessContext::trusted("default"); // The host supplies authorization.
 //! let completed = async {
 //!     let plan = app.prepare(access.clone(), definition).await?;
-//!     let receipt = app.start(access.clone(), StartRunRequest::new(plan, serde_json::json!({"hello": 1}))).await?;
-//!     app.wait(access, receipt.run_id).await
+//!     app.execute(access, StartRunRequest::new(plan, serde_json::json!({"hello": 1})), CancellationToken::new()).await
 //! }.await;
 //! runtime.shutdown(ShutdownOptions::default()).await?;
-//! assert_eq!(completed?.output, Some(serde_json::json!({"hello": 1})));
+//! assert_eq!(completed?, serde_json::json!({"hello": 1}));
 //! # Ok(())
 //! # }
 //! ```

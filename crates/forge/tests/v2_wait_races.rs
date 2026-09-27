@@ -71,7 +71,10 @@ async fn boot(
             .artifact_store(provider.artifacts.clone())
             .build()
             .unwrap(),
-        BootOptions::default(),
+        BootOptions {
+            recovery: RecoveryPolicy::Resume,
+            ..Default::default()
+        },
     )
     .await
     .unwrap();

@@ -86,7 +86,7 @@
       "id": "invocar-api",
       "from": "aplicacion",
       "to": "handle",
-      "label": "prepare / start",
+      "label": "prepare / execute",
       "variant": "emphasis"
     },
     {
@@ -118,7 +118,7 @@
       "dot": "cyan",
       "title": "Un solo proceso",
       "items": [
-        "La aplicación integra workflow-forge como dependencia; las flechas representan llamadas internas."
+        "La aplicación conserva runtime y cancelación; la librería no abre un servicio."
       ]
     },
     {

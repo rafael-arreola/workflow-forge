@@ -1,0 +1,70 @@
+{
+  "format": "forge.workflow/2",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "id": "manual.importacion",
+  "revision": "r1",
+  "input_schema": {
+    "type": "array",
+    "maxItems": 20,
+    "items": true
+  },
+  "output_schema": {
+    "type": "array"
+  },
+  "entry": "clientes",
+  "nodes": [
+    {
+      "id": "clientes",
+      "kind": "foreach",
+      "input": {
+        "select": {
+          "source": "input",
+          "pointer": ""
+        }
+      },
+      "items": {
+        "select": {
+          "source": "input",
+          "pointer": ""
+        }
+      },
+      "concurrency": 2,
+      "errors": "collect",
+      "body": {
+        "entry": "saludo",
+        "nodes": [
+          {
+            "id": "saludo",
+            "kind": "subworkflow",
+            "input": {
+              "select": {
+                "source": "input",
+                "pointer": "/item"
+              }
+            },
+            "workflow": {
+              "id": "manual.saludo",
+              "revision": "r1"
+            }
+          }
+        ],
+        "edges": [],
+        "output": {
+          "select": {
+            "source": "node",
+            "pointer": "",
+            "node": "saludo"
+          }
+        }
+      }
+    }
+  ],
+  "edges": [],
+  "output": {
+    "select": {
+      "source": "node",
+      "pointer": "",
+      "node": "clientes"
+    }
+  }
+}

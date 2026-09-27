@@ -6,12 +6,12 @@
   "input": "/Users/rafael-arreola/sites/rafael-arreola/workflow-forge/manual/diagramas/arquitectura.json",
   "output": "/Users/rafael-arreola/sites/rafael-arreola/workflow-forge/manual/diagramas/arquitectura.html",
   "specification": {
-    "sha256": "1624d21a20b96f0a5cb3748d7d4d3e6ce8e9ab7ee5d53e998dbef04e2fd45f30",
-    "bytes": 2477
+    "sha256": "a9b0c6205eb5ffe0dc5bda474abf493a28c87b360350bc3e6e1a117d679691e6",
+    "bytes": 2462
   },
   "artifact": {
-    "sha256": "ea7f5e3ba052db14679bae2cac615f576ef000ed9e30027f1cfebbafefc80ed1",
-    "bytes": 800313
+    "sha256": "747259d09f6fd245c9242a02c0ffd808af2da5830e78cb4242543eec6784aece",
+    "bytes": 800306
   },
   "validation": {
     "checksPassed": 9,

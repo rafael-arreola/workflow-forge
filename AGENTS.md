@@ -4,7 +4,7 @@
 
 Develop and extend an agnostic declarative workflow engine, embedded as a **library within a Rust application**. JSON definitions connect operations through JSON Schema contracts. The host selects implementations, resources, and transports.
 
-- Prioritize embedded integration in designs, examples, and documentation. The HTTP service and CLI are optional adapters, not prerequisites for using the engine.
+- This product is a Rust-only embedded library. Do not add a server, HTTP execution API, CLI client, scheduler daemon, or support surface for other languages. The host owns all inbound transports. HTTP request operations are outbound capabilities, not services.
 - Implement modules, graph validation, execution, and transformations using the existing public types and traits, without requiring step-by-step guidance.
 - Keep the engine independent of providers, business rules, and any future graphical interface. Authoring metadata supports building a separate editor.
 - The project has no public release yet. Breaking changes are allowed, but must explicitly update affected contracts, consumers, and documentation.
@@ -40,7 +40,6 @@ Consult the index and verify coverage of files used as evidence. If coverage is 
 | `crates/modules` | Official operation and provider implementations. |
 | `crates/forge` | The `workflow-forge` facade and default composition. |
 | `crates/conformance` | Reusable public contract checks. |
-| `crates/service`, `crates/cli` | HTTP adapter and its client; do not duplicate coordination. |
 | `examples/reference-module` | Reference extension using public contracts. |
 | `examples/authoring-client` | Consumer of catalog, validation, and authoring capabilities. |
 
@@ -59,12 +58,16 @@ Extensions depend on the protocol and their own dependencies; they must not impo
 
 ## Implementation Invariants
 
+- Prefer `WorkflowApplication::execute` with a host cancellation token for owned calls. Dropping its future requests cancellation; the runtime supervises acceptance and cleanup. `start`/`wait` is an advanced host-owned API, not the default integration recipe.
+- Boot must not resume old work implicitly. Default `RecoveryPolicy::RejectUnfinished` fails when pending work exists; only the host can explicitly choose `Resume`.
+- Workflows choose business routes. Operations return schema-conforming values or stable structured errors. Use `try` for exact error handlers and a required fallback; wrap the root body for a general handler. Preserve cancellation, deadlines, quotas, and uncertain effects above error handlers.
 - Keep preparation, acceptance, and completion separate. `wait` may return a blocked run; check its state before assuming success or requesting output.
 - Pin operation and workflow revisions. Update schemas, validation, and examples when a public contract changes.
 - Preserve the distinction between missing values, `null`, and literals. Edges determine order; bindings construct data.
 - Declare effects, repetition safety, and error certainty. A write timeout does not prove that the effect did not occur; do not blindly retry uncertain effects.
 - Preserve the deduplication, concurrency, recovery, and limits defined by the contracts. Do not present memory as durable storage or local SQLite as distributed coordination.
 - Reserve the wait before requesting an external response. Authentication and transport adaptation belong to the host.
+- Deterministic control and bounded execution are distinct guarantees. External I/O may vary. Rust extensions must cooperate with cancellation, avoid blocking executor threads, and never leave unowned tasks; timeouts cannot forcibly stop arbitrary in-process code.
 - Bound data, artifacts, concurrency, and retention. Do not promise throughput or memory usage without evidence for an identified workload and environment.
 
 ## Working Practices and Verification

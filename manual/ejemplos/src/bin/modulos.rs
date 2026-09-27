@@ -15,14 +15,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 include_bytes!("../../workflows/saludo.json"),
             )
             .await?;
-        let receipt = app
-            .start(
-                access.clone(),
-                StartRunRequest::new(plan, json!({"nombre":"  Rafael  "})),
-            )
-            .await?;
-        app.wait(access.clone(), receipt.run_id.clone()).await?;
-        app.result(access, receipt.run_id).await
+        app.execute(
+            access,
+            StartRunRequest::new(plan, json!({"nombre":"  Rafael  "})),
+            CancellationToken::new(),
+        )
+        .await
     }
     .await;
     let shutdown = runtime.shutdown(ShutdownOptions::default()).await?;

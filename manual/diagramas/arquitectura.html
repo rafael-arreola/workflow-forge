@@ -5234,7 +5234,7 @@ html[data-preset] .card { background: var(--panel); }
 
 
         <!-- Connection paths (before components for correct z-order) -->
-        <path data-edge-from="aplicacion" data-edge-to="handle" data-edge-label="prepare / start" data-edge-key="0" data-edge-id="invocar-api" data-composition-points="250,324;450,324" d="M 250 324 L 450 324" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="aplicacion" data-edge-to="handle" data-edge-label="prepare / execute" data-edge-key="0" data-edge-id="invocar-api" data-composition-points="250,324;450,324" d="M 250 324 L 450 324" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         <path data-edge-from="handle" data-edge-to="coordinador" data-edge-label="Coordina el run" data-edge-key="1" data-edge-id="coordinar" data-composition-points="695,324;860,324" d="M 695 324 L 860 324" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         <path data-edge-from="coordinador" data-edge-to="operaciones" data-edge-label="execute" data-edge-key="2" data-edge-id="ejecutar-operacion" data-composition-points="965,285;965,143" d="M 965 285 L 965 143" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="coordinador" data-edge-to="almacenamiento" data-edge-label="Puertos de recursos" data-edge-key="3" data-edge-id="guardar-estado" data-composition-points="965,363;965,505" d="M 965 363 L 965 505" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
@@ -5297,9 +5297,9 @@ html[data-preset] .card { background: var(--panel); }
         </g>
 
         <!-- Connection labels -->
-        <g data-detail="context" data-edge-from="aplicacion" data-edge-to="handle" data-edge-label="prepare / start" data-edge-key="0" data-edge-id="invocar-api">
-          <rect x="309" y="304" width="82" height="14" rx="3" class="c-mask"/>
-          <text x="350" y="314" class="t-backend" font-size="8" text-anchor="middle">prepare / start</text>
+        <g data-detail="context" data-edge-from="aplicacion" data-edge-to="handle" data-edge-label="prepare / execute" data-edge-key="0" data-edge-id="invocar-api">
+          <rect x="304.2" y="304" width="91.6" height="14" rx="3" class="c-mask"/>
+          <text x="350" y="314" class="t-backend" font-size="8" text-anchor="middle">prepare / execute</text>
         </g>
         <g data-detail="context" data-edge-from="handle" data-edge-to="coordinador" data-edge-label="Coordina el run" data-edge-key="1" data-edge-id="coordinar">
           <rect x="736.5" y="304" width="82" height="14" rx="3" class="c-mask"/>
@@ -5521,7 +5521,7 @@ html[data-preset] .card { background: var(--panel); }
           <h3>Un solo proceso</h3>
         </div>
         <ul>
-          <li>&bull; La aplicación integra workflow-forge como dependencia; las flechas representan llamadas internas.</li>
+          <li>&bull; La aplicación conserva runtime y cancelación; la librería no abre un servicio.</li>
         </ul>
       </div>
 

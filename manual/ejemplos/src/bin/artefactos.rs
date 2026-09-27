@@ -23,9 +23,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut request = StartRunRequest::new(plan, json!({"source":reference}));
         // El JSON solo transporta la referencia; esta lista la vincula al run.
         request.options.artifacts.push(reference.clone());
-        let receipt = app.start(access.clone(), request).await?;
-        app.wait(access.clone(), receipt.run_id.clone()).await?;
-        let output = app.result(access.clone(), receipt.run_id).await?;
+        let output = app
+            .execute(access.clone(), request, CancellationToken::new())
+            .await?;
         let mut content = app.read_artifact(access, &reference).await?;
         let mut downloaded = Vec::new();
         while let Some(chunk) = content.next().await {
