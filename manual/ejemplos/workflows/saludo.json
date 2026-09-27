@@ -1,0 +1,87 @@
+{
+  "format": "forge.workflow/2",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "id": "manual.saludo",
+  "revision": "r1",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "nombre"
+    ],
+    "properties": {
+      "nombre": {
+        "type": "string",
+        "maxLength": 128
+      }
+    },
+    "additionalProperties": false
+  },
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "saludo"
+    ],
+    "properties": {
+      "saludo": {
+        "type": "string",
+        "maxLength": 192
+      }
+    },
+    "additionalProperties": false
+  },
+  "entry": "limpiar",
+  "nodes": [
+    {
+      "id": "limpiar",
+      "kind": "operation",
+      "operation": {
+        "id": "forge.text.trim",
+        "contract": "1",
+        "implementation": "r1"
+      },
+      "config": {},
+      "input": {
+        "select": {
+          "source": "input",
+          "pointer": "/nombre"
+        }
+      }
+    },
+    {
+      "id": "saludar",
+      "kind": "operation",
+      "operation": {
+        "id": "manual.saludos.crear",
+        "contract": "1",
+        "implementation": "r1"
+      },
+      "config": {
+        "prefijo": "Hola, "
+      },
+      "input": {
+        "select": {
+          "source": "node",
+          "node": "limpiar",
+          "pointer": ""
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "limpiar",
+      "to": "saludar"
+    }
+  ],
+  "output": {
+    "object": {
+      "saludo": {
+        "select": {
+          "source": "node",
+          "node": "saludar",
+          "pointer": ""
+        }
+      }
+    }
+  }
+}

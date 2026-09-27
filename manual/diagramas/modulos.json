@@ -1,0 +1,102 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "De un contrato a un módulo registrado",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "extension",
+      "label": "Extensión Rust"
+    },
+    {
+      "id": "host",
+      "label": "Tu aplicación"
+    }
+  ],
+  "mainPath": [
+    "contrato",
+    "implementacion",
+    "bundle",
+    "registro"
+  ],
+  "nodes": [
+    {
+      "id": "contrato",
+      "lane": "extension",
+      "col": 0,
+      "type": "backend",
+      "label": "OperationDescriptor",
+      "sublabel": "Schemas, revisión y efectos",
+      "width": 185
+    },
+    {
+      "id": "implementacion",
+      "lane": "extension",
+      "col": 1,
+      "type": "backend",
+      "label": "impl Operation",
+      "sublabel": "descriptor() y execute()",
+      "width": 220
+    },
+    {
+      "id": "bundle",
+      "lane": "extension",
+      "col": 2,
+      "type": "backend",
+      "label": "OperationBundle",
+      "sublabel": "ModuleDescriptor y operaciones",
+      "width": 250
+    },
+    {
+      "id": "registro",
+      "lane": "host",
+      "col": 2,
+      "type": "backend",
+      "label": "register_bundle",
+      "sublabel": "Antes de build y boot",
+      "width": 250,
+      "yOffset": 55
+    }
+  ],
+  "edges": [
+    {
+      "id": "declarar",
+      "from": "contrato",
+      "to": "implementacion",
+      "label": "Expone el contrato",
+      "variant": "emphasis"
+    },
+    {
+      "id": "agrupar",
+      "from": "implementacion",
+      "to": "bundle",
+      "label": "Agrupa operaciones",
+      "variant": "emphasis"
+    },
+    {
+      "id": "registrar",
+      "from": "bundle",
+      "to": "registro",
+      "label": "Registra capacidades",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Depende del protocolo",
+      "items": [
+        "La extensión implementa contratos públicos; no importa el engine."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Revisión explícita",
+      "items": [
+        "El workflow elige operación, contrato e implementación por identidad exacta."
+      ]
+    }
+  ]
+}

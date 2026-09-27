@@ -1,0 +1,61 @@
+{
+  "format": "forge.workflow/2",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "id": "manual.aprobacion",
+  "revision": "r1",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "pedido"
+    ],
+    "properties": {
+      "pedido": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output_schema": {
+    "type": "object"
+  },
+  "entry": "aprobar",
+  "nodes": [
+    {
+      "id": "aprobar",
+      "kind": "await_signal",
+      "input": {
+        "select": {
+          "source": "input",
+          "pointer": ""
+        }
+      },
+      "correlation": {
+        "select": {
+          "source": "input",
+          "pointer": "/pedido"
+        }
+      },
+      "timeout_ms": 60000,
+      "payload_schema": {
+        "type": "object",
+        "required": [
+          "aprobado"
+        ],
+        "properties": {
+          "aprobado": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ],
+  "edges": [],
+  "output": {
+    "select": {
+      "source": "node",
+      "node": "aprobar",
+      "pointer": ""
+    }
+  }
+}

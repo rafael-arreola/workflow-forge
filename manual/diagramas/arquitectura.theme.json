@@ -1,0 +1,20 @@
+{
+  "transform": {
+    "sha256": "2125642a5ef96a64c4d59b8605e7b8e8a31f98bf641849beb85d12a49c58ade5",
+    "bytes": 2921
+  },
+  "reason": "User-requested manual palette; styling only, same SVG geometry and interaction logic.",
+  "source_delivery": "arquitectura.delivery.json",
+  "source_artifact": {
+    "sha256": "ea7f5e3ba052db14679bae2cac615f576ef000ed9e30027f1cfebbafefc80ed1",
+    "bytes": 800313
+  },
+  "stylesheet": {
+    "sha256": "0149294134212720433a43e406137efdadacaebe024f2a2d2bbbd5213f46bb2e",
+    "bytes": 2780
+  },
+  "artifact": {
+    "sha256": "08834e4d7ce38133eb80de975f215c40fd2036ff2b1ecae72e3fc557f84e0b67",
+    "bytes": 803051
+  }
+}

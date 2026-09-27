@@ -1,0 +1,88 @@
+{
+  "format": "forge.workflow/2",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "id": "manual.paralelo",
+  "revision": "r1",
+  "input_schema": true,
+  "output_schema": {
+    "type": "object"
+  },
+  "entry": "grupo",
+  "nodes": [
+    {
+      "id": "grupo",
+      "kind": "parallel",
+      "input": {
+        "select": {
+          "source": "input",
+          "pointer": ""
+        }
+      },
+      "concurrency": 2,
+      "errors": "fail_fast",
+      "join": "all",
+      "branches": {
+        "izquierda": {
+          "entry": "valor",
+          "nodes": [
+            {
+              "id": "valor",
+              "kind": "operation",
+              "operation": {
+                "id": "forge.data.identity",
+                "contract": "1",
+                "implementation": "r1"
+              },
+              "config": {},
+              "input": {
+                "literal": "A"
+              }
+            }
+          ],
+          "edges": [],
+          "output": {
+            "select": {
+              "source": "node",
+              "node": "valor",
+              "pointer": ""
+            }
+          }
+        },
+        "derecha": {
+          "entry": "valor",
+          "nodes": [
+            {
+              "id": "valor",
+              "kind": "operation",
+              "operation": {
+                "id": "forge.data.identity",
+                "contract": "1",
+                "implementation": "r1"
+              },
+              "config": {},
+              "input": {
+                "literal": "B"
+              }
+            }
+          ],
+          "edges": [],
+          "output": {
+            "select": {
+              "source": "node",
+              "node": "valor",
+              "pointer": ""
+            }
+          }
+        }
+      }
+    }
+  ],
+  "edges": [],
+  "output": {
+    "select": {
+      "source": "node",
+      "node": "grupo",
+      "pointer": ""
+    }
+  }
+}

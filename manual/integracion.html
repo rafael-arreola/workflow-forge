@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Ejecuta tu primer workflow dentro del proceso Rust, sin HTTP y sin otro servicio.">
+  <title>Integrar la librería en Rust · Manual de Workflow Forge</title>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="font-sans leading-relaxed antialiased">
+  <a href="#contenido" class="sr-only focus:not-sr-only focus:block focus:p-4">Saltar al contenido</a>
+  <header class="border-b border-[var(--color-base-300)] px-5 py-5">
+    <div class="mx-auto max-w-6xl sm:flex sm:items-center sm:justify-between sm:gap-6">
+      <a href="index.html" class="text-lg font-semibold">Workflow Forge <span class="font-normal">/ Manual de implementación</span></a>
+      <p class="mt-2 text-sm sm:mt-0">Rust 1.98.1 · forge.workflow/2</p>
+    </div>
+  </header>
+  <div class="mx-auto max-w-6xl px-5 py-7 lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-12">
+    <aside class="mb-8 lg:mb-0 print:hidden">
+      <details class="rounded border border-[var(--color-base-300)] p-3 lg:hidden">
+        <summary class="cursor-pointer font-medium">Capítulos del manual</summary>
+        <nav class="mt-3" aria-label="Capítulos en móvil"><ul class="menu w-full p-0 text-sm"><li><a href="index.html">00. Inicio y ruta de aprendizaje</a></li><li><a href="integracion.html" aria-current="page" class="menu-active">01. Integrar la librería en Rust</a></li><li><a href="arquitectura.html">02. Instancia y arquitectura</a></li><li><a href="modulos.html">03. Crear módulos y operaciones</a></li><li><a href="workflows.html">04. Definir workflows</a></li><li><a href="datos.html">05. Mover y transformar datos</a></li><li><a href="control.html">06. Decisiones y flujos avanzados</a></li><li><a href="recursos.html">07. Secretos, archivos y conectores</a></li><li><a href="persistencia.html">08. Persistencia y recuperación</a></li><li><a href="efectos.html">09. Errores, reintentos y efectos</a></li><li><a href="procesos.html">10. Señales y comunicación entre procesos</a></li><li><a href="operacion.html">11. Límites, diagnóstico y pruebas</a></li></ul></nav>
+      </details>
+      <nav class="hidden lg:sticky lg:top-6 lg:block" aria-label="Capítulos">
+        <p class="mb-4 text-sm font-semibold">DE LO BÁSICO A LO AVANZADO</p>
+        <ul class="menu w-full p-0 text-sm"><li><a href="index.html">00. Inicio y ruta de aprendizaje</a></li><li><a href="integracion.html" aria-current="page" class="menu-active">01. Integrar la librería en Rust</a></li><li><a href="arquitectura.html">02. Instancia y arquitectura</a></li><li><a href="modulos.html">03. Crear módulos y operaciones</a></li><li><a href="workflows.html">04. Definir workflows</a></li><li><a href="datos.html">05. Mover y transformar datos</a></li><li><a href="control.html">06. Decisiones y flujos avanzados</a></li><li><a href="recursos.html">07. Secretos, archivos y conectores</a></li><li><a href="persistencia.html">08. Persistencia y recuperación</a></li><li><a href="efectos.html">09. Errores, reintentos y efectos</a></li><li><a href="procesos.html">10. Señales y comunicación entre procesos</a></li><li><a href="operacion.html">11. Límites, diagnóstico y pruebas</a></li></ul>
+      </nav>
+    </aside>
+    <main id="contenido" tabindex="-1" class="min-w-0 max-w-4xl">
+      <nav class="breadcrumbs mb-4 text-sm print:hidden" aria-label="Ruta">
+        <ul><li><a href="index.html">Manual</a></li><li>Integrar la librería en Rust</li></ul>
+      </nav>
+      <p class="mb-2 text-sm">Básico · Capítulo 01</p>
+      <h1 class="text-3xl font-semibold tracking-tight">Integrar la librería en Rust</h1>
+      <p class="mt-5 text-lg">Ejecuta tu primer workflow dentro del proceso Rust, sin HTTP y sin otro servicio.</p>
+      <!-- archify:diagrama -->
+      <figure id="diagrama" class="my-8">
+        <h2 class="mb-4 text-xl font-semibold">Arranque, uso y cierre de la instancia</h2>
+        <a href="diagramas/arranque.html" class="block rounded border border-[var(--color-base-300)]" aria-label="Abrir diagrama interactivo: Arranque, uso y cierre de la instancia">
+          <img src="diagramas/arranque.svg" alt="La aplicación compone el motor, conserva el runtime y utiliza su handle para preparar y ejecutar workflows. El cierre ocurre al terminar el host." loading="lazy" class="block h-auto w-full rounded">
+        </a>
+        <figcaption class="mt-3 text-sm leading-relaxed">
+          <p>La aplicación compone el motor, conserva el runtime y utiliza su handle para preparar y ejecutar workflows. El cierre ocurre al terminar el host.</p>
+          <p class="mt-2"><a href="diagramas/arranque.html" class="underline underline-offset-4">Abrir diagrama interactivo y ampliar</a></p>
+        </figcaption>
+      </figure>
+      <!-- /archify:diagrama -->
+      <section id="dependencia" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">1. Agrega la dependencia local</h2><p class="my-4">Este ejemplo supone que <code>mi-aplicacion/</code> y <code>workflow-forge/</code> son carpetas hermanas. Ajusta <code>path</code> a tu checkout; no es una ruta del servidor de producción.</p><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">Estructura del ejemplo · text</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-text">proyectos/
+├── workflow-forge/
+└── mi-aplicacion/
+    ├── Cargo.toml
+    ├── src/main.rs
+    └── workflows/normalizar.json</code></pre></figure><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">mi-aplicacion/Cargo.toml · toml</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-toml">[package]
+name = &quot;mi-aplicacion&quot;
+version = &quot;0.1.0&quot;
+edition = &quot;2024&quot;
+rust-version = &quot;1.98.1&quot;
+
+[dependencies]
+workflow-forge = { path = &quot;../workflow-forge/crates/forge&quot;, default-features = false }
+serde_json = &quot;1&quot;
+tokio = { version = &quot;1&quot;, features = [&quot;macros&quot;, &quot;rt-multi-thread&quot;] }</code></pre></figure><p class="my-4"><code>default-features = false</code> conserva protocolo, engine y proveedores de memoria. <code>integrations</code> habilita conectores HTTP/archivos/CSV; <code>sqlite</code> habilita el proveedor durable; <code>full</code> habilita ambos. Una feature no selecciona automáticamente esos proveedores.</p></section><section id="definicion" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">2. Guarda el workflow</h2><p class="my-4">Guarda este documento como <code>workflows/normalizar.json</code>. Usa una operación instalada por la composición estándar; no necesitas escribir un plugin.</p><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">workflows/normalizar.json · json</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-json">{
+  &quot;format&quot;: &quot;forge.workflow/2&quot;,
+  &quot;schema_dialect&quot;: &quot;https://json-schema.org/draft/2020-12/schema&quot;,
+  &quot;id&quot;: &quot;manual.normalizar&quot;,
+  &quot;revision&quot;: &quot;r1&quot;,
+  &quot;input_schema&quot;: {
+    &quot;type&quot;: &quot;string&quot;,
+    &quot;maxLength&quot;: 128
+  },
+  &quot;output_schema&quot;: {
+    &quot;type&quot;: &quot;string&quot;,
+    &quot;maxLength&quot;: 128
+  },
+  &quot;entry&quot;: &quot;limpiar&quot;,
+  &quot;nodes&quot;: [
+    {
+      &quot;id&quot;: &quot;limpiar&quot;,
+      &quot;kind&quot;: &quot;operation&quot;,
+      &quot;operation&quot;: {
+        &quot;id&quot;: &quot;forge.text.trim&quot;,
+        &quot;contract&quot;: &quot;1&quot;,
+        &quot;implementation&quot;: &quot;r1&quot;
+      },
+      &quot;config&quot;: {},
+      &quot;input&quot;: {
+        &quot;select&quot;: {
+          &quot;source&quot;: &quot;input&quot;,
+          &quot;pointer&quot;: &quot;&quot;
+        }
+      }
+    }
+  ],
+  &quot;edges&quot;: [],
+  &quot;output&quot;: {
+    &quot;select&quot;: {
+      &quot;source&quot;: &quot;node&quot;,
+      &quot;node&quot;: &quot;limpiar&quot;,
+      &quot;pointer&quot;: &quot;&quot;
+    }
+  }
+}</code></pre></figure><p class="my-4">La entrada es un string y la salida también. <code>pointer: ""</code> selecciona el valor completo.</p></section><section id="programa" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">3. Arranca, prepara, ejecuta y cierra</h2><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">src/main.rs · programa completo para la estructura anterior · rust</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-rust">use serde_json::json;
+use workflow_forge::prelude::*;
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    let runtime =
+        EngineRuntime::boot(WorkflowBuilder::standard().build()?, BootOptions::default()).await?;
+    let app = runtime.application();
+    let access = AccessContext::trusted(&quot;default&quot;);
+
+    let outcome = async {
+        let plan = app
+            .prepare_json(
+                access.clone(),
+                include_bytes!(&quot;../workflows/normalizar.json&quot;),
+            )
+            .await?;
+        let receipt = app
+            .start(
+                access.clone(),
+                StartRunRequest::new(plan, json!(&quot;  Rafael  &quot;)),
+            )
+            .await?;
+        let run = app.wait(access.clone(), receipt.run_id.clone()).await?;
+        if run.state != RunState::Succeeded {
+            return Err(run.error.unwrap_or_else(|| {
+                ForgeError::new(&quot;manual.not_succeeded&quot;, &quot;La ejecución no terminó con éxito&quot;)
+            }));
+        }
+        app.result(access, receipt.run_id).await
+    }
+    .await;
+
+    // Apagar también cuando prepare/start/wait devuelve un error.
+    let shutdown = runtime.shutdown(ShutdownOptions::default()).await?;
+    if shutdown.forced || !shutdown.pending.is_empty() {
+        return Err(&quot;El cierre dejó trabajo pendiente&quot;.into());
+    }
+    let output = outcome?;
+    assert_eq!(output, json!(&quot;Rafael&quot;));
+    println!(&quot;{output}&quot;);
+    Ok(())
+}</code></pre></figure><p class="my-4">El bloque <code>outcome</code> captura errores antes del apagado: no abandona el runtime por un <code>?</code> durante la ejecución. El programa comprueba el estado porque <code>wait</code> también puede devolver un run bloqueado o fallido.</p></section><section id="ejecutar" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">4. Ejecútalo</h2><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">Dentro de mi-aplicacion · bash</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-bash">cargo run</code></pre></figure><p class="my-4">Salida esperada: <code>"Rafael"</code>. Para ejecutar la versión incluida sin crear otro proyecto:</p><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">Desde la raíz de workflow-forge · bash</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-bash">cargo run --manifest-path manual/ejemplos/Cargo.toml --locked --bin inicio</code></pre></figure><p class="my-4">El archivo descargable <a class="underline underline-offset-4" href="ejemplos/src/bin/inicio.rs">inicio.rs</a> usa una ruta de <code>include_bytes!</code> adaptada a su propia carpeta; en el programa de arriba ya está ajustada a <code>src/main.rs</code>.</p></section><section id="host" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">5. Conserva la instancia en tu aplicación</h2><ol class="my-4 list-decimal space-y-2 pl-6"><li>Durante el arranque: configura recursos y registra módulos; construye una sola composición.</li><li>Conserva <code>EngineRuntime</code> en el dueño del lifecycle y comparte clones de <code>WorkflowApplication</code> con tus handlers o workers.</li><li>Prepara una definición y reutiliza el plan para distintas entradas de esa misma instancia.</li><li>Al cerrar la aplicación: deja de recibir trabajo, espera <code>shutdown</code> y revisa su reporte.</li></ol><aside class="my-6 border-l-2 border-[var(--color-base-300)] pl-4"><p class="font-semibold">Una instancia por petición no es el patrón de integración</p><p class="mt-2">El ejemplo termina después de un run porque es un programa de demostración. En un backend, el runtime vive mientras viva el backend. Continuarás ese patrón en el capítulo de arquitectura.</p></aside></section>
+      <section id="fuentes" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Código y contratos de referencia</h2><ul class="my-4 list-disc space-y-2 pl-6"><li><a class="underline underline-offset-4" href="../crates/forge/src/lib.rs">Fachada pública y prelude</a></li><li><a class="underline underline-offset-4" href="../crates/forge/src/v2.rs">WorkflowBuilder</a></li><li><a class="underline underline-offset-4" href="../docs/ADOPTION.md">Composición y features</a></li></ul></section>
+      <nav class="mt-12 border-t border-[var(--color-base-300)] pt-6 text-sm sm:flex sm:justify-between sm:gap-8 print:hidden" aria-label="Anterior y siguiente">
+        <div class="mb-4 sm:mb-0"><a class="underline underline-offset-4" rel="prev" href="index.html">← Inicio y ruta de aprendizaje</a></div><div><a class="underline underline-offset-4" rel="next" href="arquitectura.html">Instancia y arquitectura →</a></div>
+      </nav>
+    </main>
+  </div>
+  <footer class="mx-auto max-w-6xl border-t border-[var(--color-base-300)] px-5 py-6 text-sm">
+    Manual de la librería embebida · Revisión 2026-09-27 · <a class="underline underline-offset-4" href="../docs/PROJECT.md">Evidencia y límites del motor</a>
+  </footer>
+</body>
+</html>

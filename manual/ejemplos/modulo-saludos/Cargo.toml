@@ -1,0 +1,10 @@
+[package]
+name = "modulo-saludos"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+workflow-forge-protocol = { path = "../../../crates/protocol" }
+serde_json = "1"
+

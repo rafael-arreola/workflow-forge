@@ -1,0 +1,107 @@
+{
+  "format": "forge.workflow/2",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "id": "manual.decision",
+  "revision": "r1",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "aprobado"
+    ],
+    "properties": {
+      "aprobado": {
+        "type": "boolean"
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object"
+  },
+  "entry": "elegir",
+  "nodes": [
+    {
+      "id": "elegir",
+      "kind": "decision",
+      "input": {
+        "select": {
+          "source": "input",
+          "pointer": ""
+        }
+      },
+      "cases": [
+        {
+          "id": "si",
+          "when": {
+            "select": {
+              "source": "input",
+              "pointer": "/aprobado"
+            }
+          },
+          "body": {
+            "entry": "valor",
+            "nodes": [
+              {
+                "id": "valor",
+                "kind": "operation",
+                "operation": {
+                  "id": "forge.data.identity",
+                  "contract": "1",
+                  "implementation": "r1"
+                },
+                "config": {},
+                "input": {
+                  "literal": "continuar"
+                }
+              }
+            ],
+            "edges": [],
+            "output": {
+              "select": {
+                "source": "node",
+                "node": "valor",
+                "pointer": ""
+              }
+            }
+          }
+        }
+      ],
+      "fallback": {
+        "id": "no",
+        "body": {
+          "entry": "valor",
+          "nodes": [
+            {
+              "id": "valor",
+              "kind": "operation",
+              "operation": {
+                "id": "forge.data.identity",
+                "contract": "1",
+                "implementation": "r1"
+              },
+              "config": {},
+              "input": {
+                "literal": "revisar"
+              }
+            }
+          ],
+          "edges": [],
+          "output": {
+            "select": {
+              "source": "node",
+              "node": "valor",
+              "pointer": ""
+            }
+          }
+        }
+      }
+    }
+  ],
+  "edges": [],
+  "output": {
+    "select": {
+      "source": "node",
+      "node": "elegir",
+      "pointer": ""
+    }
+  }
+}

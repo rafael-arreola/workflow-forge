@@ -1,0 +1,78 @@
+{
+  "format": "forge.workflow/2",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "id": "manual.bucle",
+  "revision": "r1",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "continuar"
+    ],
+    "properties": {
+      "continuar": {
+        "type": "boolean"
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object"
+  },
+  "entry": "repetir",
+  "nodes": [
+    {
+      "id": "repetir",
+      "kind": "loop",
+      "input": {
+        "select": {
+          "source": "input",
+          "pointer": ""
+        }
+      },
+      "while": {
+        "select": {
+          "source": "input",
+          "pointer": "/state/continuar"
+        }
+      },
+      "body": {
+        "entry": "siguiente",
+        "nodes": [
+          {
+            "id": "siguiente",
+            "kind": "operation",
+            "operation": {
+              "id": "forge.data.identity",
+              "contract": "1",
+              "implementation": "r1"
+            },
+            "config": {},
+            "input": {
+              "literal": {
+                "continuar": false,
+                "valor": "terminado"
+              }
+            }
+          }
+        ],
+        "edges": [],
+        "output": {
+          "select": {
+            "source": "node",
+            "node": "siguiente",
+            "pointer": ""
+          }
+        }
+      },
+      "max_iterations": 3,
+      "on_limit": "fail"
+    }
+  ],
+  "edges": [],
+  "output": {
+    "select": {
+      "source": "node",
+      "node": "repetir",
+      "pointer": ""
+    }
+  }
+}

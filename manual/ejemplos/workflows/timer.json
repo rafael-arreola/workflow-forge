@@ -1,0 +1,30 @@
+{
+  "format": "forge.workflow/2",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "id": "manual.timer",
+  "revision": "r1",
+  "input_schema": true,
+  "output_schema": true,
+  "entry": "esperar",
+  "nodes": [
+    {
+      "id": "esperar",
+      "kind": "timer",
+      "input": {
+        "select": {
+          "source": "input",
+          "pointer": ""
+        }
+      },
+      "duration_ms": 10
+    }
+  ],
+  "edges": [],
+  "output": {
+    "select": {
+      "source": "node",
+      "node": "esperar",
+      "pointer": ""
+    }
+  }
+}

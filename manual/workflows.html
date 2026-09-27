@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Describe qué operaciones ejecutar, en qué orden y con qué contratos, sin incorporar lógica de coordinación en tus módulos.">
+  <title>Definir workflows · Manual de Workflow Forge</title>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="font-sans leading-relaxed antialiased">
+  <a href="#contenido" class="sr-only focus:not-sr-only focus:block focus:p-4">Saltar al contenido</a>
+  <header class="border-b border-[var(--color-base-300)] px-5 py-5">
+    <div class="mx-auto max-w-6xl sm:flex sm:items-center sm:justify-between sm:gap-6">
+      <a href="index.html" class="text-lg font-semibold">Workflow Forge <span class="font-normal">/ Manual de implementación</span></a>
+      <p class="mt-2 text-sm sm:mt-0">Rust 1.98.1 · forge.workflow/2</p>
+    </div>
+  </header>
+  <div class="mx-auto max-w-6xl px-5 py-7 lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-12">
+    <aside class="mb-8 lg:mb-0 print:hidden">
+      <details class="rounded border border-[var(--color-base-300)] p-3 lg:hidden">
+        <summary class="cursor-pointer font-medium">Capítulos del manual</summary>
+        <nav class="mt-3" aria-label="Capítulos en móvil"><ul class="menu w-full p-0 text-sm"><li><a href="index.html">00. Inicio y ruta de aprendizaje</a></li><li><a href="integracion.html">01. Integrar la librería en Rust</a></li><li><a href="arquitectura.html">02. Instancia y arquitectura</a></li><li><a href="modulos.html">03. Crear módulos y operaciones</a></li><li><a href="workflows.html" aria-current="page" class="menu-active">04. Definir workflows</a></li><li><a href="datos.html">05. Mover y transformar datos</a></li><li><a href="control.html">06. Decisiones y flujos avanzados</a></li><li><a href="recursos.html">07. Secretos, archivos y conectores</a></li><li><a href="persistencia.html">08. Persistencia y recuperación</a></li><li><a href="efectos.html">09. Errores, reintentos y efectos</a></li><li><a href="procesos.html">10. Señales y comunicación entre procesos</a></li><li><a href="operacion.html">11. Límites, diagnóstico y pruebas</a></li></ul></nav>
+      </details>
+      <nav class="hidden lg:sticky lg:top-6 lg:block" aria-label="Capítulos">
+        <p class="mb-4 text-sm font-semibold">DE LO BÁSICO A LO AVANZADO</p>
+        <ul class="menu w-full p-0 text-sm"><li><a href="index.html">00. Inicio y ruta de aprendizaje</a></li><li><a href="integracion.html">01. Integrar la librería en Rust</a></li><li><a href="arquitectura.html">02. Instancia y arquitectura</a></li><li><a href="modulos.html">03. Crear módulos y operaciones</a></li><li><a href="workflows.html" aria-current="page" class="menu-active">04. Definir workflows</a></li><li><a href="datos.html">05. Mover y transformar datos</a></li><li><a href="control.html">06. Decisiones y flujos avanzados</a></li><li><a href="recursos.html">07. Secretos, archivos y conectores</a></li><li><a href="persistencia.html">08. Persistencia y recuperación</a></li><li><a href="efectos.html">09. Errores, reintentos y efectos</a></li><li><a href="procesos.html">10. Señales y comunicación entre procesos</a></li><li><a href="operacion.html">11. Límites, diagnóstico y pruebas</a></li></ul>
+      </nav>
+    </aside>
+    <main id="contenido" tabindex="-1" class="min-w-0 max-w-4xl">
+      <nav class="breadcrumbs mb-4 text-sm print:hidden" aria-label="Ruta">
+        <ul><li><a href="index.html">Manual</a></li><li>Definir workflows</li></ul>
+      </nav>
+      <p class="mb-2 text-sm">Básico → intermedio · Capítulo 04</p>
+      <h1 class="text-3xl font-semibold tracking-tight">Definir workflows</h1>
+      <p class="mt-5 text-lg">Describe qué operaciones ejecutar, en qué orden y con qué contratos, sin incorporar lógica de coordinación en tus módulos.</p>
+      <!-- archify:diagrama -->
+      <figure id="diagrama" class="my-8">
+        <h2 class="mb-4 text-xl font-semibold">El workflow de saludo, de entrada a salida</h2>
+        <a href="diagramas/datos.html" class="block rounded border border-[var(--color-base-300)]" aria-label="Abrir diagrama interactivo: El workflow de saludo, de entrada a salida">
+          <img src="diagramas/datos.svg" alt="El nodo limpiar obtiene /nombre; saludar recibe su salida y agrega el prefijo de config. El binding final construye el objeto con la propiedad saludo." loading="lazy" class="block h-auto w-full rounded">
+        </a>
+        <figcaption class="mt-3 text-sm leading-relaxed">
+          <p>El nodo limpiar obtiene /nombre; saludar recibe su salida y agrega el prefijo de config. El binding final construye el objeto con la propiedad saludo.</p>
+          <p class="mt-2"><a href="diagramas/datos.html" class="underline underline-offset-4">Abrir diagrama interactivo y ampliar</a></p>
+        </figcaption>
+      </figure>
+      <!-- /archify:diagrama -->
+      <section id="documento" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Anatomía del documento</h2><div class="my-5 max-w-full overflow-x-auto"><table class="table"><thead><tr><th scope="col">Campo</th><th scope="col">Función</th></tr></thead><tbody><tr><td class="align-top">format / schema_dialect</td><td class="align-top">forge.workflow/2 y el dialecto JSON Schema 2020-12.</td></tr><tr><td class="align-top">id / revision</td><td class="align-top">Identidad semántica del workflow; una revisión no cambia de contenido.</td></tr><tr><td class="align-top">input_schema / output_schema</td><td class="align-top">Contrato de entrada y salida de la ejecución completa.</td></tr><tr><td class="align-top">entry / nodes / edges</td><td class="align-top">Nodo inicial, instrucciones y orden de ejecución dentro del cuerpo.</td></tr><tr><td class="align-top">output</td><td class="align-top">Binding que construye la respuesta final.</td></tr><tr><td class="align-top">presentation</td><td class="align-top">Metadata del editor conservada por el autor; el engine no la ejecuta.</td></tr></tbody></table></div><p class="my-4">Cada operación fija <code>id</code>, <code>contract</code> e <code>implementation</code>. El motor no elige automáticamente la última revisión instalada.</p></section><section id="secuencia" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Un workflow con dos pasos</h2><p class="my-4">Este documento recibe <code>{"nombre":"  Rafael  "}</code>. Primero limpia el nombre; después llama al módulo del capítulo anterior y devuelve un objeto.</p><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">saludo.json · documento completo · json</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-json">{
+  &quot;format&quot;: &quot;forge.workflow/2&quot;,
+  &quot;schema_dialect&quot;: &quot;https://json-schema.org/draft/2020-12/schema&quot;,
+  &quot;id&quot;: &quot;manual.saludo&quot;,
+  &quot;revision&quot;: &quot;r1&quot;,
+  &quot;input_schema&quot;: {
+    &quot;type&quot;: &quot;object&quot;,
+    &quot;required&quot;: [
+      &quot;nombre&quot;
+    ],
+    &quot;properties&quot;: {
+      &quot;nombre&quot;: {
+        &quot;type&quot;: &quot;string&quot;,
+        &quot;maxLength&quot;: 128
+      }
+    },
+    &quot;additionalProperties&quot;: false
+  },
+  &quot;output_schema&quot;: {
+    &quot;type&quot;: &quot;object&quot;,
+    &quot;required&quot;: [
+      &quot;saludo&quot;
+    ],
+    &quot;properties&quot;: {
+      &quot;saludo&quot;: {
+        &quot;type&quot;: &quot;string&quot;,
+        &quot;maxLength&quot;: 192
+      }
+    },
+    &quot;additionalProperties&quot;: false
+  },
+  &quot;entry&quot;: &quot;limpiar&quot;,
+  &quot;nodes&quot;: [
+    {
+      &quot;id&quot;: &quot;limpiar&quot;,
+      &quot;kind&quot;: &quot;operation&quot;,
+      &quot;operation&quot;: {
+        &quot;id&quot;: &quot;forge.text.trim&quot;,
+        &quot;contract&quot;: &quot;1&quot;,
+        &quot;implementation&quot;: &quot;r1&quot;
+      },
+      &quot;config&quot;: {},
+      &quot;input&quot;: {
+        &quot;select&quot;: {
+          &quot;source&quot;: &quot;input&quot;,
+          &quot;pointer&quot;: &quot;/nombre&quot;
+        }
+      }
+    },
+    {
+      &quot;id&quot;: &quot;saludar&quot;,
+      &quot;kind&quot;: &quot;operation&quot;,
+      &quot;operation&quot;: {
+        &quot;id&quot;: &quot;manual.saludos.crear&quot;,
+        &quot;contract&quot;: &quot;1&quot;,
+        &quot;implementation&quot;: &quot;r1&quot;
+      },
+      &quot;config&quot;: {
+        &quot;prefijo&quot;: &quot;Hola, &quot;
+      },
+      &quot;input&quot;: {
+        &quot;select&quot;: {
+          &quot;source&quot;: &quot;node&quot;,
+          &quot;node&quot;: &quot;limpiar&quot;,
+          &quot;pointer&quot;: &quot;&quot;
+        }
+      }
+    }
+  ],
+  &quot;edges&quot;: [
+    {
+      &quot;from&quot;: &quot;limpiar&quot;,
+      &quot;to&quot;: &quot;saludar&quot;
+    }
+  ],
+  &quot;output&quot;: {
+    &quot;object&quot;: {
+      &quot;saludo&quot;: {
+        &quot;select&quot;: {
+          &quot;source&quot;: &quot;node&quot;,
+          &quot;node&quot;: &quot;saludar&quot;,
+          &quot;pointer&quot;: &quot;&quot;
+        }
+      }
+    }
+  }
+}</code></pre></figure><p class="my-4">La arista <code>limpiar → saludar</code> establece el orden. El binding de <code>saludar.input</code> selecciona el resultado de <code>limpiar</code>; la arista por sí sola no mueve datos.</p></section><section id="preparar" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Preparar no significa ejecutar</h2><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">Fragmento · app es el handle, bytes es el documento JSON · rust</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-rust">let definition: WorkflowDefinition = serde_json::from_slice(&amp;bytes)?;
+let plan = app.prepare(access.clone(), definition).await?;
+
+// Reutilizar el mismo plan para otra entrada.
+let request = StartRunRequest::new(plan.clone(), serde_json::json!({&quot;nombre&quot;:&quot;  Ana  &quot;}));
+let receipt = app.start(access.clone(), request).await?;</code></pre></figure><p class="my-4">Preparar resuelve operaciones y subworkflows, revisa el grafo, compila schemas y valida config/bindings. No llama al negocio. Un plan pertenece a esa composición; no se serializa ni se envía a otra instancia.</p><p class="my-4">El input global se valida antes de aceptar. El input y output de cada operación se validan al ejecutarla; la salida global se valida antes de declarar éxito. Un análisis estático que no puede acreditar compatibilidad puede producir <code>compatibility.unknown</code>; no equivale a saltarse la validación de runtime.</p></section><section id="grafo" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Reglas del grafo</h2><ul class="my-4 list-disc space-y-2 pl-6"><li>Cada cuerpo tiene una cadena explícita desde su entry. No construyas forks o joins arbitrarios agregando varias aristas.</li><li>Para rutas alternativas usa <code>decision</code>; para concurrencia usa <code>parallel</code> o <code>foreach</code>; para repetir usa <code>loop</code>. Consulta <a class="underline underline-offset-4" href="control.html">flujos avanzados</a>.</li><li>Los IDs de nodos son locales a su cuerpo. Un binding solo puede leer el input del ámbito y resultados de predecesores disponibles en ese mismo ámbito.</li><li>No se permiten aristas que crucen cuerpos ni ciclos arbitrarios. Para reutilizar una definición registrada usa subworkflow.</li></ul></section><section id="schemas" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Schemas útiles y limitados</h2><p class="my-4">Un contrato ayuda más si acota tipos, propiedades y tamaños. <code>default</code> en un schema no inserta valores y el motor no convierte <code>"42"</code> en <code>42</code>. <code>format</code> es anotación en este perfil; una regla de negocio estricta necesita validación explícita.</p><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">Schema de negocio ilustrativo · json</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-json">{
+  &quot;type&quot;: &quot;object&quot;,
+  &quot;required&quot;: [&quot;pedido&quot;, &quot;cantidad&quot;],
+  &quot;properties&quot;: {
+    &quot;pedido&quot;: {&quot;type&quot;: &quot;string&quot;, &quot;minLength&quot;: 1, &quot;maxLength&quot;: 64},
+    &quot;cantidad&quot;: {&quot;type&quot;: &quot;integer&quot;, &quot;minimum&quot;: 1, &quot;maximum&quot;: 1000}
+  },
+  &quot;additionalProperties&quot;: false
+}</code></pre></figure><p class="my-4">Las referencias $ref se resuelven en el paquete registrado, sin descargar URIs. Registra recursos con URI y revisión mediante <code>register_schemas</code> antes de build. El perfil acota expansión y evaluación, y no admite todas las construcciones posibles de 2020-12: por ejemplo $dynamicRef, anchors nombrados, $id anidados y referencias recursivas de schema se rechazan.</p><p class="my-4">Para un editor, obtiene el catálogo con <code>app.catalog(&amp;access)?</code>, conserva revisiones exactas y muestra los diagnósticos de <code>prepare</code>. El <a class="underline underline-offset-4" href="../examples/authoring-client/src/lib.rs">consumidor de autoría</a> muestra el round-trip con metadata visual.</p></section>
+      <section id="fuentes" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Código y contratos de referencia</h2><ul class="my-4 list-disc space-y-2 pl-6"><li><a class="underline underline-offset-4" href="../crates/protocol/src/definition.rs">Tipos de definición y bindings</a></li><li><a class="underline underline-offset-4" href="../schemas/2/workflow.schema.json">Schema del documento</a></li><li><a class="underline underline-offset-4" href="../docs/CONTRACTS.md">Contrato de preparación y schemas</a></li></ul></section>
+      <nav class="mt-12 border-t border-[var(--color-base-300)] pt-6 text-sm sm:flex sm:justify-between sm:gap-8 print:hidden" aria-label="Anterior y siguiente">
+        <div class="mb-4 sm:mb-0"><a class="underline underline-offset-4" rel="prev" href="modulos.html">← Crear módulos y operaciones</a></div><div><a class="underline underline-offset-4" rel="next" href="datos.html">Mover y transformar datos →</a></div>
+      </nav>
+    </main>
+  </div>
+  <footer class="mx-auto max-w-6xl border-t border-[var(--color-base-300)] px-5 py-6 text-sm">
+    Manual de la librería embebida · Revisión 2026-09-27 · <a class="underline underline-offset-4" href="../docs/PROJECT.md">Evidencia y límites del motor</a>
+  </footer>
+</body>
+</html>

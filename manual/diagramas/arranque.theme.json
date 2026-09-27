@@ -1,0 +1,20 @@
+{
+  "transform": {
+    "sha256": "2125642a5ef96a64c4d59b8605e7b8e8a31f98bf641849beb85d12a49c58ade5",
+    "bytes": 2921
+  },
+  "reason": "User-requested manual palette; styling only, same SVG geometry and interaction logic.",
+  "source_delivery": "arranque.delivery.json",
+  "source_artifact": {
+    "sha256": "36fca869b2a3cb323d727f9a84cf76c4b3780d06cb5d0d9eb198ff2ba44c95ea",
+    "bytes": 801833
+  },
+  "stylesheet": {
+    "sha256": "0149294134212720433a43e406137efdadacaebe024f2a2d2bbbd5213f46bb2e",
+    "bytes": 2780
+  },
+  "artifact": {
+    "sha256": "a6b974ff8ed2f92ff102ec0103a85455743d39f6ed9b135603705a0732215a96",
+    "bytes": 804571
+  }
+}

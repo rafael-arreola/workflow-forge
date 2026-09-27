@@ -1,0 +1,73 @@
+/* Manual palette. Shared by diagrams, traces, highlights and SVG exports. */
+html[data-theme="light"], svg[data-theme="light"] {
+  --bg: #ffffff !important;
+  --grid: #eeeeee !important;
+  --text: #181818 !important;
+  --text-muted: #525252 !important;
+  --text-dim: #737373 !important;
+  --text-faint: #525252 !important;
+  --panel: #ffffff !important;
+  --panel-border: #e5e5e5 !important;
+  --lane-fill: #fafafa !important;
+  --lane-stroke: #d4d4d4 !important;
+  --arrow: #737373 !important;
+  --arrow-emphasis: #181818 !important;
+  --mask: #ffffff !important;
+  --toolbar-bg: #ffffff !important;
+  --toolbar-border: #d4d4d4 !important;
+  --toolbar-text: #181818 !important;
+  --toolbar-hover: #f5f5f5 !important;
+  --toolbar-menu-bg: #ffffff !important;
+  --frontend-fill: #f5f5f5 !important;
+  --frontend-stroke: #737373 !important;
+  --backend-fill: #f5f5f5 !important;
+  --backend-stroke: #737373 !important;
+  --database-fill: #f5f5f5 !important;
+  --database-stroke: #737373 !important;
+  --cloud-fill: #f5f5f5 !important;
+  --cloud-stroke: #737373 !important;
+  --security-fill: #f5f5f5 !important;
+  --security-stroke: #737373 !important;
+  --messagebus-fill: #f5f5f5 !important;
+  --messagebus-stroke: #737373 !important;
+  --external-fill: #f5f5f5 !important;
+  --external-stroke: #737373 !important;
+}
+html[data-theme="dark"], svg[data-theme="dark"] {
+  --bg: #171717 !important;
+  --grid: #262626 !important;
+  --text: #fafafa !important;
+  --text-muted: #d4d4d4 !important;
+  --text-dim: #a3a3a3 !important;
+  --text-faint: #d4d4d4 !important;
+  --panel: #1c1c1c !important;
+  --panel-border: #404040 !important;
+  --lane-fill: #202020 !important;
+  --lane-stroke: #525252 !important;
+  --arrow: #a3a3a3 !important;
+  --arrow-emphasis: #fafafa !important;
+  --mask: #1c1c1c !important;
+  --toolbar-bg: #1c1c1c !important;
+  --toolbar-border: #525252 !important;
+  --toolbar-text: #fafafa !important;
+  --toolbar-hover: #303030 !important;
+  --toolbar-menu-bg: #1c1c1c !important;
+  --frontend-fill: #262626 !important;
+  --frontend-stroke: #a3a3a3 !important;
+  --backend-fill: #262626 !important;
+  --backend-stroke: #a3a3a3 !important;
+  --database-fill: #262626 !important;
+  --database-stroke: #a3a3a3 !important;
+  --cloud-fill: #262626 !important;
+  --cloud-stroke: #a3a3a3 !important;
+  --security-fill: #262626 !important;
+  --security-stroke: #a3a3a3 !important;
+  --messagebus-fill: #262626 !important;
+  --messagebus-stroke: #a3a3a3 !important;
+  --external-fill: #262626 !important;
+  --external-stroke: #a3a3a3 !important;
+}
+/* Presets retain their geometry and motion while sharing the manual surfaces. */
+html[data-preset] body { background: var(--bg); }
+html[data-preset] .diagram-container,
+html[data-preset] .card { background: var(--panel); }

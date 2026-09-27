@@ -1,6 +1,8 @@
 # workflow-forge
 
-Motor agnóstico de integración en Rust. Las definiciones JSON conectan operaciones mediante contratos JSON Schema; el host decide qué módulos, recursos y transportes habilita.
+Librería de integración agnóstica para aplicaciones Rust. Las definiciones JSON conectan operaciones mediante contratos JSON Schema; tu aplicación conserva el motor y decide qué módulos, recursos y transportes habilita. El servicio HTTP es un adaptador opcional.
+
+El [manual de implementación en HTML](manual/index.html) explica cómo integrar la librería, crear módulos y workflows, mover datos y operar el motor, desde el primer ejemplo hasta persistencia y comunicación entre procesos.
 
 **En desarrollo, sin versión pública.** `workflow_forge::v2` ejecuta secuencias, decisiones, paralelo, foreach, loop y subworkflows, con retry e inspección/resolución de efectos. Incluye estado/artefactos SQLite, recuperación, señales y timers. El servicio HTTP comparte esos contratos y agrega autenticación, consultas y transferencias acotadas; los módulos oficiales integran HTTP/JSON y archivos/CSV. La [evidencia y los límites](docs/PROJECT.md) distinguen pruebas locales de metas de producción y casos reales de la etapa posterior de integración. La refactorización F-0 a F-5 y su validación técnica están completas; el [ROADMAP](docs/ROADMAP.md) conserva el alcance.
 

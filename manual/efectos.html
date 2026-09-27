@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Distingue un error conocido de una escritura cuyo resultado no se pudo confirmar antes de decidir si se puede repetir.">
+  <title>Errores, reintentos y efectos · Manual de Workflow Forge</title>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="font-sans leading-relaxed antialiased">
+  <a href="#contenido" class="sr-only focus:not-sr-only focus:block focus:p-4">Saltar al contenido</a>
+  <header class="border-b border-[var(--color-base-300)] px-5 py-5">
+    <div class="mx-auto max-w-6xl sm:flex sm:items-center sm:justify-between sm:gap-6">
+      <a href="index.html" class="text-lg font-semibold">Workflow Forge <span class="font-normal">/ Manual de implementación</span></a>
+      <p class="mt-2 text-sm sm:mt-0">Rust 1.98.1 · forge.workflow/2</p>
+    </div>
+  </header>
+  <div class="mx-auto max-w-6xl px-5 py-7 lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-12">
+    <aside class="mb-8 lg:mb-0 print:hidden">
+      <details class="rounded border border-[var(--color-base-300)] p-3 lg:hidden">
+        <summary class="cursor-pointer font-medium">Capítulos del manual</summary>
+        <nav class="mt-3" aria-label="Capítulos en móvil"><ul class="menu w-full p-0 text-sm"><li><a href="index.html">00. Inicio y ruta de aprendizaje</a></li><li><a href="integracion.html">01. Integrar la librería en Rust</a></li><li><a href="arquitectura.html">02. Instancia y arquitectura</a></li><li><a href="modulos.html">03. Crear módulos y operaciones</a></li><li><a href="workflows.html">04. Definir workflows</a></li><li><a href="datos.html">05. Mover y transformar datos</a></li><li><a href="control.html">06. Decisiones y flujos avanzados</a></li><li><a href="recursos.html">07. Secretos, archivos y conectores</a></li><li><a href="persistencia.html">08. Persistencia y recuperación</a></li><li><a href="efectos.html" aria-current="page" class="menu-active">09. Errores, reintentos y efectos</a></li><li><a href="procesos.html">10. Señales y comunicación entre procesos</a></li><li><a href="operacion.html">11. Límites, diagnóstico y pruebas</a></li></ul></nav>
+      </details>
+      <nav class="hidden lg:sticky lg:top-6 lg:block" aria-label="Capítulos">
+        <p class="mb-4 text-sm font-semibold">DE LO BÁSICO A LO AVANZADO</p>
+        <ul class="menu w-full p-0 text-sm"><li><a href="index.html">00. Inicio y ruta de aprendizaje</a></li><li><a href="integracion.html">01. Integrar la librería en Rust</a></li><li><a href="arquitectura.html">02. Instancia y arquitectura</a></li><li><a href="modulos.html">03. Crear módulos y operaciones</a></li><li><a href="workflows.html">04. Definir workflows</a></li><li><a href="datos.html">05. Mover y transformar datos</a></li><li><a href="control.html">06. Decisiones y flujos avanzados</a></li><li><a href="recursos.html">07. Secretos, archivos y conectores</a></li><li><a href="persistencia.html">08. Persistencia y recuperación</a></li><li><a href="efectos.html" aria-current="page" class="menu-active">09. Errores, reintentos y efectos</a></li><li><a href="procesos.html">10. Señales y comunicación entre procesos</a></li><li><a href="operacion.html">11. Límites, diagnóstico y pruebas</a></li></ul>
+      </nav>
+    </aside>
+    <main id="contenido" tabindex="-1" class="min-w-0 max-w-4xl">
+      <nav class="breadcrumbs mb-4 text-sm print:hidden" aria-label="Ruta">
+        <ul><li><a href="index.html">Manual</a></li><li>Errores, reintentos y efectos</li></ul>
+      </nav>
+      <p class="mb-2 text-sm">Avanzado · Capítulo 09</p>
+      <h1 class="text-3xl font-semibold tracking-tight">Errores, reintentos y efectos</h1>
+      <p class="mt-5 text-lg">Distingue un error conocido de una escritura cuyo resultado no se pudo confirmar antes de decidir si se puede repetir.</p>
+      <section id="declarar" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Declara lo que la operación hace</h2><div class="my-5 max-w-full overflow-x-auto"><table class="table"><thead><tr><th scope="col">Clasificación</th><th scope="col">Significado</th><th scope="col">Ejemplo</th></tr></thead><tbody><tr><td class="align-top">Pure / Safe</td><td class="align-top">Transformación sin interacción externa que puede repetirse.</td><td class="align-top">Normalizar una string.</td></tr><tr><td class="align-top">Read / Safe</td><td class="align-top">Lectura repetible; su resultado no tiene por qué permanecer constante.</td><td class="align-top">Consultar un cliente.</td></tr><tr><td class="align-top">Write / Keyed</td><td class="align-top">El destino deduplica usando una clave estable y garantiza esa semántica.</td><td class="align-top">Crear un pedido en un destino con idempotencia comprobada.</td></tr><tr><td class="align-top">Write / Unsafe</td><td class="align-top">Repetir puede duplicar el efecto.</td><td class="align-top">POST genérico sin contrato de deduplicación.</td></tr></tbody></table></div><p class="my-4">Keyed exige cooperación del destino. Enviar una cabecera o declarar la bandera en el descriptor no crea esa garantía. Usa la <code>effect_key</code> de la Invocation conforme al contrato del adaptador; no la reemplaces por una clave aleatoria en cada intento.</p></section><section id="certeza" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Errores con certeza explícita</h2><div class="my-5 max-w-full overflow-x-auto"><table class="table"><thead><tr><th scope="col">EffectCertainty</th><th scope="col">Qué afirmas</th></tr></thead><tbody><tr><td class="align-top">NotApplied</td><td class="align-top">No se produjo el efecto. No basta con no haber recibido una respuesta.</td></tr><tr><td class="align-top">Applied</td><td class="align-top">El efecto se produjo, aunque todavía falte un output conforme.</td></tr><tr><td class="align-top">Unknown</td><td class="align-top">No puedes confirmar si se produjo.</td></tr></tbody></table></div><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">Fragmento · error tras despachar una escritura y perder la respuesta · rust</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-rust">OperationError {
+    code: &quot;mi.pedidos.respuesta_perdida&quot;.into(),
+    class: ErrorClass::Transient,
+    certainty: EffectCertainty::Unknown,
+    message: &quot;No se pudo confirmar el resultado del destino&quot;.into(),
+}</code></pre></figure><p class="my-4">El mensaje debe ser seguro: no copies credenciales ni bodies remotos. El motor conserva clase y certeza, además de la identidad lógica y del intento. Un error nuevo NotApplied no borra incertidumbre de un intento anterior.</p></section><section id="retry" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Reintentar solo cuando está permitido</h2><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">Valor de retry dentro de un nodo operation · json</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-json">{
+  &quot;max_attempts&quot;: 3,
+  &quot;initial_delay_ms&quot;: 100,
+  &quot;max_delay_ms&quot;: 2000,
+  &quot;jitter&quot;: true
+}</code></pre></figure><p class="my-4"><code>max_attempts</code> incluye el primer intento. El default es 1 y el máximo depende del host. El backoff elige una demora después de clasificar la seguridad de repetición; no convierte un rechazo de negocio en un fallo transitorio.</p><div class="my-5 max-w-full overflow-x-auto"><table class="table"><thead><tr><th scope="col">Situación</th><th scope="col">Respuesta del coordinador</th></tr></thead><tbody><tr><td class="align-top">Input/config/mapping inválido</td><td class="align-top">Rechazar o fallar sin repetir validación como si fuera I/O transitorio.</td></tr><tr><td class="align-top">Error transitorio/recurso definitivamente NotApplied</td><td class="align-top">Puede repetir si quedan presupuesto y deadline.</td></tr><tr><td class="align-top">Escritura Unknown y Unsafe</td><td class="align-top">Bloquear; no repetir automáticamente.</td></tr><tr><td class="align-top">Escritura Unknown y Safe/Keyed</td><td class="align-top">Repetir solo si el error es elegible y queda presupuesto; conservar la clave.</td></tr><tr><td class="align-top">Applied con output inválido</td><td class="align-top">Mantener el efecto y bloquear para obtener un resultado conforme.</td></tr></tbody></table></div></section><section id="resolver" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Investigar y resolver un run bloqueado</h2><ol class="my-4 list-decimal space-y-2 pl-6"><li>Consulta el estado, identifica la invocación y el intento exactos y conserva la revisión observada.</li><li>Si existe EffectInspector, usa <code>inspect_effect</code>. Es una consulta: no aplica una decisión ni escribe el negocio.</li><li>Obtén evidencia del destino. Una búsqueda inconclusa no permite declarar que el efecto no existió.</li><li>Envía un ReconcileCommand con command_id estable, revisión e intento observados.</li><li>Revisa el recibo y el nuevo estado; un conflicto requiere volver a observar, no sobrescribir otra resolución.</li></ol><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">Fragmento · solo después de confirmar efecto y output con evidencia real · rust</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-rust">let snapshot = app.status(access.clone(), run_id.clone()).await?;
+let record = snapshot.invocations.get(&amp;invocation_id)
+    .ok_or_else(|| ForgeError::new(&quot;manual.missing&quot;, &quot;Invocación no encontrada&quot;))?;
+
+let command = ReconcileCommand {
+    command_id: &quot;resolucion-pedido-P-42&quot;.into(),
+    run_id,
+    invocation_id: invocation_id.clone(),
+    expected_revision: snapshot.revision,
+    observed_attempt: record.attempt_id.clone(),
+    resolution: EffectResolution::ConfirmApplied {
+        output: output_confirmado,
+        evidence: evidencia_del_destino,
+    },
+};
+let receipt = app.reconcile(access.clone(), command).await?;</code></pre></figure><p class="my-4"><code>EffectEvidence</code> contiene authority, reference y note. ConfirmApplied valida el output. ConfirmNotApplied requiere evidencia y <code>quiescent: true</code>: el intento ya no puede completar tardíamente. RecordInconclusive conserva el bloqueo. StopTracking requiere permiso propio y cierra sin convertir incertidumbre en éxito.</p><p class="my-4">Si el descriptor anuncia reconciliación, el bundle debe aportar el inspector correspondiente a esa revisión. El inspector no recibe el ExecutionStore: las transiciones siguen siendo responsabilidad del coordinador.</p></section><section id="cancelar" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Cancelación y deadlines</h2><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">Fragmento · solicitud explícita de cancelación · rust</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-rust">app.cancel(access.clone(), run_id.clone()).await?;
+let observed = app.status(access.clone(), run_id).await?;
+// Consultar observed.state: pedir cancelación no acredita que ya terminó.</code></pre></figure><p class="my-4">El contexto entrega un token de cancelación cooperativa a las operaciones. Timeout, panic o desconexión después de despachar una escritura pueden dejar un efecto incierto. Cancelar un run no revierte una transacción del destino. Una compensación, si tu negocio la necesita, es otra operación explícita.</p></section>
+      <section id="fuentes" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Código y contratos de referencia</h2><ul class="my-4 list-disc space-y-2 pl-6"><li><a class="underline underline-offset-4" href="../crates/protocol/src/operation.rs">Clases de error y certeza</a></li><li><a class="underline underline-offset-4" href="../crates/protocol/src/reconcile.rs">Inspección y comandos de resolución</a></li><li><a class="underline underline-offset-4" href="../crates/protocol/src/retry.rs">Política de intentos</a></li><li><a class="underline underline-offset-4" href="../docs/CONTRACTS.md">Reglas de efectos y cancelación</a></li></ul></section>
+      <nav class="mt-12 border-t border-[var(--color-base-300)] pt-6 text-sm sm:flex sm:justify-between sm:gap-8 print:hidden" aria-label="Anterior y siguiente">
+        <div class="mb-4 sm:mb-0"><a class="underline underline-offset-4" rel="prev" href="persistencia.html">← Persistencia y recuperación</a></div><div><a class="underline underline-offset-4" rel="next" href="procesos.html">Señales y comunicación entre procesos →</a></div>
+      </nav>
+    </main>
+  </div>
+  <footer class="mx-auto max-w-6xl border-t border-[var(--color-base-300)] px-5 py-6 text-sm">
+    Manual de la librería embebida · Revisión 2026-09-27 · <a class="underline underline-offset-4" href="../docs/PROJECT.md">Evidencia y límites del motor</a>
+  </footer>
+</body>
+</html>

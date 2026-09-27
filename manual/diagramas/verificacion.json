@@ -1,0 +1,517 @@
+{
+  "skill": "Archify 2.17",
+  "diagrams": [
+    {
+      "diagram_type": "architecture",
+      "output": "arquitectura.html",
+      "specification_sha256": "1624d21a20b96f0a5cb3748d7d4d3e6ce8e9ab7ee5d53e998dbef04e2fd45f30",
+      "artifact_sha256": "08834e4d7ce38133eb80de975f215c40fd2036ff2b1ecae72e3fc557f84e0b67",
+      "validation": {
+        "checksPassed": 9,
+        "checkCount": 9,
+        "compositionProfile": "showcase",
+        "compositionStatus": "pass",
+        "errors": 0,
+        "warnings": 0
+      },
+      "browser_evidence": "passed",
+      "browser_receipt": "arquitectura.visual-check.json",
+      "visual_review": "passed",
+      "visual_review_scope": {
+        "samples": [
+          {
+            "viewport": [
+              1440,
+              900
+            ],
+            "theme": "light"
+          },
+          {
+            "viewport": [
+              2048,
+              1320
+            ],
+            "theme": "dark"
+          }
+        ],
+        "reviewer": "image-capable assistant",
+        "observations": "Paleta neutra, buen contraste, geometría conservada y sin texto recortado."
+      },
+      "correction_rounds": 0,
+      "preview_svg_sha256": "c6465fad76c46caced4965b439eb92ece7a2b11bf21fe171b05562957615b5c0",
+      "source_artifact_sha256": "ea7f5e3ba052db14679bae2cac615f576ef000ed9e30027f1cfebbafefc80ed1",
+      "theme_receipt": "arquitectura.theme.json",
+      "artifact_check": "arquitectura.check.json"
+    },
+    {
+      "diagram_type": "sequence",
+      "output": "arranque.html",
+      "specification_sha256": "89e5b5fc2747fbe429bb891bcb309f68028d6994d3b12de315bcae20052fc8ee",
+      "artifact_sha256": "a6b974ff8ed2f92ff102ec0103a85455743d39f6ed9b135603705a0732215a96",
+      "validation": {
+        "checksPassed": 9,
+        "checkCount": 9,
+        "compositionProfile": "showcase",
+        "compositionStatus": "pass",
+        "errors": 0,
+        "warnings": 0
+      },
+      "browser_evidence": "passed",
+      "browser_receipt": "arranque.visual-check.json",
+      "visual_review": "passed",
+      "visual_review_scope": {
+        "samples": [
+          {
+            "viewport": [
+              1440,
+              900
+            ],
+            "theme": "light"
+          },
+          {
+            "viewport": [
+              2048,
+              1320
+            ],
+            "theme": "dark"
+          }
+        ],
+        "reviewer": "image-capable assistant",
+        "observations": "Paleta neutra, buen contraste, geometría conservada y sin texto recortado."
+      },
+      "correction_rounds": 0,
+      "preview_svg_sha256": "a7da3ee27867e560fec7ad97347cd2ca1cf1b1388b4df79c4f1f39800873cc47",
+      "source_artifact_sha256": "36fca869b2a3cb323d727f9a84cf76c4b3780d06cb5d0d9eb198ff2ba44c95ea",
+      "theme_receipt": "arranque.theme.json",
+      "artifact_check": "arranque.check.json"
+    },
+    {
+      "diagram_type": "workflow",
+      "output": "modulos.html",
+      "specification_sha256": "1f8ce8839adca508835ccf686e3fdeac82cbce425659c1cb9725009b64cb0a7b",
+      "artifact_sha256": "e3ccb42e01a3445ee8b4b15586b226927fdc606d9fbd017c0d1fe399c92e67d0",
+      "validation": {
+        "checksPassed": 9,
+        "checkCount": 9,
+        "compositionProfile": "showcase",
+        "compositionStatus": "pass",
+        "errors": 0,
+        "warnings": 0
+      },
+      "browser_evidence": "passed",
+      "browser_receipt": "modulos.visual-check.json",
+      "visual_review": "passed",
+      "visual_review_scope": {
+        "samples": [
+          {
+            "viewport": [
+              1440,
+              900
+            ],
+            "theme": "dark"
+          },
+          {
+            "viewport": [
+              2048,
+              1320
+            ],
+            "theme": "light"
+          }
+        ],
+        "reviewer": "image-capable assistant",
+        "observations": "Paleta neutra, buen contraste, geometría conservada y sin texto recortado."
+      },
+      "correction_rounds": 0,
+      "preview_svg_sha256": "420211a8d5012902b99f8ef68de28d01023debe31dd7a230fef95ce13056509d",
+      "source_artifact_sha256": "b2efc0e0778fd0fbfeebc88eecca94d73ba7b01a5e2045c35a0b3d8a8adde691",
+      "theme_receipt": "modulos.theme.json",
+      "artifact_check": "modulos.check.json"
+    },
+    {
+      "diagram_type": "dataflow",
+      "output": "datos.html",
+      "specification_sha256": "a2ce2612930d06d98b4537de8f417184f1ad67915d2750b1a62d52e6ed1fe21b",
+      "artifact_sha256": "926b8ab28dbc3aab3aebcca2769ba17bd79371c0e14edf058f3df321bb3d07c6",
+      "validation": {
+        "checksPassed": 9,
+        "checkCount": 9,
+        "compositionProfile": "showcase",
+        "compositionStatus": "pass",
+        "errors": 0,
+        "warnings": 0
+      },
+      "browser_evidence": "passed",
+      "browser_receipt": "datos.visual-check.json",
+      "visual_review": "passed",
+      "visual_review_scope": {
+        "samples": [
+          {
+            "viewport": [
+              1440,
+              900
+            ],
+            "theme": "light"
+          },
+          {
+            "viewport": [
+              2048,
+              1320
+            ],
+            "theme": "dark"
+          }
+        ],
+        "reviewer": "image-capable assistant",
+        "observations": "Paleta neutra, buen contraste, geometría conservada y sin texto recortado."
+      },
+      "correction_rounds": 0,
+      "preview_svg_sha256": "01cb15a7e0fe99c809b84ed771c3f8daf1ebeda77a68b44b7ad292917c4cf062",
+      "source_artifact_sha256": "8ac811094a86184ab574b79584e45a273471575c2b4d908fdc4679442dd27517",
+      "theme_receipt": "datos.theme.json",
+      "artifact_check": "datos.check.json"
+    },
+    {
+      "diagram_type": "sequence",
+      "output": "senales.html",
+      "specification_sha256": "3de81297ec7a2946b472a8c93bce64f1c1a98501eb5878089c33eff55fe8b155",
+      "artifact_sha256": "3a8c7e76107fa61a758a27030d26eb1013603195a047d56023e204f17ddac03e",
+      "validation": {
+        "checksPassed": 9,
+        "checkCount": 9,
+        "compositionProfile": "showcase",
+        "compositionStatus": "pass",
+        "errors": 0,
+        "warnings": 0
+      },
+      "browser_evidence": "passed",
+      "browser_receipt": "senales.visual-check.json",
+      "visual_review": "passed",
+      "visual_review_scope": {
+        "samples": [
+          {
+            "viewport": [
+              1440,
+              900
+            ],
+            "theme": "dark"
+          },
+          {
+            "viewport": [
+              2048,
+              1320
+            ],
+            "theme": "light"
+          }
+        ],
+        "reviewer": "image-capable assistant",
+        "observations": "Paleta neutra, buen contraste, geometría conservada y sin texto recortado."
+      },
+      "correction_rounds": 0,
+      "preview_svg_sha256": "745833b674118b738ca65419c09638c4948c06c2dafeef31a043a00dd65439af",
+      "source_artifact_sha256": "1f88ac3d7d8387d84baa73f5775da1ff94ea1bbe66d56480ce49955a04242efe",
+      "theme_receipt": "senales.theme.json",
+      "artifact_check": "senales.check.json"
+    }
+  ],
+  "manual_links": {
+    "html_pages": 22,
+    "local_references": 485,
+    "errors": []
+  },
+  "manual_browser": {
+    "evidence": "Supplementary local Chrome inspection of manual pages with embedded SVG previews",
+    "checks": [
+      {
+        "page": "Instancia y arquitectura · Manual de Workflow Forge",
+        "width": 1440,
+        "scroll": 1440,
+        "images": [
+          {
+            "src": "diagramas/arquitectura.svg",
+            "loaded": true
+          }
+        ],
+        "href": "diagramas/arquitectura.html"
+      },
+      {
+        "page": "Integrar la librería en Rust · Manual de Workflow Forge",
+        "width": 390,
+        "scroll": 390,
+        "images": [
+          {
+            "src": "diagramas/arranque.svg",
+            "loaded": true
+          }
+        ],
+        "href": "diagramas/arranque.html"
+      },
+      {
+        "page": "Mover y transformar datos · Manual de Workflow Forge",
+        "width": 1440,
+        "scroll": 1440,
+        "images": [
+          {
+            "src": "diagramas/datos.svg",
+            "loaded": true
+          }
+        ],
+        "href": "diagramas/datos.html"
+      },
+      {
+        "page": "Señales y comunicación entre procesos · Manual de Workflow Forge",
+        "width": 390,
+        "scroll": 390,
+        "images": [
+          {
+            "src": "diagramas/senales.svg",
+            "loaded": true
+          }
+        ],
+        "href": "diagramas/senales.html"
+      }
+    ],
+    "perceptual_review": "Preview images, captions and enlargement links inspected in desktop and mobile layouts."
+  },
+  "theme": "Paleta neutra del manual, aplicada por petición explícita del usuario.",
+  "palette_browser_audit": [
+    {
+      "name": "arquitectura",
+      "theme": "light",
+      "preset": "classic",
+      "bad": []
+    },
+    {
+      "name": "arquitectura",
+      "theme": "light",
+      "preset": "signal-flow",
+      "bad": []
+    },
+    {
+      "name": "arquitectura",
+      "theme": "light",
+      "preset": "blueprint",
+      "bad": []
+    },
+    {
+      "name": "arquitectura",
+      "theme": "light",
+      "preset": "editorial",
+      "bad": []
+    },
+    {
+      "name": "arquitectura",
+      "theme": "dark",
+      "preset": "classic",
+      "bad": []
+    },
+    {
+      "name": "arquitectura",
+      "theme": "dark",
+      "preset": "signal-flow",
+      "bad": []
+    },
+    {
+      "name": "arquitectura",
+      "theme": "dark",
+      "preset": "blueprint",
+      "bad": []
+    },
+    {
+      "name": "arquitectura",
+      "theme": "dark",
+      "preset": "editorial",
+      "bad": []
+    },
+    {
+      "name": "arranque",
+      "theme": "light",
+      "preset": "classic",
+      "bad": []
+    },
+    {
+      "name": "arranque",
+      "theme": "light",
+      "preset": "signal-flow",
+      "bad": []
+    },
+    {
+      "name": "arranque",
+      "theme": "light",
+      "preset": "blueprint",
+      "bad": []
+    },
+    {
+      "name": "arranque",
+      "theme": "light",
+      "preset": "editorial",
+      "bad": []
+    },
+    {
+      "name": "arranque",
+      "theme": "dark",
+      "preset": "classic",
+      "bad": []
+    },
+    {
+      "name": "arranque",
+      "theme": "dark",
+      "preset": "signal-flow",
+      "bad": []
+    },
+    {
+      "name": "arranque",
+      "theme": "dark",
+      "preset": "blueprint",
+      "bad": []
+    },
+    {
+      "name": "arranque",
+      "theme": "dark",
+      "preset": "editorial",
+      "bad": []
+    },
+    {
+      "name": "modulos",
+      "theme": "light",
+      "preset": "classic",
+      "bad": []
+    },
+    {
+      "name": "modulos",
+      "theme": "light",
+      "preset": "signal-flow",
+      "bad": []
+    },
+    {
+      "name": "modulos",
+      "theme": "light",
+      "preset": "blueprint",
+      "bad": []
+    },
+    {
+      "name": "modulos",
+      "theme": "light",
+      "preset": "editorial",
+      "bad": []
+    },
+    {
+      "name": "modulos",
+      "theme": "dark",
+      "preset": "classic",
+      "bad": []
+    },
+    {
+      "name": "modulos",
+      "theme": "dark",
+      "preset": "signal-flow",
+      "bad": []
+    },
+    {
+      "name": "modulos",
+      "theme": "dark",
+      "preset": "blueprint",
+      "bad": []
+    },
+    {
+      "name": "modulos",
+      "theme": "dark",
+      "preset": "editorial",
+      "bad": []
+    },
+    {
+      "name": "datos",
+      "theme": "light",
+      "preset": "classic",
+      "bad": []
+    },
+    {
+      "name": "datos",
+      "theme": "light",
+      "preset": "signal-flow",
+      "bad": []
+    },
+    {
+      "name": "datos",
+      "theme": "light",
+      "preset": "blueprint",
+      "bad": []
+    },
+    {
+      "name": "datos",
+      "theme": "light",
+      "preset": "editorial",
+      "bad": []
+    },
+    {
+      "name": "datos",
+      "theme": "dark",
+      "preset": "classic",
+      "bad": []
+    },
+    {
+      "name": "datos",
+      "theme": "dark",
+      "preset": "signal-flow",
+      "bad": []
+    },
+    {
+      "name": "datos",
+      "theme": "dark",
+      "preset": "blueprint",
+      "bad": []
+    },
+    {
+      "name": "datos",
+      "theme": "dark",
+      "preset": "editorial",
+      "bad": []
+    },
+    {
+      "name": "senales",
+      "theme": "light",
+      "preset": "classic",
+      "bad": []
+    },
+    {
+      "name": "senales",
+      "theme": "light",
+      "preset": "signal-flow",
+      "bad": []
+    },
+    {
+      "name": "senales",
+      "theme": "light",
+      "preset": "blueprint",
+      "bad": []
+    },
+    {
+      "name": "senales",
+      "theme": "light",
+      "preset": "editorial",
+      "bad": []
+    },
+    {
+      "name": "senales",
+      "theme": "dark",
+      "preset": "classic",
+      "bad": []
+    },
+    {
+      "name": "senales",
+      "theme": "dark",
+      "preset": "signal-flow",
+      "bad": []
+    },
+    {
+      "name": "senales",
+      "theme": "dark",
+      "preset": "blueprint",
+      "bad": []
+    },
+    {
+      "name": "senales",
+      "theme": "dark",
+      "preset": "editorial",
+      "bad": []
+    }
+  ]
+}

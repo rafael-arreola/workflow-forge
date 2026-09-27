@@ -1,0 +1,39 @@
+{
+  "format": "forge.workflow/2",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "id": "manual.padre",
+  "revision": "r1",
+  "input_schema": {
+    "type": "string",
+    "maxLength": 128
+  },
+  "output_schema": {
+    "type": "string",
+    "maxLength": 128
+  },
+  "entry": "hijo",
+  "nodes": [
+    {
+      "id": "hijo",
+      "kind": "subworkflow",
+      "input": {
+        "select": {
+          "source": "input",
+          "pointer": ""
+        }
+      },
+      "workflow": {
+        "id": "manual.normalizar",
+        "revision": "r1"
+      }
+    }
+  ],
+  "edges": [],
+  "output": {
+    "select": {
+      "source": "node",
+      "node": "hijo",
+      "pointer": ""
+    }
+  }
+}

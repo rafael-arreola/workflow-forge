@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Conserva las ejecuciones aceptadas y sus dependencias usando el proveedor SQLite local.">
+  <title>Persistencia y recuperación · Manual de Workflow Forge</title>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="font-sans leading-relaxed antialiased">
+  <a href="#contenido" class="sr-only focus:not-sr-only focus:block focus:p-4">Saltar al contenido</a>
+  <header class="border-b border-[var(--color-base-300)] px-5 py-5">
+    <div class="mx-auto max-w-6xl sm:flex sm:items-center sm:justify-between sm:gap-6">
+      <a href="index.html" class="text-lg font-semibold">Workflow Forge <span class="font-normal">/ Manual de implementación</span></a>
+      <p class="mt-2 text-sm sm:mt-0">Rust 1.98.1 · forge.workflow/2</p>
+    </div>
+  </header>
+  <div class="mx-auto max-w-6xl px-5 py-7 lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-12">
+    <aside class="mb-8 lg:mb-0 print:hidden">
+      <details class="rounded border border-[var(--color-base-300)] p-3 lg:hidden">
+        <summary class="cursor-pointer font-medium">Capítulos del manual</summary>
+        <nav class="mt-3" aria-label="Capítulos en móvil"><ul class="menu w-full p-0 text-sm"><li><a href="index.html">00. Inicio y ruta de aprendizaje</a></li><li><a href="integracion.html">01. Integrar la librería en Rust</a></li><li><a href="arquitectura.html">02. Instancia y arquitectura</a></li><li><a href="modulos.html">03. Crear módulos y operaciones</a></li><li><a href="workflows.html">04. Definir workflows</a></li><li><a href="datos.html">05. Mover y transformar datos</a></li><li><a href="control.html">06. Decisiones y flujos avanzados</a></li><li><a href="recursos.html">07. Secretos, archivos y conectores</a></li><li><a href="persistencia.html" aria-current="page" class="menu-active">08. Persistencia y recuperación</a></li><li><a href="efectos.html">09. Errores, reintentos y efectos</a></li><li><a href="procesos.html">10. Señales y comunicación entre procesos</a></li><li><a href="operacion.html">11. Límites, diagnóstico y pruebas</a></li></ul></nav>
+      </details>
+      <nav class="hidden lg:sticky lg:top-6 lg:block" aria-label="Capítulos">
+        <p class="mb-4 text-sm font-semibold">DE LO BÁSICO A LO AVANZADO</p>
+        <ul class="menu w-full p-0 text-sm"><li><a href="index.html">00. Inicio y ruta de aprendizaje</a></li><li><a href="integracion.html">01. Integrar la librería en Rust</a></li><li><a href="arquitectura.html">02. Instancia y arquitectura</a></li><li><a href="modulos.html">03. Crear módulos y operaciones</a></li><li><a href="workflows.html">04. Definir workflows</a></li><li><a href="datos.html">05. Mover y transformar datos</a></li><li><a href="control.html">06. Decisiones y flujos avanzados</a></li><li><a href="recursos.html">07. Secretos, archivos y conectores</a></li><li><a href="persistencia.html" aria-current="page" class="menu-active">08. Persistencia y recuperación</a></li><li><a href="efectos.html">09. Errores, reintentos y efectos</a></li><li><a href="procesos.html">10. Señales y comunicación entre procesos</a></li><li><a href="operacion.html">11. Límites, diagnóstico y pruebas</a></li></ul>
+      </nav>
+    </aside>
+    <main id="contenido" tabindex="-1" class="min-w-0 max-w-4xl">
+      <nav class="breadcrumbs mb-4 text-sm print:hidden" aria-label="Ruta">
+        <ul><li><a href="index.html">Manual</a></li><li>Persistencia y recuperación</li></ul>
+      </nav>
+      <p class="mb-2 text-sm">Avanzado · Capítulo 08</p>
+      <h1 class="text-3xl font-semibold tracking-tight">Persistencia y recuperación</h1>
+      <p class="mt-5 text-lg">Conserva las ejecuciones aceptadas y sus dependencias usando el proveedor SQLite local.</p>
+      <section id="elegir" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Memoria o SQLite</h2><div class="my-5 max-w-full overflow-x-auto"><table class="table"><thead><tr><th scope="col">Perfil</th><th scope="col">Qué garantiza</th><th scope="col">Uso</th></tr></thead><tbody><tr><td class="align-top">Memoria</td><td class="align-top">Estado disponible mientras vive la instancia; una caída pierde runs y recibos.</td><td class="align-top">Pruebas, tareas efímeras o hosts que aceptan esa pérdida.</td></tr><tr><td class="align-top">SQLite</td><td class="align-top">Aceptación y progreso durables bajo el contrato local del proveedor.</td><td class="align-top">Recuperación después de reiniciar y esperas persistentes.</td></tr></tbody></table></div><p class="my-4">Agrega <code>features = ["sqlite"]</code> a la dependencia workflow-forge. Crear un store no inicia otro servicio: SQLite funciona dentro de tu aplicación, mediante su actor de I/O.</p></section><section id="componer" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Configurar estado y artefactos coordinados</h2><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">Fragmento · crear antes el directorio ./datos · rust</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-rust">use std::sync::Arc;
+
+let store = Arc::new(modules::SqliteExecutionStore::open(
+    &quot;./datos/workflows.sqlite&quot;,
+    modules::SqliteOptions::default(),
+)?);
+let builder = WorkflowBuilder::standard()
+    .execution_store(store.clone())
+    .artifact_store(store);
+
+let runtime = EngineRuntime::boot(builder.build()?, BootOptions::default()).await?;</code></pre></figure><p class="my-4">Usar el mismo proveedor en ambos puertos conserva el dominio de artefactos. El directorio padre debe existir. Un fallo de apertura o recuperación se atiende como fallo del host; no se cambia silenciosamente a memoria.</p><p class="my-4">El perfil utiliza SQLite local con WAL y confirmaciones configuradas por el proveedor. Un segundo coordinador sobre el mismo store se rechaza. No montes esa base como coordinación entre hosts.</p></section><section id="aceptacion" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Pedir aceptación durable y deduplicar recepción</h2><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">Fragmento · clave estable para la misma solicitud · rust</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-rust">let mut request = StartRunRequest::new(plan, input);
+request.options.require_durable = true;
+request.options.receipt_key = Some(&quot;pedido-P-42&quot;.into());
+
+let receipt = app.start(access.clone(), request).await?;
+assert!(receipt.durable);</code></pre></figure><p class="my-4">La misma clave y el mismo request semántico, dentro de la ventana publicada, devuelven el mismo RunId. Cambiar contenido/opciones con la misma clave produce conflicto. La clave no es un retry de una operación ni demuestra exactamente una vez en el destino.</p><p class="my-4">El recibo puede seguir deduplicando aunque el resultado haya expirado. Al terminar la ventana, la misma clave puede iniciar otro run. Guarda el RunId y considera la retención antes de reenviar.</p></section><section id="probar" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Comprobarlo con dos arranques</h2><p class="my-4">Usa una ruta nueva, en un directorio existente, y ejecuta estos comandos consecutivamente desde la raíz del repositorio:</p><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">Desde la raíz de workflow-forge · bash</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-bash">cargo run --manifest-path manual/ejemplos/Cargo.toml --locked --bin durable -- ./manual-demo.sqlite pedido-P-42</code></pre></figure><figure class="my-5 min-w-0"><figcaption class="mb-2 text-sm">Desde la raíz de workflow-forge · bash</figcaption><pre tabindex="0" class="max-w-full overflow-x-auto rounded border border-[var(--color-base-300)] bg-[var(--color-base-200)] p-4 text-sm leading-relaxed print:whitespace-pre-wrap print:break-words"><code class="language-bash">cargo run --manifest-path manual/ejemplos/Cargo.toml --locked --bin durable -- ./manual-demo.sqlite pedido-P-42</code></pre></figure><p class="my-4">El primer recibo muestra <code>durable: true</code> y <code>duplicate: false</code>. El segundo devuelve el mismo run_id y <code>duplicate: true</code>, mientras siga vigente su ventana y el resultado esté retenido. El programa verifica la salida Rafael y cierra la instancia en ambos casos.</p><p class="my-4"><a class="underline underline-offset-4" href="ejemplos/src/bin/durable.rs">Programa completo</a> · Usa otra clave para una solicitud nueva; no borres una base en uso.</p></section><section id="recuperacion" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Qué sucede al reiniciar</h2><ol class="my-4 list-decimal space-y-2 pl-6"><li>El host vuelve a registrar los módulos, schemas y proveedores requeridos.</li><li>Boot reclama la propiedad del store y revisa codecs y dependencias de los paquetes aceptados antes de habilitar admisión.</li><li>Los pasos confirmados conservan sus resultados; el coordinador retoma el trabajo pendiente.</li><li>Una intención de escritura sin resultado confirmado puede requerir reconciliación. No se deduce que el destino no hizo nada.</li><li>Si falta una revisión fijada, la recuperación queda bloqueada: reinstala la implementación exacta; no sustituyas sus datos por otra revisión.</li></ol><aside class="my-6 border-l-2 border-[var(--color-base-300)] pl-4"><p class="font-semibold">Versionar también es una responsabilidad del host</p><p class="mt-2">El checkpoint no serializa código, futures, pools ni credenciales. El despliegue debe conservar implementaciones compatibles y resolver sus recursos. No edites tablas para forzar que un run cambie de versión.</p></aside></section><section id="retencion" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Retención y límites de almacenamiento</h2><p class="my-4">Los terminales se retienen por cantidad y por tiempo. Recibos, resultados y artefactos tienen políticas relacionadas pero no idénticas. Consulta los límites de la composición y del proveedor; un not_found después de retención no autoriza por sí mismo a repetir un efecto de negocio.</p><p class="my-4"><code>SqliteOptions.max_database_bytes</code> tiene un default de 512 MiB: es un presupuesto del almacenamiento, no una reserva ni un límite de RAM del proceso. El RSS, los archivos WAL/SHM y el tamaño final de una base no representan la misma medición.</p></section>
+      <section id="fuentes" class="mt-10 scroll-mt-6"><h2 class="mb-4 text-xl font-semibold">Código y contratos de referencia</h2><ul class="my-4 list-disc space-y-2 pl-6"><li><a class="underline underline-offset-4" href="../crates/modules/src/sqlite/mod.rs">SqliteOptions y apertura</a></li><li><a class="underline underline-offset-4" href="../docs/CONTRACTS.md">Aceptación, paquetes y retención</a></li><li><a class="underline underline-offset-4" href="../crates/forge/tests/v2_sqlite.rs">Evidencia de recuperación ante fallos</a></li></ul></section>
+      <nav class="mt-12 border-t border-[var(--color-base-300)] pt-6 text-sm sm:flex sm:justify-between sm:gap-8 print:hidden" aria-label="Anterior y siguiente">
+        <div class="mb-4 sm:mb-0"><a class="underline underline-offset-4" rel="prev" href="recursos.html">← Secretos, archivos y conectores</a></div><div><a class="underline underline-offset-4" rel="next" href="efectos.html">Errores, reintentos y efectos →</a></div>
+      </nav>
+    </main>
+  </div>
+  <footer class="mx-auto max-w-6xl border-t border-[var(--color-base-300)] px-5 py-6 text-sm">
+    Manual de la librería embebida · Revisión 2026-09-27 · <a class="underline underline-offset-4" href="../docs/PROJECT.md">Evidencia y límites del motor</a>
+  </footer>
+</body>
+</html>

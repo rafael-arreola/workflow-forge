@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Cómo viajan los datos en manual.saludo",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1080,
+      600
+    ]
+  },
+  "stages": [
+    {
+      "label": "Entrada"
+    },
+    {
+      "label": "Primer nodo"
+    },
+    {
+      "label": "Segundo nodo"
+    },
+    {
+      "label": "Salida"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "input",
+      "type": "backend",
+      "label": "input",
+      "sublabel": "nombre: \"  Rafael  \"",
+      "stage": 0,
+      "row": 1,
+      "width": 128
+    },
+    {
+      "id": "limpiar",
+      "type": "backend",
+      "label": "limpiar",
+      "sublabel": "forge.text.trim",
+      "stage": 1,
+      "row": 1,
+      "width": 160
+    },
+    {
+      "id": "saludar",
+      "type": "backend",
+      "label": "saludar",
+      "sublabel": "manual.saludos.crear",
+      "stage": 2,
+      "row": 1,
+      "width": 160
+    },
+    {
+      "id": "output",
+      "type": "backend",
+      "label": "output.object",
+      "sublabel": "saludo: \"Hola, Rafael\"",
+      "stage": 3,
+      "row": 1,
+      "width": 160
+    },
+    {
+      "id": "config",
+      "type": "backend",
+      "label": "config del nodo",
+      "sublabel": "prefijo: \"Hola, \"",
+      "stage": 2,
+      "row": 0,
+      "width": 160
+    }
+  ],
+  "flows": [
+    {
+      "id": "seleccionar-nombre",
+      "from": "input",
+      "to": "limpiar",
+      "label": "/nombre",
+      "variant": "emphasis"
+    },
+    {
+      "id": "nombre-limpio",
+      "from": "limpiar",
+      "to": "saludar",
+      "label": "\"Rafael\"",
+      "variant": "emphasis"
+    },
+    {
+      "id": "mensaje",
+      "from": "saludar",
+      "to": "output",
+      "label": "\"Hola, Rafael\"",
+      "variant": "emphasis",
+      "labelDy": -30
+    },
+    {
+      "id": "configurar",
+      "from": "config",
+      "to": "saludar",
+      "label": "invocation.config",
+      "labelAt": [
+        530,
+        214
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "El binding selecciona datos",
+      "items": [
+        "select usa source, node y JSON Pointer; un pointer vacío selecciona el valor completo."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "El edge fija el orden",
+      "items": [
+        "limpiar → saludar ordena la ejecución. Los bindings construyen input y output."
+      ]
+    }
+  ]
+}

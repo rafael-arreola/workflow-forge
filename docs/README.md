@@ -6,6 +6,8 @@ La documentación define la refactorización de Workflow Forge como motor agnós
 
 ## Recorrido de lectura
 
+Para integrar la librería en una aplicación Rust, comienza por el [manual de implementación en HTML](../manual/index.html). Incluye ejemplos ejecutables y un recorrido progresivo de módulos, workflows, datos, persistencia y señales.
+
 | Documento | Pregunta que responde | Autoridad |
 |---|---|---|
 | [PRD](PRD.md) | ¿Qué construiremos, para quién y cómo sabremos que cumple? | Producto, alcance, requisitos y decisiones pendientes. |

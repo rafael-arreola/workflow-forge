@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Crear una instancia y usarla durante la vida del host",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [
+      1040,
+      520
+    ]
+  },
+  "participants": [
+    {
+      "id": "host",
+      "type": "backend",
+      "label": "Tu aplicación",
+      "sublabel": "Arranque y cierre"
+    },
+    {
+      "id": "builder",
+      "type": "backend",
+      "label": "WorkflowBuilder",
+      "sublabel": "Composición"
+    },
+    {
+      "id": "runtime",
+      "type": "backend",
+      "label": "Motor embebido",
+      "sublabel": "Runtime y handle"
+    }
+  ],
+  "messages": [
+    {
+      "id": "componer",
+      "from": "host",
+      "to": "builder",
+      "y": 160,
+      "label": "Registrar módulos; build()",
+      "variant": "emphasis"
+    },
+    {
+      "id": "engine-creado",
+      "from": "builder",
+      "to": "host",
+      "y": 194,
+      "label": "EngineAssembly configurado",
+      "variant": "return"
+    },
+    {
+      "id": "boot",
+      "from": "host",
+      "to": "runtime",
+      "y": 228,
+      "label": "boot(engine, opciones)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "instancia-lista",
+      "from": "runtime",
+      "to": "host",
+      "y": 262,
+      "label": "Runtime listo; application()",
+      "variant": "return"
+    },
+    {
+      "id": "preparar",
+      "from": "host",
+      "to": "runtime",
+      "y": 296,
+      "label": "prepare_json: validar y preparar"
+    },
+    {
+      "id": "iniciar",
+      "from": "host",
+      "to": "runtime",
+      "y": 330,
+      "label": "start: aceptar una ejecución"
+    },
+    {
+      "id": "observar",
+      "from": "host",
+      "to": "runtime",
+      "y": 364,
+      "label": "wait; comprobar estado; result"
+    },
+    {
+      "id": "cerrar",
+      "from": "host",
+      "to": "runtime",
+      "y": 398,
+      "label": "runtime.shutdown()",
+      "variant": "emphasis"
+    },
+    {
+      "id": "reporte-cierre",
+      "from": "runtime",
+      "to": "host",
+      "y": 432,
+      "label": "Reporte de cierre",
+      "variant": "return"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Una instancia compartida",
+      "items": [
+        "Conserva el runtime; clona el handle para las tareas que ejecuten workflows."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Comprueba el resultado",
+      "items": [
+        "wait también puede devolver Blocked. result requiere una salida disponible."
+      ]
+    }
+  ]
+}

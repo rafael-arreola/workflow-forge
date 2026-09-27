@@ -1,0 +1,74 @@
+{
+  "format": "forge.workflow/2",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "id": "manual.lote",
+  "revision": "r1",
+  "input_schema": {
+    "type": "array",
+    "items": {
+      "type": "string",
+      "maxLength": 128
+    }
+  },
+  "output_schema": {
+    "type": "array"
+  },
+  "entry": "nombres",
+  "nodes": [
+    {
+      "id": "nombres",
+      "kind": "foreach",
+      "input": {
+        "select": {
+          "source": "input",
+          "pointer": ""
+        }
+      },
+      "items": {
+        "select": {
+          "source": "input",
+          "pointer": ""
+        }
+      },
+      "concurrency": 2,
+      "errors": "collect",
+      "body": {
+        "entry": "limpiar",
+        "nodes": [
+          {
+            "id": "limpiar",
+            "kind": "operation",
+            "operation": {
+              "id": "forge.text.trim",
+              "contract": "1",
+              "implementation": "r1"
+            },
+            "config": {},
+            "input": {
+              "select": {
+                "source": "input",
+                "pointer": "/item"
+              }
+            }
+          }
+        ],
+        "edges": [],
+        "output": {
+          "select": {
+            "source": "node",
+            "node": "limpiar",
+            "pointer": ""
+          }
+        }
+      }
+    }
+  ],
+  "edges": [],
+  "output": {
+    "select": {
+      "source": "node",
+      "node": "nombres",
+      "pointer": ""
+    }
+  }
+}

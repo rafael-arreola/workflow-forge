@@ -1,0 +1,41 @@
+{
+  "format": "forge.workflow/2",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "id": "manual.normalizar",
+  "revision": "r1",
+  "input_schema": {
+    "type": "string",
+    "maxLength": 128
+  },
+  "output_schema": {
+    "type": "string",
+    "maxLength": 128
+  },
+  "entry": "limpiar",
+  "nodes": [
+    {
+      "id": "limpiar",
+      "kind": "operation",
+      "operation": {
+        "id": "forge.text.trim",
+        "contract": "1",
+        "implementation": "r1"
+      },
+      "config": {},
+      "input": {
+        "select": {
+          "source": "input",
+          "pointer": ""
+        }
+      }
+    }
+  ],
+  "edges": [],
+  "output": {
+    "select": {
+      "source": "node",
+      "node": "limpiar",
+      "pointer": ""
+    }
+  }
+}

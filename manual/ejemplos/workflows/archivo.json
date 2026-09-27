@@ -1,0 +1,48 @@
+{
+  "format": "forge.workflow/2",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "id": "manual.archivo",
+  "revision": "r1",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "source"
+    ],
+    "properties": {
+      "source": {
+        "type": "object"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output_schema": {
+    "type": "object"
+  },
+  "entry": "referencia",
+  "nodes": [
+    {
+      "id": "referencia",
+      "kind": "operation",
+      "operation": {
+        "id": "forge.data.identity",
+        "contract": "1",
+        "implementation": "r1"
+      },
+      "config": {},
+      "input": {
+        "select": {
+          "source": "input",
+          "pointer": ""
+        }
+      }
+    }
+  ],
+  "edges": [],
+  "output": {
+    "select": {
+      "source": "node",
+      "node": "referencia",
+      "pointer": ""
+    }
+  }
+}

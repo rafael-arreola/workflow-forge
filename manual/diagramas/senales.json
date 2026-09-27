@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Comunicar una respuesta externa al workflow",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [
+      1040,
+      520
+    ]
+  },
+  "participants": [
+    {
+      "id": "adaptador",
+      "type": "backend",
+      "label": "Tu aplicación",
+      "sublabel": "Adapta el transporte"
+    },
+    {
+      "id": "motor",
+      "type": "backend",
+      "label": "Motor embebido",
+      "sublabel": "Espera await_signal"
+    },
+    {
+      "id": "externo",
+      "type": "external",
+      "label": "Otro proceso",
+      "sublabel": "API, cola o callback"
+    }
+  ],
+  "messages": [
+    {
+      "id": "start",
+      "from": "adaptador",
+      "to": "motor",
+      "y": 160,
+      "label": "start: iniciar el workflow",
+      "variant": "emphasis"
+    },
+    {
+      "id": "consultar-reserva",
+      "from": "adaptador",
+      "to": "motor",
+      "y": 198,
+      "label": "status: esperar la reserva"
+    },
+    {
+      "id": "reserva-lista",
+      "from": "motor",
+      "to": "adaptador",
+      "y": 236,
+      "label": "run_id + wait_id + correlación",
+      "variant": "return"
+    },
+    {
+      "id": "enviar-solicitud",
+      "from": "adaptador",
+      "to": "externo",
+      "y": 274,
+      "label": "Enviar solicitud con correlación",
+      "variant": "dashed"
+    },
+    {
+      "id": "respuesta-externa",
+      "from": "externo",
+      "to": "adaptador",
+      "y": 312,
+      "label": "Respuesta por el transporte elegido",
+      "variant": "dashed"
+    },
+    {
+      "id": "entregar-senal",
+      "from": "adaptador",
+      "to": "motor",
+      "y": 350,
+      "label": "signal: SignalCommand autenticado",
+      "variant": "emphasis"
+    },
+    {
+      "id": "observar",
+      "from": "adaptador",
+      "to": "motor",
+      "y": 388,
+      "label": "wait; comprobar estado; result"
+    },
+    {
+      "id": "salida",
+      "from": "motor",
+      "to": "adaptador",
+      "y": 426,
+      "label": "Salida del workflow reanudado",
+      "variant": "return"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "La reserva existe primero",
+      "items": [
+        "El host espera wait_id antes de solicitar una respuesta al otro proceso."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Responsabilidad del host",
+      "items": [
+        "Autentica el mensaje y conserva message_id para deduplicar su entrega."
+      ]
+    }
+  ]
+}
