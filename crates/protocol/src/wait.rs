@@ -106,10 +106,10 @@ impl RunSnapshot {
             return Err(invalid());
         }
         for (key, record) in &self.invocations {
-            if let Some(ControlFrame::Wait { id }) = &record.control {
-                if self.waits.get(id).is_none_or(|w| &w.node != key) {
-                    return Err(invalid());
-                }
+            if let Some(ControlFrame::Wait { id }) = &record.control
+                && self.waits.get(id).is_none_or(|w| &w.node != key)
+            {
+                return Err(invalid());
             }
         }
         for (id, wait) in &self.waits {

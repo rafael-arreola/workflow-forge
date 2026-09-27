@@ -215,7 +215,7 @@ impl InventoryDestination for ObservedDestination {
             let count = self.active.fetch_add(1, Ordering::SeqCst) + 1;
             let _active = Active(&self.active);
             self.peak.fetch_max(count, Ordering::SeqCst);
-            if self.delay_first && update.index % 100 == 0 {
+            if self.delay_first && update.index.is_multiple_of(100) {
                 tokio::time::sleep(Duration::from_millis(25)).await;
             }
             let receipt = self.inner.apply(key, update).await?;

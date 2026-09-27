@@ -4,10 +4,34 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-The workflow **spec** is versioned independently (`"spec": "1.0"`, published
-under `schemas/1.0/`); a crate version bump does not imply a spec bump.
+The workflow format is versioned independently (`forge.workflow/2`, defined
+under `schemas/2/`); a crate version bump does not imply a format bump.
 
 ## [Unreleased]
+
+### Added
+
+- Protocol-only authoring consumer with catalog discovery, visual metadata
+  round-trip and structured validation diagnostics.
+- Configurable external text operation and adoption recipes for composition,
+  extension versioning and migration from the prototype.
+
+### Changed
+
+- Use the installed Rust 1.98 series, pinned to 1.98.1 in the workspace and CI.
+- The Rust facade and prelude expose the format-2 engine. The `v2` namespace
+  re-exports the same implementation. Protocols, engine, modules, service and CLI
+  have separate responsibilities; see [adoption](docs/ADOPTION.md).
+- `forge` is an authenticated HTTP client. The service owns accepted runs;
+  closing the CLI does not cancel them. See the [CLI contract](docs/CLI.md).
+- Retired the spec-1 engine, extensions, schemas, examples, features and SFTP CI
+  job after migrating current consumers. There is no automatic conversion of
+  legacy documents or implementations of retired XLSX/SFTP/compression modules.
+
+## Historical prototype (before format 2; not current API)
+
+The following entries describe the unreleased spec-1 prototype retained in Git
+through `6806fa0`. They do not advertise capabilities of the current engine.
 
 ### Added
 

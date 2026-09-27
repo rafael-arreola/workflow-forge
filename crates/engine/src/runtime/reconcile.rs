@@ -12,16 +12,16 @@ fn previous_receipt(
     actor: &str,
 ) -> Result<Option<ReconcileReceipt>, ForgeError> {
     for entry in &run.audit {
-        if let AuditEntry::Resolution(audit) = entry {
-            if audit.command.command_id == command.command_id {
-                return if audit.command == *command && audit.actor == actor {
-                    Ok(Some(audit.receipt.clone()))
-                } else {
-                    Err(conflict(
-                        "Command identity was used with different content or actor",
-                    ))
-                };
-            }
+        if let AuditEntry::Resolution(audit) = entry
+            && audit.command.command_id == command.command_id
+        {
+            return if audit.command == *command && audit.actor == actor {
+                Ok(Some(audit.receipt.clone()))
+            } else {
+                Err(conflict(
+                    "Command identity was used with different content or actor",
+                ))
+            };
         }
     }
     Ok(None)

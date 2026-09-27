@@ -272,13 +272,13 @@ impl<'a> Compiler<'a> {
                 start,
             } => {
                 context_binding(correlation, limits, false)?;
-                if let Binding::Literal(value) = correlation {
-                    if value.as_str().is_none_or(|s| s.is_empty() || s.len() > 256) {
-                        return Err(ForgeError::new(
-                            "data.invalid",
-                            "Signal correlation must contain 1 to 256 bytes",
-                        ));
-                    }
+                if let Binding::Literal(value) = correlation
+                    && value.as_str().is_none_or(|s| s.is_empty() || s.len() > 256)
+                {
+                    return Err(ForgeError::new(
+                        "data.invalid",
+                        "Signal correlation must contain 1 to 256 bytes",
+                    ));
                 }
                 if *timeout_ms == 0 || *timeout_ms > limits.wait_timeout_ms {
                     return Err(ForgeError::new(
@@ -306,8 +306,15 @@ impl<'a> Compiler<'a> {
                             retry: start.retry.clone(),
                         },
                     };
-                    let PreparedInstruction::Operation(operation) =
-                        self.instruction(&synthetic, depth, document_nodes, metadata)?
+                    let PreparedInstruction::Operation(operation) = self
+                        .instruction(&synthetic, depth, document_nodes, metadata)
+                        .map_err(|mut error| {
+                            for diagnostic in &mut error.diagnostics {
+                                diagnostic.location.field =
+                                    format!("/start{}", diagnostic.location.field);
+                            }
+                            error
+                        })?
                     else {
                         unreachable!()
                     };
@@ -333,12 +340,27 @@ impl<'a> Compiler<'a> {
                     .get(revision)
                     .cloned()
                     .ok_or_else(|| {
-                        ForgeError::new("reference.missing", "Operation revision is unavailable")
+                        located(
+                            ForgeError::new(
+                                "reference.missing",
+                                "Operation revision is unavailable",
+                            ),
+                            Some(&node.id),
+                            "/operation",
+                        )
                     })?;
-                retry.validate(limits.max_retry_attempts)?;
-                operation.config.validate(config, limits)?;
+                retry
+                    .validate(limits.max_retry_attempts)
+                    .map_err(|e| located(e, Some(&node.id), "/retry"))?;
+                operation
+                    .config
+                    .validate(config, limits)
+                    .map_err(|e| located(e, Some(&node.id), "/config"))?;
                 if let Binding::Literal(value) = &node.input {
-                    operation.input.validate(value, limits)?;
+                    operation
+                        .input
+                        .validate(value, limits)
+                        .map_err(|e| located(e, Some(&node.id), "/input/literal"))?;
                 } else {
                     metadata.warnings.push(
                         Diagnostic::new(
@@ -441,17 +463,16 @@ impl<'a> Compiler<'a> {
                 errors,
             } => {
                 context_binding(items, limits, false)?;
-                if let Binding::Literal(value) = items {
-                    if !value.is_array()
+                if let Binding::Literal(value) = items
+                    && (!value.is_array()
                         || value
                             .as_array()
-                            .is_some_and(|a| a.len() > limits.foreach_items)
-                    {
-                        return Err(ForgeError::new(
-                            "data.invalid",
-                            "Foreach items must be a bounded array",
-                        ));
-                    }
+                            .is_some_and(|a| a.len() > limits.foreach_items))
+                {
+                    return Err(ForgeError::new(
+                        "data.invalid",
+                        "Foreach items must be a bounded array",
+                    ));
                 }
                 let concurrency = concurrency_limit(*concurrency, limits)?;
                 Ok(PreparedInstruction::Foreach {

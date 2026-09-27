@@ -139,8 +139,11 @@ impl PreparedWorkflow {
 fn located(mut error: ForgeError, node: Option<&str>, field: &str) -> ForgeError {
     for d in &mut error.diagnostics {
         d.phase = "prepare".into();
-        d.location.node = node.map(str::to_owned);
-        d.location.field = field.into();
+        // Outer controls must not erase an already located child/config error.
+        if d.location.field.is_empty() {
+            d.location.node = node.map(str::to_owned);
+            d.location.field = field.into();
+        }
     }
     error
 }

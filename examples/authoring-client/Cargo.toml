@@ -1,0 +1,17 @@
+[package]
+name = "workflow-forge-authoring-example"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+workflow-forge-protocol = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+workflow-forge = { path = "../../crates/forge", default-features = false }
+workflow-forge-reference-module = { path = "../reference-module" }
+tokio = { workspace = true }
+jsonschema = { workspace = true }

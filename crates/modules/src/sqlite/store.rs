@@ -230,14 +230,13 @@ fn commit(
         .ok_or_else(|| ForgeError::new("not_found", "Run is unavailable"))?;
     current.validate_successor(expected, &next)?;
     for (id, wait) in &next.waits {
-        if let Some(delivery) = &wait.delivery {
-            if current
+        if let Some(delivery) = &wait.delivery
+            && current
                 .waits
                 .get(id)
                 .is_none_or(|old| old.delivery.is_none())
-            {
-                artifacts::pin_references(tx, &next.id, &next.scope, &delivery.command.artifacts)?;
-            }
+        {
+            artifacts::pin_references(tx, &next.id, &next.scope, &delivery.command.artifacts)?;
         }
     }
     let head = next.head();

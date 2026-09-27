@@ -1,16 +1,18 @@
 # Workflow Forge — estado y continuidad
 
-Actualizado: 2026-09-26. Esta página registra evidencia; el producto objetivo está en [PRD](PRD.md), sus límites en [ARCHITECTURE](ARCHITECTURE.md) y mecanismos en [TDD](TDD.md).
+Actualizado: 2026-09-27. Esta página registra evidencia; el producto objetivo está en [PRD](PRD.md), sus límites en [ARCHITECTURE](ARCHITECTURE.md) y mecanismos en [TDD](TDD.md).
 
 ## Punto actual
 
-**Implementación autorizada el 2026-09-26:** avanzar F-0 a F-5 en orden y crear un commit por fase. La planificación quedó conservada en `66d39a5`; F-0 en `d5901a1`, F-1 en `00bcad9`, F-2 en `dcb1d34` y F-3 en `2ed3970`. La API nueva se encuentra en `workflow_forge::v2`; la CLI y los módulos spec 1.0 permanecen temporalmente durante su migración.
+**Implementación autorizada el 2026-09-26:** avanzar F-0 a F-5 en orden y crear un commit por fase. La planificación quedó conservada en `66d39a5`; F-0 en `d5901a1`, F-1 en `00bcad9`, F-2 en `dcb1d34`, F-3 en `2ed3970` y F-4 en `6806fa0`. La fachada raíz, `prelude` y `workflow_forge::v2` exponen el mismo motor. F-5 completa autoría, extensión y adopción, migra la CLI a HTTP y retira los consumidores/implementación spec 1.0. Su cierre se conserva en el commit de esta fase.
+
+**Alcance vigente, ajustado por el usuario el 2026-09-27:** terminar con pruebas esenciales y casos borde, conservando contratos/errores, recuperación/efectos, cuotas/concurrencia, paridad y checks apropiados. Las nueve combinaciones de secuencias/lecturas SQLite y tres de capacidad SQLite sin completar quedan diferidas, igual que nuevas repeticiones y comparaciones históricas de rendimiento. Solo se retomarían ante una necesidad de capacidad real; no son criterios de cierre técnico de F-5. La evidencia ya obtenida permanece abajo y las combinaciones omitidas no se acreditan como exitosas. La verificación funcional final pasó: 151 pruebas del workspace y una regresión focalizada adicional, con Clippy y formato limpios. La aclaración posterior del usuario en esta misma fecha separa las integraciones reales del cierre del engine: P-01/P-07 quedan para una etapa posterior, cuando el usuario decida integrar sus sistemas. F-5 queda completada con los casos de referencia y la evidencia técnica registrada; no se acredita aceptación ni capacidad de producción.
 
 F-1 incorpora protocolo público, engine, módulos oficiales, fachada, kit de conformidad y extensión externa. El recorrido C-01A recibe JSON, normaliza un identificador, consulta un cliente inyectado y devuelve un resultado validado. `build` permanece inactivo, `boot` reclama el store y supervisa ejecución, los handles comparten la instancia y `shutdown` cierra admisión y drena.
 
 Los patrones se concretan en código: Builder en la composición, Adapter en la extensión, Factory Function en las contribuciones, Facade en el handle, Command en la invocación y Decorator en la prueba de observación. F-2 añade State para control/efectos, Composite para cuerpos/subworkflows y Strategy de backoff después de clasificar la seguridad de repetición. No se requiere importar internos del engine para extender operaciones o sustituir proveedores. El compilador fija revisiones y rechaza capacidades fuera del perfil implementado.
 
-F-3 está completa: paquete de recuperación fijado, estado/artefactos SQLite, migraciones, señales/timers y reconciliación durable, con 331 pruebas del workspace y mediciones comparables registradas abajo. F-4 está completa: servicio HTTP, módulos de integración y ejecutable, con 357 pruebas del workspace y los checks de cierre registrados abajo. F-5 cubre adopción. P-01 aún requiere contrastar las referencias con dos sistemas reales del usuario y P-07 cerrar sus metas de despliegue. El éxito de los fixtures no acredita esas integraciones.
+F-3 está completa: paquete de recuperación fijado, estado/artefactos SQLite, migraciones, señales/timers y reconciliación durable, con 331 pruebas del workspace y mediciones comparables registradas abajo. F-4 está completa: servicio HTTP, módulos de integración y ejecutable, con 357 pruebas del workspace y los checks de cierre registrados abajo. F-5 completa adopción, autoría y validación esencial del engine. Después de este cierre, P-01 permitirá contrastar las referencias con sistemas reales del usuario y P-07 fijar sus metas de despliegue. El éxito de los fixtures no acredita esas integraciones ni obliga a iniciarlas ahora.
 
 ## Evidencia F-1
 
@@ -93,7 +95,7 @@ El input/reporte final mide 995/13 332 bytes para 100 filas y 137 797/1 491 144 
 
 La primera medición C-02 de 10 000 filas, anterior a optimizar acceso al estado, terminó correctamente en 618.774 s y 1 068 892 160 bytes de RSS. Las transiciones copiaban y serializaban el historial completo. `ExecutionStore::view`, `unfinished_heads` y `commit_invocation` permiten confirmar un nodo con contadores atómicos; los snapshots completos quedan para consultas/recuperación y transiciones de cabecera. Las tres muestras posteriores conservan las mismas 10 302 activaciones, 30 706 transiciones y 10 000 efectos correctos. No se omiten commits para conseguir la mejora.
 
-Logs locales de medición: `/tmp/workflow-forge-f2-final-sequence-*.log`, `/tmp/workflow-forge-f1-recheck-*.log`, `/tmp/workflow-forge-f2-final-inventory-*.log` y `/tmp/workflow-forge-f2-inventory-10000-before-views.log`. Los comandos y tablas permiten repetir la comparación aunque esos logs temporales caduquen. La matriz completa de cargas, consumo tras liberar resultados, latencia externa y metas de producción siguen en V-14/P-07; estas muestras no cierran F-5.
+Logs locales de medición: `/tmp/workflow-forge-f2-final-sequence-*.log`, `/tmp/workflow-forge-f1-recheck-*.log`, `/tmp/workflow-forge-f2-final-inventory-*.log` y `/tmp/workflow-forge-f2-inventory-10000-before-views.log`. Los comandos y tablas permiten reproducir la comparación aunque esos logs temporales caduquen. Al cerrar F-2 se previó ampliar V-14 en F-5; el ajuste del 2026-09-27 deja las campañas de rendimiento sin completar como opcionales. Estas muestras históricas no acreditan las metas reales P-07.
 
 La recuperación de una intención tras fallo del supervisor usa un proveedor en memoria conservado por el host. Las pruebas de reanudación de controles conservan la misma composición. No acreditan caída de proceso, SQLite ni recuperación de dependencias entre composiciones: F-3 debe persistir el paquete de revisiones resueltas y probar cambios/ausencias de dependencias antes de prometer esa garantía.
 
@@ -221,7 +223,7 @@ C-02 usa `/usr/bin/time -l target/release/examples/v2_inventory FILAS 3`, agrega
 
 Las tres muestras durables de 10 000 filas terminaron con 10 000 filas y efectos correctos cada una; entre 43.91 y 44.40 filas/s. Los runs de 100/10 000 filas conservan 105/10 302 activaciones y 313/30 706 transiciones. CSV de 995/137 797 bytes; reporte de 13 332/1 491 144 bytes. Las mediciones en memoria de 10 000 filas suben 8.3% en RSS frente a F-2 repetida; la evidencia de recuperación C-02 sigue siendo la matriz con ledger externo de 201 filas, no el destino volátil de este benchmark.
 
-Logs locales bajo `/tmp/workflow-forge-f3-measure-uiYwceCq`: `shared-memory-*.log`, `shared-memory-repeat{2,3}-*.log`, `f2-repeat-*.log`, `shared-inventory-memory-*.log`, `sqlite-*.log` e `inventory-sqlite-*.log`. Los comandos/tablas se conservan aunque caduquen los temporales. La matriz completa de 1 MiB, latencia externa, saturación sostenida y RSS tras liberación sigue en V-14/F-5. Los casos funcionales de admisión y GC ya pasan; no sustituyen esa campaña de capacidad.
+Logs locales bajo `/tmp/workflow-forge-f3-measure-uiYwceCq`: `shared-memory-*.log`, `shared-memory-repeat{2,3}-*.log`, `f2-repeat-*.log`, `shared-inventory-memory-*.log`, `sqlite-*.log` e `inventory-sqlite-*.log`. Los comandos/tablas se conservan aunque caduquen los temporales. La ampliación prevista de 1 MiB, latencia externa, saturación sostenida y RSS tras liberación obtuvo la evidencia F-5 registrada abajo; su parte sin completar quedó opcional por el ajuste del 2026-09-27. Los casos funcionales de admisión y GC verifican comportamiento, sin acreditar capacidad de producción.
 
 ### Criterios de salida F-3
 
@@ -235,7 +237,7 @@ Logs locales bajo `/tmp/workflow-forge-f3-measure-uiYwceCq`: `shared-memory-*.lo
 | Proveedor conforme | Kit público, CAS, cuotas y exclusión de propietario en SQLite; sin fallback a memoria. |
 | Medición P-07 aplicable | Cuatro cargas de secuencias en ambos perfiles y C-02 de 100/10 000 filas; investigación de regresiones y límites publicados. |
 
-F-3 quedó cerrada en `2ed3970` con los checks anteriores. Los resultados F-4 se registran a continuación; los casos reales y metas de producción permanecen en F-5.
+F-3 quedó cerrada en `2ed3970` con los checks anteriores. Los resultados F-4 se registran a continuación; el contraste con casos reales y metas de producción quedó posteriormente diferido hasta después del cierre del engine por instrucción del usuario.
 
 ## Evidencia F-4
 
@@ -259,23 +261,137 @@ Los anexos [HTTP](HTTP.md) e [INTEGRATIONS](INTEGRATIONS.md) concretan los contr
 
 Una primera pasada completa detectó que pruebas paralelas de F-3 podían usar el mismo timestamp para sus directorios SQLite; la reserva ahora usa contador y creación atómica, sin depender de resolución del reloj. No cambió el comportamiento del engine por ese ajuste.
 
-Los límites siguen siendo explícitos: un scope y coordinador por instancia, plugins compilados confiables, HTTP sin TLS directo, bearer inicial, escrituras HTTP genéricas `Unsafe` y CSV acotado que se vuelve a analizar por lote. No se acreditan destinos reales, rendimiento HTTP de producción, MSRV 1.85 ni el servidor SFTP externo mediante estas pruebas locales. F-5 debe contrastar P-01/P-07 y medir el overhead del servicio por separado.
+Los límites siguen siendo explícitos: un scope y coordinador por instancia, plugins compilados confiables, HTTP sin TLS directo, bearer inicial, escrituras HTTP genéricas `Unsafe` y CSV acotado que se vuelve a analizar por lote. No se acreditan destinos reales, rendimiento HTTP de producción, MSRV 1.85 ni el servidor SFTP externo mediante estas pruebas locales. El contraste P-01/P-07 queda para la adopción posterior al cierre del engine; la comparación de transporte ya realizada se registra abajo.
+
+## Evidencia F-5 — completada
+
+El [consumidor de autoría](../examples/authoring-client/src/lib.rs) usa solo protocolo/JSON en su biblioteca. Su host de demostración y [cuatro pruebas](../examples/authoring-client/tests/consumer.rs) obtienen el catálogo público, seleccionan una revisión exacta, generan una definición, conservan metadata visual al exportar/importar y ejecutan mediante la fachada. No adivina configuración requerida ni elige otra revisión cuando falta la solicitada. Un Decorator comprueba que preparar o rechazar datos de configuración no invoca la operación.
+
+La [extensión de texto](../examples/reference-module/src/text.rs) agrega configuración reusable y un contrato Pure/Safe desde un crate externo. [ADOPTION](ADOPTION.md) publica las recetas de composición, plugins, autoría, versionado y retiro. [EXAMPLES](../EXAMPLES.md) ahora apunta a recorridos formato 2; sus quince workflows históricos se conservaron temporalmente como fixtures de caracterización. Se retiraron con sus consumidores en el incremento posterior; los originales están en `6806fa0:EXAMPLES.md`.
+
+La sustitución técnica de C-02 se comprueba mediante el puerto público [InventoryDestination](../examples/reference-module/src/inventory/destination.rs) y el bootstrap inyectable de [las pruebas de inventario](../crates/forge/tests/v2_inventory.rs). `multiple_pages_preserve_order_bound_concurrency_and_retry_without_duplicate_effect` registra `ObservedDestination` en lugar de `MemoryInventory`, ejecuta la misma definición y verifica 201 efectos, 202 intentos, orden del reporte y concurrencia acotada. El caso de reconciliación continúa sin repetir la página confirmada. Ambos pasan en el log `/tmp/workflow-forge-f5-rust98-workspace.log`. El sustituto es un Decorator de prueba sobre `MemoryInventory`; demuestra la sustitución por contrato sin cambiar el coordinador, no un segundo sistema de negocio real ni el cierre de P-01.
+
+El consumidor descubrió una ubicación demasiado genérica en errores de preparación. El compilador ahora conserva diagnósticos ya ubicados y señala `/operation`, `/retry`, `/config`, `/input/literal` y `/start/config`, con JSON Pointer del dato cuando aplica. Las pruebas comprueban esos campos y cero ejecución durante validación. El ejemplo de autoría cubre un nodo; no acredita un editor completo de controles anidados.
+
+Verificación de este incremento: `cargo test --workspace --all-features` termina con **361 pruebas exitosas, 0 fallidas y 1 SFTP ignorada**. `cargo run -p workflow-forge-authoring-example --example round_trip` exporta el documento y verifica `ID-42`. Formato y Clippy workspace/all-targets con defaults y all-features, `-D warnings`, pasan. El benchmark posterior se compiló en release y ejecutó las combinaciones de abajo. Log de tests: `/tmp/workflow-forge-f5-authoring-workspace.log`. No se comprobó MSRV 1.85 ni se ejecutó el servidor SFTP externo.
+
+La ejecución completa también reprodujo una colisión de directorios por timestamps en otro fixture SQLite. Los cuatro fixtures del motor comparten ahora reserva atómica con contador, incluidos procesos de caída; no se cambió la semántica de ejecución por este ajuste.
+
+Revisión documental del incremento: catorce documentos, 250 enlaces locales/anchors, cinco bloques JSON y seis archivos de configuración/fixtures/schema parseables, sin errores y con fences balanceados. No se renderizó Mermaid. El archivo de mediciones enlazado se genera como JSON a partir de los resultados completos de los procesos.
+
+### Comparación de transporte F-5
+
+El [ejecutable de medición](../crates/service/examples/service_measure.rs) compara una operación identity por Rust y HTTP/1.1 loopback. Mismo entorno de F-3: Apple M1 Max, 10 CPU, 64 GiB, macOS 27.0 (26A428), Rust 1.98.1, release. Una pasada por combinación: 100 calentamientos y 1 000 muestras, en lotes de 1/8/32 que terminan antes de iniciar el siguiente. Cada SQLite es nueva; sin observer de logging ni destinos externos.
+
+Build: `cargo build --release -p workflow-forge-service --example service_measure`. Comando: `/usr/bin/time -l target/release/examples/service_measure rust|http BYTES 1000 CONCURRENCY [RUTA_SQLITE_NUEVA]`. Ejemplo concreto: `/usr/bin/time -l target/release/examples/service_measure http 1024 1000 8`. Omitir ruta mide memoria. Los [datos completos](measurements/f5_transport.json) publican preparación inicial y p50/p95/p99 de preparación, aceptación y recorrido completo, throughput, defaults, huellas SHA-256 del código/binario y cada comando.
+
+**24 combinaciones; 26 400 runs correctos, incluidos calentamientos.** No hubo un RunId repetido ni un acuse con garantía diferente del perfil solicitado. Resumen de p95; el JSON enlazado conserva los demás percentiles:
+
+| Perfil / JSON / concurrencia | Aceptación p95 Rust / HTTP (µs) | Completo p95 Rust / HTTP (µs) | RSS Rust / HTTP (bytes) | Consultas HTTP/run |
+|---|---|---|---|---|
+| Memoria / 1 KiB / 1 | 42.75 / 163.25 | 152.209 / 295.75 | 26017792 / 28557312 | 1.003 |
+| Memoria / 1 KiB / 8 | 97.542 / 1274.833 | 1249.834 / 4266.958 | 26345472 / 30048256 | 1.988 |
+| Memoria / 1 KiB / 32 | 155.167 / 6172.125 | 4548.5 / 9441.125 | 26902528 / 33800192 | 1.764 |
+| Memoria / 64 KiB / 1 | 139.333 / 692.875 | 753.084 / 4254.5 | 224755712 / 225280000 | 2 |
+| Memoria / 64 KiB / 8 | 442.458 / 2554.208 | 2575 / 5953.625 | 226181120 / 240664576 | 2.133 |
+| Memoria / 64 KiB / 32 | 626.583 / 13571.042 | 11496.5 / 17811.417 | 227721216 / 260423680 | 2.353 |
+| SQLite / 1 KiB / 1 | 8251.791 / 8781.208 | 42313.375 / 46108.417 | 18726912 / 21151744 | 4.862 |
+| SQLite / 1 KiB / 8 | 125857.542 / 148421.333 | 293047.584 / 298160.834 | 18825216 / 22429696 | 6.411 |
+| SQLite / 1 KiB / 32 | 928144.333 / 935601.333 | 1118223.667 / 1098096.75 | 19136512 / 25722880 | 6.572 |
+| SQLite / 64 KiB / 1 | 10765.917 / 11085.209 | 58879.459 / 57834.833 | 22003712 / 25247744 | 4.892 |
+| SQLite / 64 KiB / 8 | 169848.958 / 161400.208 | 346213.083 / 328880.292 | 26066944 / 33587200 | 6.563 |
+| SQLite / 64 KiB / 32 | 1100029.5 / 1040478.167 | 1318243.833 / 1229950.667 | 32309248 / 55836672 | 6.72 |
+
+Aceptación termina al recibir el acuse. El recorrido completo incluye comprobar el resultado: Rust espera con `wait`; HTTP consulta `/result`, con pausa solicitada de 1 ms tras `not_ready`. El tiempo real de esa pausa depende del scheduler. Por tanto, la diferencia incluye polling, autenticación, traducción y transporte; estas mediciones no atribuyen su coste individual. Que algún p95 HTTP durable sea menor en esta pasada no demuestra que HTTP acelere el engine. Hace falta repetir para sostener diferencias pequeñas.
+
+El RSS procede de `/usr/bin/time -l` e incluye el proceso completo, preparación/calentamiento y retención predeterminada; en HTTP incluye el cliente local. No es memoria por run ni consumo tras liberar resultados. Esta herramienta usa futures por lotes y un workflow de un nodo; no sustituye la comparación histórica de cadenas de `v2_measure`. Logs locales: `/tmp/workflow-forge-f5-measure-ejH7QR/transport.log`.
+
+La evidencia adicional de memoria y SQLite se registra abajo. Por el ajuste autorizado del 2026-09-27, las campañas de rendimiento sin completar quedan diferidas y opcionales. La verificación funcional final está registrada al final de esta sección. El contraste con integraciones reales P-01 y sus metas P-07 se realizará después del cierre del engine, cuando el usuario decida comenzar esa etapa.
+
+### Migración de consumidores y retiro del prototipo
+
+La [CLI](CLI.md) consume el protocolo HTTP: catálogo paginado, preparación, inicio/espera, estado/resultado, consultas paginadas, cancelación, señales, inspección/reconciliación y artefactos. Su dependencia normal es el protocolo y transporte; el engine solo aparece en fixtures de desarrollo. Por defecto pide durabilidad, mantiene separados los deadlines de petición/run/espera y no cancela al desconectarse. `wait` consulta el estado autoritativo para distinguir fallo, espera y bloqueo de intervención, incluidos efectos inciertos.
+
+Las [pruebas contra el servicio](../crates/cli/tests/service.rs) pasan seis casos con procesos CLI reales: 65 operaciones adicionales para paginación, preparación sin ejecutar, diagnósticos, credencial rechazada, recibo SQLite tras reiniciar sin repetir la operación, aceptación expresa de memoria, timeout/SIGINT sin cancelación, señal y cancelación explícita, efecto inspeccionado/resuelto una sola vez y stream de 200 003 bytes con referencia declarada. Las [pruebas de transporte](../crates/cli/tests/wire.rs) pasan tres casos: redirects/retries deshabilitados, plazo de petición, bytes reales sin Content-Length, JSON/argumentos inválidos sin reflejar datos y descargas truncadas/excesivas sin destino parcial ni archivos temporales residuales. `cargo test -p workflow-forge-cli` pasa nueve casos antes de retirar las dependencias anteriores.
+
+La [fachada](../crates/forge/src/lib.rs) y `prelude` ahora exponen el motor formato 2. Se eliminaron `core`, los seis crates `extensions/*`, los schemas 1.0, tres ejemplos Rust y las pruebas exclusivas de esos contratos, además del job SFTP y dependencias que ya no tienen consumidores. El namespace `v2` conserva los mismos tipos/implementación. [ADOPTION §5](ADOPTION.md#5-migrar-desde-el-prototipo) publica las features actuales y las diferencias: SFTP/XLSX/ZIP/GZIP/plantillas/conversiones antiguas no se presentan como migradas. Los historiales de abajo y mediciones previas conservan sus resultados originales, no el conteo de la suite actual.
+
+Verificación posterior al retiro y al ajuste de Rust, previa a la pasada final: `cargo test --workspace --all-features --locked` pasa **151 pruebas, 0 fallos y 0 ignoradas** con Rust/Cargo 1.98.1. El conteo excluye las pruebas eliminadas del prototipo e incluye los nueve casos CLI. Clippy workspace/all-targets con defaults y all-features, `-D warnings`, pasa; formato y `git diff --check` también. El perfil `cargo check -p workflow-forge --no-default-features` compila. `cargo tree -p workflow-forge-cli --edges normal --prefix none --depth 1` confirma protocolo/transporte sin dependencia normal del engine o servicio.
+
+Por instrucción del usuario se usa la serie instalada Rust 1.98, concretamente 1.98.1, fijada en `rust-toolchain.toml`, el mínimo del workspace y CI. La declaración antigua 1.85 no representaba las dependencias resueltas: ICU/IDNA ya exigen 1.86 según sus manifests. Se revisaron siete sugerencias mecánicas de Clippy habilitadas por el mínimo nuevo (condiciones `if let` y `is_multiple_of`), y la suite anterior pasó después de aplicarlas. No se acredita compatibilidad con toolchains anteriores. La configuración CI se actualizó; la evidencia indicada es local, no una ejecución remota de GitHub Actions.
+
+La revisión documental del retiro verifica 15 documentos, 253 enlaces locales/anchors, cinco bloques JSON y seis archivos JSON de fixtures/configuración/schema, sin errores. La posterior publicación de secuencias lleva los enlaces a 256 y valida por separado sus 30 comandos únicos, contadores y documento JSON. No se renderizó Mermaid. La ampliación del benchmark tiene su protocolo en ACCEPTANCE; no altera los resultados históricos ni completa por sí sola V-14. Log de la suite Rust 1.98.1: `/tmp/workflow-forge-f5-rust98-workspace.log`.
+
+### Secuencias y lectura simulada en memoria
+
+El [informe de secuencias](measurements/f5_sequences.json) registra **30 combinaciones y 33 000 runs verificados**, incluyendo calentamiento: 27 000 muestras exitosas, 3 000 muestras rechazadas por cuota como se esperaba y 3 000 calentamientos. No hubo resultados inesperados ni RunIds repetidos dentro de cada combinación. Los rechazos son runs aceptados que terminan `Failed/resource.limit`, sin output; no son 30 000 ejecuciones exitosas.
+
+Comando base: `/usr/bin/time -l target/release/examples/v2_measure N BYTES 1000 CONCURRENCY --terminal-runs 64`. Se añade `--expect-resource-limit` a 100 nodos de 1 MiB y `--latency-ms 10` a una primera lectura de 1 KiB. Se midieron cadenas puras de 1/10/100 nodos × 1/64/1024 KiB × concurrencia 1/8/32, más tres lecturas simuladas. Se conservan los demás defaults, incluidos 16 MiB retenidos por run y 1 MiB por valor. El perfil de esta matriz es memoria; las mediciones SQLite realizadas y las omitidas se distinguen en la sección siguiente.
+
+Apple M1 Max, diez CPU, 64 GiB, macOS 27.0/26A428 y Rust 1.98.1 release. Una pasada por combinación, 100 calentamientos y 1000 muestras. La tabla muestra **concurrencia 1 / 8 / 32**, p95 de start→wait en milisegundos y pico RSS del proceso en MiB; el JSON conserva p50/p95/p99, throughput, límites, hashes y comandos.
+
+| Nodos / payload | p95 ms, 1 / 8 / 32 | Pico RSS MiB, 1 / 8 / 32 | Resultado exigido |
+|---|---|---|---|
+| 1 / 1 KiB | 0.080 / 1.127 / 3.589 | 13.2 / 14.0 / 14.0 | Resultado correcto |
+| 1 / 64 KiB | 0.753 / 3.011 / 10.412 | 33.6 / 35.6 / 37.8 | Resultado correcto |
+| 1 / 1024 KiB | 10.182 / 31.486 / 102.514 | 355.9 / 343.1 / 447.8 | Resultado correcto |
+| 10 / 1 KiB | 0.328 / 3.331 / 13.737 | 14.9 / 15.9 / 16.8 | Resultado correcto |
+| 10 / 64 KiB | 4.088 / 26.835 / 75.545 | 108.4 / 102.3 / 124.0 | Resultado correcto |
+| 10 / 1024 KiB | 77.558 / 355.399 / 1075.934 | 1246.1 / 1534.7 / 1568.6 | Resultado correcto |
+| 100 / 1 KiB | 5.971 / 36.150 / 129.456 | 35.9 / 40.5 / 52.1 | Resultado correcto |
+| 100 / 64 KiB | 53.518 / 166.079 / 619.982 | 697.0 / 733.3 / 824.1 | Resultado correcto |
+| 100 / 1024 KiB | 79.426 / 200.470 / 795.683 | 1737.1 / 1568.5 / 1743.2 | resource.limit |
+| 1 / 1 KiB / lectura 10 ms | 12.764 / 14.281 / 14.622 | 13.1 / 13.8 / 14.8 | Resultado correcto |
+
+El campo `max_retained_data_bytes` mide snapshots finales; no es el máximo intermedio de un run ni RSS. `failed_runs` cuenta resultados inesperados, no los estados Failed exigidos por las pruebas de cuota. La comprobación de output, tamaño final e identidad ocurre después del cronómetro start→wait y entra en throughput. El tiempo de lectura incluye el timer y scheduling de Tokio, sin una red real.
+
+El calentamiento rechazó inicialmente una expectativa incorrecta para diez nodos de 1 MiB: el motor ya libera inputs de nodos confirmados y termina con 12 582 976 bytes retenidos. Se corrigió la expectativa del experimento; no se cambió el engine. El JSON distingue los dos binarios del harness: el segundo solo agrega diagnósticos de calentamiento y estado/código al registro de muestra. La matriz completa compara comportamientos exigidos explícitamente, sin convertir ese intento descartado en un fallo del motor.
+
+La retención de 64 terminales difiere de los 1000 de los benchmarks históricos; estas cifras no acreditan una mejora/regresión frente a ellos. Una comparación futura necesitaría la misma configuración, pero no se exige realizarla para cerrar técnicamente F-5 bajo el ajuste del 2026-09-27. Los picos incluyen allocator, planes, snapshots y resultados retenidos; no son una medición de memoria tras GC. Logs completos: `/tmp/workflow-forge-f5-sequences-8Bkfgg/memory.log`. Las observaciones de saturación/liberación se registran abajo; las metas reales P-07 siguen abiertas.
+
+### Ampliación durable y capacidad de una instancia viva — evidencia conservada
+
+El [informe SQLite](measurements/f5_sqlite_sequences.json) conserva tres de las doce combinaciones previstas: un nodo de 1 MiB, concurrencia 1/8/32, 100 calentamientos y 1000 muestras por combinación. **3300 runs correctos**, sin resultados inesperados. p95 start→wait: 230.702/992.566/3907.690 ms; pico RSS: 68.750/119.375/186.578 MiB. Cada base nueva declara 2 GiB de cuota, mantiene WAL/FULL/fullfsync y retiene hasta 64 terminales. Los tamaños finales de las bases son 206012416/215482368/218632192 bytes, sin sidecars WAL/SHM al salir; no representan el pico de disco. Las nueve combinaciones de cadenas de 10/100 nodos y lecturas simuladas quedaron diferidas por el ajuste del 2026-09-27; no tienen resultados acreditados.
+
+El [harness de capacidad](../crates/forge/examples/v2_capacity.rs) implementa el protocolo de ACCEPTANCE mediante una operación pública y consultas al store. Formato, Clippy del ejemplo con SQLite y build release pasaron con Rust 1.98.1 antes del último ajuste del consumidor descrito abajo. No modifica el engine. El [informe de capacidad](measurements/f5_capacity.json) conserva las observaciones terminadas y distingue las combinaciones diferidas, sin exigir reanudar la campaña.
+
+Las tres saturaciones en memoria, con 1/8/32 plazas activas y 2/16/64 pendientes, verifican 1002/6984/27456 ejecuciones medidas y 2004/13968/54912 rechazos `admission.full`. Cada combinación suma además 100 calentamientos correctos y al menos 30 segundos con la cola llena. Todas las aceptaciones tienen resultado e invocación única; no se excede la concurrencia. La espera de 100 ms por ciclo forma parte del recorrido completo y throughput. Estas cifras verifican límites y no son capacidad máxima de producción. No se atribuye liberación a los picos de estas saturaciones; la serie correspondiente se registra a continuación.
+
+La saturación SQLite con una plaza activa y dos pendientes completó **1002 ejecuciones medidas y 100 calentamientos**, 2004 rechazos `admission.full`, 334 ciclos y 34.806 segundos con la cola llena, sin resultados incorrectos. El p95 del recorrido completo fue 223559.834 µs y el pico RSS 16400384 bytes. También incluye la espera artificial del harness; no acredita capacidad máxima de producción. Las saturaciones SQLite con concurrencia 8/32 quedaron diferidas.
+
+La expiración en memoria con 32 runs concurrentes y 1 MiB pasa los 1100 IDs de cada una de dos observaciones iniciales: `not_found`, store sin pendientes y readiness vigente. El RSS supera el umbral de investigación: +27.46%/+24.57% frente al calentamiento. Una tercera observación amplía a 50 ciclos (5100 runs verificados) y conserva todas las muestras: desde el ciclo 25 al 50, RSS pasa de 499449856 a 499695616 bytes, mientras cada ciclo expira sus 100 IDs. La ventana inicial sí crece; no se borra ni se presenta como estable.
+
+Dos observaciones adicionales de 50 ciclos incorporan contadores de malloc y luego un probe final al soltar IDs/vectores de latencia del propio harness. En la última, cada expiración reduce las asignaciones en uso en **201835936 bytes (192.5 MiB)**. Los últimos 20 ciclos tienen RSS entre 464830464 y 466108416 bytes, variación de **0.275%**. Soltar la metadata de medición libera otros 636480 bytes; quedan 1967056 bytes de heap en uso, frente a 1745120 tras calentamiento (+12.72%). Permanecen vivos el runtime, plan, input reusable e informe compacto. La memoria reservada por malloc queda en 486539264 bytes y RSS en 466206720 bytes; ambos son distintos de los bytes aún asignados.
+
+La investigación identifica liberación de payloads, estabilización local de RSS y retención de reserva del allocator, con la metadata del instrumento contabilizada por separado. No se cambió el engine ni se forzó liberación del allocator. El campo nativo `max_size_in_use` devuelve cero en este host y no se usa como pico; el pico RSS procede de `/usr/bin/time`. Las cinco observaciones de liberación y tres saturaciones en memoria suman **53242 runs verificados**; son cuatro combinaciones de memoria, con repeticiones diagnósticas. Al agregar la saturación SQLite, el informe conserva nueve observaciones sobre cinco de las ocho combinaciones previstas: **54344 runs verificados**, incluidos 53444 medidos, y 72888 rechazos de admisión. Las otras tres combinaciones SQLite —saturación 8/32 y liberación 32— quedaron diferidas. La conclusión se limita a las ventanas/cargas medidas y las metas P-07 siguen pendientes. El informe conserva comandos, configuraciones, series completas, revisiones del harness y huellas de código/binario.
+
+El intento de liberación SQLite con concurrencia 32 terminó durante el calentamiento en 3.23 segundos con `not_found`, sin producir muestras. El consumidor del harness esperaba a que acabaran todos los `start` antes de observar resultados, mientras su TTL era de 2000 ms; resultados tempranos podían expirar antes de consultarse. Se corrigió el consumidor para encadenar `start → wait → validate` por tarea. La campaña no se repitió: la verificación del cambio se limita a una regresión focalizada de ocho runs SQLite con TTL de dos segundos, que pasó en 2.42 segundos con timeout de diez segundos. La prueba no fuerza un desfase entre aceptaciones ni reproduce estadísticamente la campaña. El intento inicial no cuenta entre las nueve observaciones completadas ni acredita liberación durable.
+
+Clippy workspace/all-targets con all-features y `--locked -D warnings` pasa después de incorporar los probes; el ejemplo release compila con Rust 1.98.1. La dependencia libc ya resuelta se declara solo para desarrollo en macOS. No se agregaron dependencias normales al motor ni se sustituyó el allocator. La revisión de enlaces/JSON del incremento conserva 15 documentos válidos; F-5 queda cerrada bajo el alcance técnico acordado.
+
+### Verificación esencial final — 2026-09-27
+
+Con Rust 1.98.1 instalado, `cargo test --workspace --all-features --locked` termina con **151 pruebas exitosas, cero fallidas y cero ignoradas**, incluidos doctests. La regresión focalizada del ejemplo `v2_capacity` añade **una prueba exitosa**: 152 verificaciones en total, sin contarla dos veces. La suite del workspace no ejecuta ese test del ejemplo; CI incorpora un paso específico para conservar su cobertura. La evidencia es local, no una ejecución remota de GitHub Actions.
+
+`cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`, `cargo fmt --all --check` y `git diff --check` pasan. Logs: `/tmp/workflow-forge-f5-essential-workspace.log`, `/tmp/workflow-forge-f5-essential-sqlite.log` y `/tmp/workflow-forge-f5-essential-clippy.log`. La verificación técnica acordada queda satisfecha; no quedan pruebas ni mediciones por completar bajo este alcance salvo que un cambio o fallo nuevo lo justifique. P-01/P-07 corresponden a la etapa posterior de integraciones reales y despliegue; no condicionan este cierre por la aclaración del usuario del 2026-09-27.
+
+La revisión documental final valida 15 documentos, 265 enlaces locales/anchors, cinco bloques JSON y seis fixtures/configuraciones/schema, sin errores. Los dos informes de campañas parciales son JSON parseable y sus contadores están comprobados. Conservan las combinaciones realizadas y las diferidas; no se renderizó Mermaid.
 
 ## Evidencia del prototipo
 
-Revisión estática inicial del 2026-09-26; no equivale a una suite ejecutada ni a auditoría exhaustiva.
+Revisión estática inicial del 2026-09-26; no equivale a una suite ejecutada ni a auditoría exhaustiva. Las rutas de esta tabla son históricas, recuperables con `git show 6806fa0:RUTA`; el retiro F-5 no convierte esos archivos en documentación vigente.
 
 | Evidencia local | Lectura y brecha |
 |---|---|
-| [Task y manifiesto](../crates/core/src/task/mod.rs) | Abstracción de operación existente; schemas opcionales y sin todas las revisiones del diseño nuevo. |
-| [Registro](../crates/core/src/task/registry.rs) y [schemas compilados](../crates/core/src/runtime/schemas.rs) | Registro sustituible por ID y validadores construidos antes del run; fijar referencias evita divergencia. Es inferencia estática, no reproducción de fallo. |
-| [Executor](../crates/core/src/runtime/executor.rs) | Coordinación/contexto en memoria; requiere separación para recuperación del nuevo diseño. |
-| [Política](../crates/core/src/runtime/policy.rs) | Validación, timeout y retry existentes; falta formalizar incertidumbre y seguridad de repetición del nuevo diseño. |
-| [Gateways](../crates/core/src/runtime/handlers/gateway.rs) | Joins por entradas del grafo; revisar activación de ramas con el contrato propuesto. |
-| [Observación](../crates/core/src/observe/mod.rs) | Eventos y observers; no sustituyen commit transaccional. |
-| [Idempotencia](../crates/core/src/idempotency.rs) | Helper basado en contenido; el nuevo diseño distingue invocación y clave de negocio. |
-| [I/O](../crates/core/src/io/mod.rs), [extensiones](../crates/extensions) y [fachada](../crates/forge/src/lib.rs) | Recursos/conectores y experiencia integrada que sirven como base de refactorización. |
-| [Pruebas del core](../crates/core/tests) | Casos existentes para baseline y caracterización; no se reporta conteo ni éxito sin ejecutarlos. |
+| `crates/core/src/task/mod.rs` | Abstracción de operación existente; schemas opcionales y sin todas las revisiones del diseño nuevo. |
+| `crates/core/src/task/registry.rs` y `crates/core/src/runtime/schemas.rs` | Registro sustituible por ID y validadores construidos antes del run; fijar referencias evita divergencia. Es inferencia estática, no reproducción de fallo. |
+| `crates/core/src/runtime/executor.rs` | Coordinación/contexto en memoria; requiere separación para recuperación del nuevo diseño. |
+| `crates/core/src/runtime/policy.rs` | Validación, timeout y retry existentes; falta formalizar incertidumbre y seguridad de repetición del nuevo diseño. |
+| `crates/core/src/runtime/handlers/gateway.rs` | Joins por entradas del grafo; revisar activación de ramas con el contrato propuesto. |
+| `crates/core/src/observe/mod.rs` | Eventos y observers; no sustituyen commit transaccional. |
+| `crates/core/src/idempotency.rs` | Helper basado en contenido; el nuevo diseño distingue invocación y clave de negocio. |
+| `crates/core/src/io/mod.rs`, `crates/extensions` y `crates/forge/src/lib.rs` históricos | Recursos/conectores y experiencia integrada que sirven como base de refactorización. |
+| `crates/core/tests` | Casos existentes para baseline y caracterización; no se reporta conteo ni éxito sin ejecutarlos. |
 
 ## Estado por fase
 
@@ -286,7 +402,7 @@ Revisión estática inicial del 2026-09-26; no equivale a una suite ejecutada ni
 | F-2 | Completada en memoria: C-01B/C-02, V-06/V-07/V-18, controles/efectos y comparación de rendimiento. 282 pruebas pasan; fmt y ambas variantes de Clippy limpios. |
 | F-3 | Completada: paquete fijado, estado/artefactos SQLite, migración 3, señales/timers y caídas C-01B/C-02/C-04/V-15/V-18 probadas. 331 pruebas pasan; fmt y ambas variantes de Clippy limpios. Mediciones en memoria/SQLite y regresiones documentadas. |
 | F-4 | Completada: paridad Rust/HTTP, servicio con bootstrap/supervisión, módulos HTTP/JSON y archivos/CSV, observación y permisos. 357 pruebas pasan; fmt y ambas variantes de Clippy limpios. |
-| F-5 | Adopción, consumidor de autoría, contraste real P-01 y metas/mediciones P-07 pendientes. |
+| F-5 | Completada: autoría/extensión, guías de adopción, CLI migrada y prototipo retirado; verificación técnica final de 151 pruebas más una regresión focalizada, Clippy y formato limpios. Se conservan 24 mediciones Rust/HTTP, 30 combinaciones de secuencias/lectura en memoria, tres SQLite y cinco combinaciones de capacidad. Campañas restantes opcionales e integraciones reales posteriores al cierre del engine, según las instrucciones del usuario del 2026-09-27. |
 
 ## Cobertura de los puntos revisados
 
@@ -297,7 +413,7 @@ Revisión estática inicial del 2026-09-26; no equivale a una suite ejecutada ni
 | Contratos concretos | CONTRACTS §3–6 y E-01: documento, revisiones, mappings, schema dialect, operación y errores. |
 | Confianza y recursos tempranos | CONTRACTS §7, P-08 y V-19 desde F-1; no se promete sandbox de plugins compilados. |
 | Ejecuciones inciertas | TDD-06, C-04 y V-18: evidencia, permisos, transiciones, concurrencia, auditoría y cierre con incertidumbre. |
-| Evidencia y mediciones tempranas | Baseline de abajo y ACCEPTANCE §5; mediciones iniciales ejecutadas arriba; matriz completa aún pendiente. |
+| Evidencia y mediciones tempranas | Baseline de abajo y ACCEPTANCE §5; conservar las mediciones realizadas y sus límites. Las combinaciones omitidas son opcionales bajo el ajuste del 2026-09-27 y no se acreditan como realizadas. |
 
 La lectura por rol está en README; PATTERNS §8 orienta la elección por necesidad y ARCHITECTURE §1.1 explica motivos/alternativas. Se conserva un registro único de decisiones P-* y se enlazan los detalles sin duplicar sus estados.
 
@@ -322,8 +438,8 @@ Las diferencias de fmt/Clippy de esta tabla se corrigieron en F-0; no describen 
 
 ## Siguiente punto de reanudación
 
-Continuar F-5 con recetas de adopción, consumidor de autoría, ciclo de vida de extensiones y mediciones comparables. Contrastar las referencias con los casos y objetivos reales de P-01/P-07 antes de cerrar la fase. La implementación y los checkpoints por fase ya están autorizados.
+F-0 a F-5 están completas: el engine y sus consumidores tienen validación técnica esencial con Rust 1.98.1. El usuario realizará las integraciones reales cuando considere listo el motor; entonces se concretarán P-01/P-07 para esos sistemas y su despliegue. No queda trabajo requerido para cerrar la refactorización actual. No repetir pruebas sin un cambio o fallo nuevo ni reanudar las nueve secuencias/lecturas SQLite, las tres combinaciones de capacidad diferidas o comparaciones históricas sin una necesidad concreta. Las mediciones realizadas y sus límites permanecen como evidencia.
 
-Baseline reproducido sobre HEAD `392303b`, con los cambios documentales del worktree, macOS y `rustc 1.98.1` / `cargo 1.98.1`. La ejecución inicial aislada no podía preparar dependencias; las pruebas se completaron después con acceso autorizado. La CI existente usa all-features y un job SFTP separado. F-0 corrigió las features del target de Criterion, su soporte async y el formato preexistente, antes de medir el motor nuevo.
+Baseline reproducido sobre HEAD `392303b`, con los cambios documentales del worktree, macOS y `rustc 1.98.1` / `cargo 1.98.1`. La ejecución inicial aislada no podía preparar dependencias; las pruebas se completaron después con acceso autorizado. La CI del baseline usaba all-features y un job SFTP separado; este último se retiró en F-5. F-0 corrigió las features del target de Criterion, su soporte async y el formato preexistente, antes de medir el motor nuevo.
 
 Al comenzar implementación, verificar las instrucciones locales y el estado de Git. La eliminación del diseño en raíz y de tres HTML bajo `docs/` ya estaba presente antes de la refactorización documental; no se restauraron esos archivos.

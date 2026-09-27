@@ -76,6 +76,14 @@ Propuesta: outputs confirmados inmutables por invocación y vistas de lectura po
 
 El formato `forge.workflow/2` usa bindings literal/select/object/array y JSON Pointer según CONTRACTS. Distingue ausente de `null`, no interpreta strings como expresiones y conserva cardinalidad: seleccionar un array no itera. Conversiones/cálculos complejos son operaciones explícitas; el validador no modifica datos para hacerlos pasar. Se sustituye el DSL implícito del prototipo sin promesa de migración automática.
 
+### Consumidor de autoría F-5
+
+V-11 se concreta con un consumidor de ejemplo separado del engine. Recibe los descriptores del catálogo público, selecciona una revisión exacta y construye una definición con un nodo, sus schemas y mappings explícitos. No adivina valores requeridos de configuración ni decide compatibilidad a partir de etiquetas del catálogo: la configuración la aporta el autor y la preparación del host sigue siendo obligatoria.
+
+Mover un nodo modifica únicamente `presentation`; exportar e importar conserva las claves de presentación desconocidas. Una revisión semántica no cambia al moverlo. Cambiar configuración, bindings u operaciones exige una revisión nueva si el host ya preparó la anterior. Los diagnósticos se asocian al nodo, campo y JSON Pointer publicados en `Location`; el consumidor no analiza mensajes libres para localizar errores.
+
+La prueba usa schemas y catálogo públicos, serializa el documento, prepara y ejecuta mediante la fachada y verifica rechazo de una configuración inválida antes de cualquier operación. Rechaza selección ambigua/ausente y coordenadas no finitas. Es una referencia de integración para un editor posterior; no define widgets ni implementa otro compilador.
+
 ## 5. TDD-04 — validación y compilación
 
 El compilador acumula diagnósticos independientes y evita errores derivados cuando una etapa previa invalida sus premisas.
@@ -240,7 +248,7 @@ Un callback de un trabajo externo es una señal, no un hilo bloqueado. Una aprob
 
 `ArtifactStore` ofrece referencias con identidad, metadatos y operaciones de lectura/escritura adecuadas para streaming. En modo durable, publicar una referencia exige que sus bytes estén disponibles para recuperación. La finalización de un future no dispara limpieza de artefactos aún retenidos por un run, espera o resultado consultable.
 
-Separar artefacto en preparación, publicado/referenciado y elegible para limpieza. Confirmar referencia y propiedad mediante protocolo recuperable cuando bytes y estado vivan en sistemas distintos. Retención, cuotas y disponibilidad tras finalizar se deciden en P-07. La expiración debe ser observable y no confundirse con un resultado vacío.
+Separar artefacto en preparación, publicado/referenciado y elegible para limpieza. Confirmar referencia y propiedad mediante protocolo recuperable cuando bytes y estado vivan en sistemas distintos. CONTRACTS fija retención, cuotas y disponibilidad del perfil actual; P-07 ajustará las necesidades del despliegue real en la etapa posterior al engine. La expiración debe ser observable y no confundirse con un resultado vacío.
 
 [CONTRACTS §10.3](CONTRACTS.md#artefactos-durables) concreta el proveedor coordinado: `StartOptions.artifacts` declara entradas que se fijan con la aceptación; `ArtifactAccess` delimita propietario/run en cada acceso; el mismo actor SQLite conserva bytes y sus propietarios. Las operaciones no obtienen acceso al store de ejecución por esa vía. Las garantías se verifican mediante migración, retención compartida, propietario obsoleto y caídas reales de C-02.
 
@@ -265,6 +273,8 @@ La solicitud puede incluir clave de recepción. Reutilizarla con contenido difer
 
 [HTTP](HTTP.md) concreta P-05 para F-4: autenticación, ámbitos, rutas, DTOs, paginación, límites, errores y lifecycle sobre la fachada pública. [INTEGRATIONS](INTEGRATIONS.md) fija perfiles y revisiones de los conectores HTTP/JSON y archivos/CSV. No se inventa multitenencia por incluir un campo genérico de metadata.
 
+En F-5 la [CLI](CLI.md) pasa a consumir ese contrato HTTP. No construye otro runtime ni interpreta otra spec. El ejecutable del servicio conserva la composición y los runs aceptados; la librería sigue siendo la superficie embebida. Catálogo, preparación, acuses, señales, reconciliación y artefactos mantienen los DTOs del mismo motor, también al cerrar el cliente.
+
 ## 12. TDD-11 — observación y errores
 
 Errores diferenciados por validación, resolución/capacidad, ejecución de operación, contrato de input/output, timeout/cancelación, persistencia y efecto incierto. Los códigos públicos son estables; el detalle interno se sanea. Clasificación de retry y fase de efecto se conservan como información estructurada cuando se conocen.
@@ -283,6 +293,10 @@ Distinguir admisión de recepción: si se confirma aceptación durable, el run q
 
 Preparar schemas, expresiones e índices una vez por revisión; reutilizar planes inmutables; medir clonación de JSON y retención de outputs; usar referencias para binarios. Los detalles del scheduler y asignación se eligen con profiling, sin convertir cada extensión en un coste dinámico innecesario.
 
+**Ajuste autorizado el 2026-09-27:** V-14 conserva pruebas funcionales esenciales y casos borde de admisión, cuotas, concurrencia y expiración, incluida la conservación de runs aceptados. Las matrices de rendimiento restantes, sus repeticiones y la comparación con fases anteriores son opcionales ante una necesidad de capacidad real; no condicionan el cierre técnico de F-5. Conservar resultados y límites históricos sin atribuir éxito a combinaciones omitidas. Los casos y objetivos reales de P-01/P-07 siguen pendientes.
+
+Por decisión posterior del usuario del mismo 2026-09-27, P-01/P-07 se atenderán después de comprobar el engine. El cierre de F-5 y su commit se apoyan en casos de referencia, conformidad, autoría/extensión, paridad, recuperación y pruebas esenciales ya verificadas en PROJECT. Las integraciones y metas reales no son condiciones de ese cierre ni se presentan como comprobadas.
+
 Durante cierre del host: detener nuevas admisiones, aplicar política de drenado y conservar transiciones/esperas pendientes en modo durable. El plazo de apagado no acredita que un destino haya cancelado su trabajo. Al reiniciar, recuperar antes de ofrecer garantías de estado consistente.
 
 ### Construcción, inicio y propiedad del motor
@@ -299,7 +313,7 @@ Estados propuestos de lifecycle del motor, distintos de estados de run: `Built �
 
 ## 14. Matriz de trazabilidad y verificación
 
-Son verificaciones por implementar, no resultados ejecutados. Cada caso debe observar comportamiento, incluyendo fallos inyectados en fronteras relevantes.
+Son criterios de aceptación; PROJECT registra los resultados ejecutados. Cada caso debe observar comportamiento, incluyendo fallos inyectados en fronteras relevantes. El ajuste del 2026-09-27 conserva la suite funcional de contratos/errores, recuperación/efectos, cuotas/concurrencia y paridad. Una pasada final y las regresiones focalizadas justificadas por cambios o fallos cubren la verificación restante; no se exige completar campañas de rendimiento.
 
 | Requisito | Contratos | Verificación de aceptación |
 |---|---|---|
@@ -316,7 +330,7 @@ Son verificaciones por implementar, no resultados ejecutados. Cada caso debe obs
 | PRD-VIS-001 | TDD-02, TDD-03, TDD-04 | V-11: consumidor de catálogo construye flujo y ubica errores sin acceso al engine interno. |
 | PRD-RES-001 | TDD-09 | V-12: exportación sin secretos, streaming y recuperación de referencia después de reinicio. |
 | PRD-OBS-001 | TDD-11 | V-13: estado correcto con observador lento/fallido y diagnósticos saneados. |
-| PRD-OPS-001 | TDD-12 | V-14: saturación sin pérdida de aceptación y medición reproducible de cargas acordadas. V-16: construcción sin admisión, boot con recuperación, handles compartidos, readiness, fallos parciales y apagado supervisado. |
+| PRD-OPS-001 | TDD-12 | V-14: cuotas, concurrencia, expiración y saturación sin pérdida de aceptación mediante pruebas funcionales y casos borde; medición reproducible opcional ante una necesidad de capacidad real. V-16: construcción sin admisión, boot con recuperación, handles compartidos, readiness, fallos parciales y apagado supervisado. |
 | PRD-EVOL-001 | TDD-01, TDD-07 | V-15: cambio de catálogo no altera run; revisión ausente bloquea recuperación explícitamente. |
 
 Casos mínimos adicionales de V-19, desde F-1:
@@ -334,6 +348,6 @@ V-18 añade en F-2/F-3 el caso donde una consulta remota devuelve «no encontrad
 
 ## 15. Detalles que deben cerrarse antes de codificar cada contrato
 
-PROJECT distingue diseño de capacidad verificada. CONTRACTS concreta F-1/F-2 y el paquete, codec, DDL, artefactos y esperas F-3, con tipos, cuotas y pruebas. HTTP e INTEGRATIONS concretan F-4; sus pruebas se registran en PROJECT. SQLite tiene evidencia de recuperación, carreras, reconciliación y mediciones locales. Las metas de producción permanecen en P-07; un contrato escrito no acredita por sí mismo su implementación.
+PROJECT distingue diseño de capacidad verificada. CONTRACTS concreta F-1/F-2 y el paquete, codec, DDL, artefactos y esperas F-3, con tipos, cuotas y pruebas. HTTP e INTEGRATIONS concretan F-4; sus pruebas se registran en PROJECT. SQLite tiene evidencia de recuperación, carreras, reconciliación y mediciones locales. Las metas de producción permanecen en P-07 para la etapa posterior al cierre del engine; un contrato escrito no acredita por sí mismo su implementación.
 
 La [hoja de ruta](ROADMAP.md) exige cerrar los detalles de la fase antes de programarlos. Decidir persistencia no equivale a elegir automáticamente event sourcing, Redis, SQL o workers remotos. Las [referencias de arquitectura](ARCHITECTURE.md#9-referencias-de-diseño) orientan este diseño sin imponer infraestructura.

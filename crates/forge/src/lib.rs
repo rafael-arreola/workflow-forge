@@ -1,87 +1,40 @@
-//! workflow-forge: engine for declarative workflows defined with
-//! JSON Schema + JSONPath.
+//! Declarative integration engine with JSON Schema contracts and explicit bindings.
 //!
-//! This is the project facade: re-exports the core and registers the
-//! official extensions according to the enabled feature flags
-//! (`util`, `data`, `http`; all active by default).
+//! Compose once when the host starts, retain the runtime, and share its application
+//! handle. `standard()` selects memory providers; the host can replace them before
+//! building. Features expose optional modules without silently configuring them.
 //!
 //! ```no_run
 //! use workflow_forge::prelude::*;
 //!
 //! # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
-//! let workflow: WorkflowDefinition = serde_json::from_str(r#"{
-//!     "name": "demo", "version": "0.1.0",
-//!     "nodes": [
-//!         { "id": "start", "kind": "start" },
-//!         { "id": "wait", "kind": "task", "task": "util.delay",
-//!           "input": { "ms": 100, "value": "$.trigger" } },
-//!         { "id": "end", "kind": "end" }
-//!     ],
-//!     "edges": [
-//!         { "from": "start", "to": "wait" },
-//!         { "from": "wait", "to": "end" }
-//!     ]
-//! }"#)?;
-//!
-//! let executor = WorkflowExecutor::new(workflow, workflow_forge::default_registry())
-//!     .map_err(|errors| format!("{errors:?}"))?;
-//! let result = executor.run(WorkflowData(serde_json::json!({ "hello": 1 }))).await?;
+//! let definition: WorkflowDefinition = serde_json::from_value(serde_json::json!({
+//!     "format": WORKFLOW_FORMAT, "schema_dialect": SCHEMA_DIALECT,
+//!     "id": "echo", "revision": "r1", "input_schema": true, "output_schema": true,
+//!     "entry": "echo", "nodes": [{"id": "echo", "kind": "operation",
+//!         "operation": {"id": "forge.data.identity", "contract": "1", "implementation": "r1"},
+//!         "config": {}, "input": {"select": {"source": "input", "pointer": ""}}
+//!     }], "edges": [],
+//!     "output": {"select": {"source": "node", "node": "echo", "pointer": ""}}
+//! }))?;
+//! let runtime = EngineRuntime::boot(WorkflowBuilder::standard().build()?, BootOptions::default()).await?;
+//! let app = runtime.application();
+//! let access = AccessContext::trusted("default"); // The host supplies authorization.
+//! let completed = async {
+//!     let plan = app.prepare(access.clone(), definition).await?;
+//!     let receipt = app.start(access.clone(), StartRunRequest::new(plan, serde_json::json!({"hello": 1}))).await?;
+//!     app.wait(access, receipt.run_id).await
+//! }.await;
+//! runtime.shutdown(ShutdownOptions::default()).await?;
+//! assert_eq!(completed?.output, Some(serde_json::json!({"hello": 1})));
 //! # Ok(())
 //! # }
 //! ```
 
-use std::sync::Arc;
-
 pub mod v2;
-pub use v2::WorkflowBuilder;
+pub use v2::*;
 
-pub use workflow_forge_core as core;
-pub use workflow_forge_core::idempotency;
-
-use workflow_forge_core::task::TaskRegistry;
-
-/// Everyday-use types, ready to import with a single `use`
+/// Public contracts, engine handles and standard composition for host applications.
 pub mod prelude {
-    pub use workflow_forge_core::error::WorkflowError;
-    pub use workflow_forge_core::io::secret::{EnvSecrets, SecretProvider};
-    pub use workflow_forge_core::observe::{
-        EventKind, ExecutionEvent, ExecutionObserver, ExecutionReport, InMemoryHistory,
-        JsonlObserver, TracingObserver,
-    };
-    pub use workflow_forge_core::runtime::{
-        CancellationToken, RunOptions, WorkflowContext, WorkflowExecutor, WorkflowRegistry,
-    };
-    pub use workflow_forge_core::spec::{TaskProfile, WorkflowDefinition};
-    pub use workflow_forge_core::task::{
-        FnTask, Task, TaskCtx, TaskId, TaskManifest, TaskRegistry, TypedTask,
-    };
-    pub use workflow_forge_core::task::{WorkflowData, WorkflowResult};
-}
-
-/// Mock tasks + dry-run helpers (enabled by the `testing` feature).
-#[cfg(feature = "testing")]
-pub use workflow_forge_core::testing;
-
-/// Registers all feature-enabled extensions in the registry
-pub fn register_extensions(registry: &TaskRegistry) {
-    let _ = registry; // A consumer can select only the v2 modules.
-    #[cfg(feature = "util")]
-    workflow_forge_ext_util::register(registry);
-    #[cfg(feature = "data")]
-    workflow_forge_ext_data::register(registry);
-    #[cfg(feature = "http")]
-    workflow_forge_ext_http::register(registry);
-    #[cfg(feature = "tabular")]
-    workflow_forge_ext_tabular::register(registry);
-    #[cfg(feature = "sftp")]
-    workflow_forge_ext_sftp::register(registry);
-    #[cfg(feature = "compress")]
-    workflow_forge_ext_compress::register(registry);
-}
-
-/// A new registry with all enabled extensions already registered
-pub fn default_registry() -> Arc<TaskRegistry> {
-    let registry = Arc::new(TaskRegistry::new());
-    register_extensions(&registry);
-    registry
+    pub use crate::v2::*;
 }

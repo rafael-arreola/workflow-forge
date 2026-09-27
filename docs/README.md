@@ -2,7 +2,7 @@
 
 La documentación define la refactorización de Workflow Forge como motor agnóstico de integración en Rust. La planificación sigue la separación de producto, arquitectura y diseño técnico utilizada en `memory-forge`, adaptada a este proyecto.
 
-**Estado al 2026-09-26:** implementación por fases autorizada. Las capacidades objetivo solo se consideran entregadas con evidencia en PROJECT. F-0 a F-4 cubren el motor en memoria, controles, efectos, persistencia SQLite, recuperación, esperas, servicio HTTP y módulos de integración; sus contratos, pruebas y mediciones están registrados en PROJECT. F-5 contrasta adopción y objetivos de producción.
+**Estado al 2026-09-27:** F-0 a F-5 completadas. El motor en memoria, controles, efectos, persistencia SQLite, recuperación, esperas, servicio HTTP, módulos, CLI y consumidor de autoría tienen evidencia en PROJECT. El cierre usa pruebas esenciales y casos borde; las integraciones reales y metas del despliegue quedan para una etapa posterior, cuando el usuario decida integrar sus sistemas.
 
 ## Recorrido de lectura
 
@@ -22,7 +22,9 @@ Los anexos permiten avanzar sin leer todo el diseño a la vez:
 | [CONTRACTS](CONTRACTS.md) | Al implementar o integrar el motor. | Anexo normativo de TDD: formato, mappings, tipos, errores, confianza, persistencia, esperas y límites F-1/F-2/F-3. |
 | [ACCEPTANCE](ACCEPTANCE.md) | Al comprobar generalidad y resultados. | Casos de referencia del PRD, fixtures y protocolo de mediciones; no resultados ejecutados. |
 | [HTTP](HTTP.md) | Al implementar o integrar el servicio. | Anexo normativo de TDD-10/12: autenticación, rutas/DTOs, paginación, cuotas y lifecycle F-4. |
+| [CLI](CLI.md) | Al usar el servicio desde una terminal o script. | Contrato del cliente HTTP: comandos, archivos/streams, límites y salida. |
 | [INTEGRATIONS](INTEGRATIONS.md) | Al configurar o extender conectores oficiales. | Anexo normativo de TDD-02/10: perfiles, revisiones y límites de HTTP/JSON y archivos/CSV F-4. |
+| [ADOPTION](ADOPTION.md) | Al integrar el motor o desarrollar un plugin/editor. | Recetas del producto, consumidor de autoría, versionado/retiro y migración del prototipo. |
 
 Para empezar: leer el alcance F-1 en CONTRACTS y recorrer C-01A. Para crear un plugin: las tres fronteras de CONTRACTS y la selección rápida de PATTERNS. Para implementar el runtime: TDD y secuencias de ARCHITECTURE. Para conocer avances: PROJECT.
 
@@ -51,7 +53,7 @@ Los IDs `PRD-*`, `ARC-*`, `TDD-*`, `V-*`, `F-*` y `P-*` enlazan requisitos, arqu
 
 ## Referencias complementarias vigentes
 
-El [ejemplo de host formato 2](../crates/forge/examples/v2_customer.rs), el [recorrido por lotes](../crates/forge/examples/v2_inventory.rs), el [host SQLite](../crates/forge/examples/v2_sqlite.rs), la [espera entre arranques](../crates/forge/examples/v2_signal.rs) y el [schema formato 2](../schemas/2/workflow.schema.json) corresponden al motor nuevo. Los [ejemplos del prototipo](../EXAMPLES.md) y [schemas 1.0](../schemas/1.0/workflow.schema.json) siguen siendo referencias del código existente y participan en sus pruebas; se retirarán con sus consumidores y no especifican el motor nuevo. El [changelog](../CHANGELOG.md) conserva el registro de cambios del prototipo.
+Los [recorridos ejecutables](../EXAMPLES.md), el [consumidor de autoría](../examples/authoring-client/src/lib.rs) y el [schema formato 2](../schemas/2/workflow.schema.json) corresponden al motor actual. Los schemas 1.0 se retiraron junto con su motor y consumidores; el [changelog](../CHANGELOG.md) conserva su historia, identificada como prototipo. [ADOPTION](ADOPTION.md#5-migrar-desde-el-prototipo) explica la migración incompatible.
 
 El diseño anterior, el borrador de evolución y los manuales sustituidos se eliminaron tras consolidar la planificación. Las nuevas decisiones sustituyen las históricas incompatibles según la tabla de ARCHITECTURE. No se promete migración compatible de la spec 1.0: el proyecto aún no tiene una versión pública, según lo confirmado por el usuario.
 

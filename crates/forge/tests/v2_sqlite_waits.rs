@@ -10,20 +10,13 @@ use std::{
     time::Duration,
 };
 use workflow_forge::v2::*;
+#[path = "support/directory.rs"]
+mod test_directory;
 
 struct Directory(PathBuf);
 impl Directory {
     fn new() -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "workflow-forge-waits-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir(&path).unwrap();
-        Self(path)
+        Self(test_directory::create("workflow-forge-waits"))
     }
 }
 impl Drop for Directory {

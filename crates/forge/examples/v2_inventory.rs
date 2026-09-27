@@ -99,7 +99,7 @@ async fn measure(
         if !buffer.is_empty() || verified_rows!=rows || observed.effects.len()!=rows || observed.attempts!=rows {
             return Err(ForgeError::new("measurement.failed","Rows or destination effects do not match"));
         }
-        Ok::<_,ForgeError>(json!({"sample":sample,"profile":providers.profile,"source_bytes":source_bytes,"report_bytes":report_bytes,"prepare_us":prepare_us,"execute_seconds":seconds,"rows_per_second":rows as f64/seconds,"activations":run.invocations.len(),"transitions":run.revision,"verified_rows":verified_rows,"destination_effects":observed.effects.len()}))
+        Ok::<_,ForgeError>(json!({"sample":sample,"profile":providers.profile,"provider_options":providers.provider_options,"source_bytes":source_bytes,"report_bytes":report_bytes,"prepare_us":prepare_us,"execute_seconds":seconds,"rows_per_second":rows as f64/seconds,"activations":run.invocations.len(),"transitions":run.revision,"verified_rows":verified_rows,"destination_effects":observed.effects.len()}))
     }.await;
     let shutdown = runtime.shutdown(ShutdownOptions::default()).await;
     let result = result?;

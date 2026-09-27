@@ -9,21 +9,13 @@ use workflow_forge::v2::*;
 
 #[path = "support/sqlite_resolution.rs"]
 mod resolution;
+#[path = "support/directory.rs"]
+mod test_directory;
 
 struct Directory(PathBuf);
 impl Directory {
     fn new() -> Self {
-        let name = format!(
-            "workflow-forge-process-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        );
-        let path = std::env::temp_dir().join(name);
-        std::fs::create_dir(&path).unwrap();
-        Self(path)
+        Self(test_directory::create("workflow-forge-process"))
     }
     fn db(&self) -> PathBuf {
         self.0.join("state.sqlite")

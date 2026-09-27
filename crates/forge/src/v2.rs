@@ -1,5 +1,5 @@
-//! The new public entry point. Legacy spec-1 exports remain during migration and
-//! will be retired when the service and official modules have moved to spec 2.
+//! Format-2 composition, also re-exported at the crate root and in `prelude`.
+//! This namespace identifies the same engine, not a separate runtime.
 use std::sync::Arc;
 pub use workflow_forge_engine::*;
 pub use workflow_forge_modules as modules;

@@ -1,6 +1,6 @@
 [package]
 name = "workflow-forge-cli"
-description = "CLI runtime for workflow-forge: run, validate and inspect declarative JSON workflows"
+description = "HTTP client for Workflow Forge: author, start and inspect declarative workflows"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,7 +15,16 @@ name = "forge"
 path = "src/main.rs"
 
 [dependencies]
-workflow-forge = { workspace = true, features = ["full"] }
+workflow-forge-protocol = { workspace = true }
 clap = { workspace = true }
+futures = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
+tokio-util = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+workflow-forge = { path = "../forge", default-features = false, features = ["sqlite", "integrations"] }
+workflow-forge-service = { path = "../service" }

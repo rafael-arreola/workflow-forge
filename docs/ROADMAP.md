@@ -1,10 +1,14 @@
 # Workflow Forge — hoja de ruta de refactorización
 
-Fecha: 2026-09-26. Secuencia de implementación autorizada, sin estimaciones de esfuerzo. El estado y evidencia de cada fase están en [PROJECT](PROJECT.md); cada fase completa se conserva en un commit. [PRD](PRD.md), [ARCHITECTURE](ARCHITECTURE.md), [TDD](TDD.md).
+Actualizado: 2026-09-27. Secuencia de implementación autorizada, sin estimaciones de esfuerzo. El estado y evidencia de cada fase están en [PROJECT](PROJECT.md); cada fase completa se conserva en un commit. [PRD](PRD.md), [ARCHITECTURE](ARCHITECTURE.md), [TDD](TDD.md).
 
 ## Reglas de ejecución
 
 Cada fase usa las decisiones adoptadas del PRD y concreta los detalles aún abiertos de su alcance antes de programar. Registrar resultados de checks en PROJECT. No sustituir aceptación por cantidad de código ni por compilar traits vacíos. El código existente aporta comportamiento y pruebas; está permitido cambiarlo de forma incompatible, documentando los cambios deliberados. CONTRACTS define F-1 y ACCEPTANCE sus casos/cargas; no es necesario resolver HTTP o SQL para implementar una operación pura.
+
+**Ajuste autorizado el 2026-09-27:** concentrar la verificación restante en pruebas esenciales y casos borde. Se conservan contratos/errores, recuperación y efectos, cuotas/concurrencia, paridad de superficies y checks apropiados. Las matrices de rendimiento restantes, sus repeticiones y la comparación histórica pasan a ser opcionales ante una necesidad de capacidad real; no son criterios de cierre técnico de F-5. Conservar las mediciones realizadas y sus límites, identificando las combinaciones omitidas sin atribuirles resultados. P-01/P-07 siguen pendientes: este ajuste no aporta los casos reales ni valida capacidad de producción.
+
+**Decisión posterior del usuario, 2026-09-27:** las integraciones reales se harán después de comprobar el funcionamiento del engine. El cierre de F-5 y su commit dependen de los casos de referencia, conformidad, autoría/extensión, paridad, recuperación y pruebas esenciales verificadas. P-01/P-07 continúan en una etapa posterior y no bloquean ese cierre; no se atribuye validación de producción.
 
 ## Fases y criterios de salida
 
@@ -15,7 +19,7 @@ Cada fase usa las decisiones adoptadas del PRD y concreta los detalles aún abie
 | F-2 | Coordinación completa y efectos. Depende de F-1. | Concretar instrucciones de P-09 y cuotas avanzadas de P-07; TDD-05/06. | C-01B/C-02 en memoria; V-06/V-07/V-18; cancelación, respuestas tardías y resolución explícitas. |
 | F-3 | Persistencia, recuperación y esperas. Depende de F-2. | Codec/DDL/migraciones de SQLite y retención P-04/P-07; TDD-07/08/09. | C-04 y caídas de C-01B/C-02; V-08/V-09/V-12/V-15/V-18 durables; backend conforme. |
 | F-4 | Servicio y módulos oficiales de integración. Depende de F-3 para perfil durable. | Rutas/DTOs/autenticación de P-05 bajo confianza ya definida P-08; TDD-10/11/12. | V-10/V-13/V-16; mismos C-01/C-02 por librería/HTTP; defaults publicados. |
-| F-5 | Adopción, autoría y objetivos de rendimiento. Depende de F-4. | Contrastar dos casos reales P-01 y cerrar metas del despliegue P-07. | V-11/V-14, dos casos reales y extensión externa; manuales del producto entregado. |
+| F-5 | Adopción, autoría y validación esencial. Depende de F-4. | Consolidar casos de referencia, recetas públicas y límites comprobados del engine. | Casos de referencia, conformidad, V-11/V-14 funcional, extensión externa, paridad y recuperación; manuales y checks esenciales. P-01/P-07 pasan a la etapa posterior. |
 
 P-02 separa la UI completa en otra entrega. F-1 define sus contratos y F-5 prueba un consumidor de autoría, sin obligar a construir un editor. Las mediciones y controles de acceso comienzan en F-1; no se difieren hasta F-5/F-4 respectivamente.
 
@@ -70,7 +74,7 @@ Entrega revisable: secuencias de recuperación y espera de ARCHITECTURE reproduc
 
 ### F-4 — servicio y composición operable
 
-- Adaptar HTTP/JSON, archivos/CSV y proveedores de C-01/C-02 al protocolo probado por una extensión externa; agregar el destino real cuando P-01 lo identifique.
+- Adaptar HTTP/JSON, archivos/CSV y proveedores de referencia C-01/C-02 al protocolo probado por una extensión externa; la integración con el destino real se realizará en la etapa posterior P-01.
 - Implementar handler delgado E-04 y traducciones de entrada/salida; fijar acceso y deduplicación de recepción.
 - Implementar la raíz de composición y bootstrap E-09/E-10: cargar configuración, registrar módulos, cargar definiciones, iniciar una instancia y compartir el handle con los handlers.
 - Verificar V-16 en el servicio: readiness después de boot/enlace, fallo de transporte con cierre del engine, supervisión y drenado; desacoplar vida del run de la conexión cliente.
@@ -79,15 +83,15 @@ Entrega revisable: secuencias de recuperación y espera de ARCHITECTURE reproduc
 
 Entrega revisable: la misma integración invocada por librería y servicio, con errores equivalentes y garantías de aceptación publicadas.
 
-### F-5 — adopción y validación de eficiencia
+### F-5 — adopción y validación esencial
 
-- Contrastar las dos referencias con integraciones reales y demostrar una nueva extensión usando recetas públicas, sin cambios de negocio en el engine.
+- Verificar los casos de referencia y demostrar una nueva extensión usando recetas públicas, sin cambios de negocio en el engine.
 - Documentar versión/retiro de extensiones y comprobar recuperación con revisiones ausentes o conservadas, según V-15/V-17.
 - Usar un consumidor de catálogo/validación para verificar autoría y round-trip; la UI completa es otra entrega según P-02.
-- Comparar con las mediciones F-1/F-2/F-3 y verificar metas de producción acordadas, separando overhead de red.
+- Verificar las garantías funcionales de capacidad y casos borde de V-14. Conservar las mediciones F-1/F-2/F-3/F-5; ampliar matrices, repetir o comparar rendimiento solo ante una necesidad de capacidad real. P-07 conserva la definición y validación de las metas del despliegue en la etapa posterior.
 - Reemplazar referencias del prototipo por ejemplos del producto entregado y documentar límites realmente comprobados.
 
-Entrega revisable: casos reales acordados y guía breve que permita extender el motor siguiendo los contratos, con mediciones reproducibles y límites conocidos.
+Entrega revisable: casos de referencia verificados y guía breve que permita extender el motor siguiendo los contratos, con pruebas esenciales y límites conocidos. Esta evidencia permite cerrar F-5 y crear su commit; las integraciones reales P-01 y metas P-07 quedan para después. Las mediciones publicadas conservan su método reproducible; completar las campañas omitidas no condiciona el cierre técnico.
 
 ## Orden de refactorización dentro de una fase
 
@@ -101,9 +105,9 @@ No se exige conservar dos engines en producción ni crear capas paralelas indefi
 
 ## Verificación prevista
 
-Baseline inicial: `cargo fmt --all --check`, `cargo test --workspace` y `cargo clippy --workspace --all-targets -- -D warnings`, registrando fallos existentes y requisitos del entorno. PROJECT conserva resultados del 2026-09-26. La CI existente también usa `--all-features` para tests/clippy y ejecuta por separado la prueba ignorada SFTP contra un servidor; un test local con features predeterminadas no acredita esas variantes.
+Baseline inicial: `cargo fmt --all --check`, `cargo test --workspace` y `cargo clippy --workspace --all-targets -- -D warnings`, registrando fallos existentes y requisitos del entorno. PROJECT conserva resultados del 2026-09-26. La CI usa `--all-features` para tests/clippy; el job SFTP del prototipo se retiró con su extensión en F-5. Un test local con features predeterminadas no acredita otras variantes ni un conector externo.
 
-Durante implementación, seleccionar pruebas de contratos y comportamiento afectado. Antes del cierre global, ejecutar la matriz acordada, paridad API/librería, recuperación con fallos inyectados y benchmarks representativos. Las verificaciones V-* están definidas en el TDD.
+Durante implementación, seleccionar pruebas de contratos y comportamiento afectado. Para el cierre técnico restante, realizar una pasada final de la suite funcional existente y los checks apropiados, incluyendo paridad API/librería, recuperación con fallos inyectados y casos borde de cuotas/concurrencia. Agregar una regresión focalizada cuando un cambio o fallo identificado lo requiera; repetir verificaciones solo por nueva evidencia. Las verificaciones V-* están definidas en el TDD. Las campañas y comparaciones de rendimiento quedan opcionales bajo el ajuste del 2026-09-27.
 
 ## Condición de cierre documental
 

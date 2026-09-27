@@ -44,7 +44,7 @@ Un protocolo es un contrato de interacción, no necesariamente un protocolo de r
 
 ## 4. Recorridos de aceptación
 
-Estos escenarios se concretan en [ACCEPTANCE](ACCEPTANCE.md), con datos, efectos y variantes de fallo. Son referencias para diseñar y probar; P-01 conserva el contraste pendiente con integraciones reales del usuario.
+Estos escenarios se concretan en [ACCEPTANCE](ACCEPTANCE.md), con datos, efectos y variantes de fallo. Son referencias para diseñar y probar el engine; P-01 conserva el contraste con integraciones reales del usuario para una etapa posterior a su cierre técnico.
 
 | Caso | Recorrido | Resultado observable |
 |---|---|---|
@@ -72,7 +72,7 @@ Los requisitos siguientes formalizan el objetivo confirmado y el diseño propues
 | PRD-VIS-001 | Proveer contratos para autoría gráfica independiente del núcleo. | Un consumidor descubre operaciones, conecta datos, valida y localiza errores usando superficies públicas; el engine funciona sin UI. |
 | PRD-RES-001 | Manejar secretos y artefactos mediante proveedores sustituibles. | Exportar una definición no exporta credenciales; los artefactos requeridos por una reanudación no se eliminan prematuramente. |
 | PRD-OBS-001 | Ofrecer estado, errores y correlación de runs, invocaciones e intentos. | Consultar una ejecución permite distinguir éxito, fallo, espera, cancelación y resultado incierto; no se registran secretos por defecto. |
-| PRD-OPS-001 | Acotar recursos y demostrar rendimiento con cargas representativas. | Saturación no descarta runs confirmados; límites se comprueban; mediciones separan overhead del motor de latencia externa. |
+| PRD-OPS-001 | Acotar recursos y verificar admisión, concurrencia y retención. Medir rendimiento ante una necesidad de capacidad real. | Saturación no descarta runs confirmados; límites y expiración se comprueban mediante pruebas funcionales y casos borde. Las mediciones realizadas separan overhead del motor de latencia externa. |
 | PRD-EVOL-001 | Fijar revisiones por run y mantener trazabilidad de decisiones y pruebas. | Cambiar catálogo/definición no cambia un run ya preparado; una revisión no disponible bloquea recuperación con diagnóstico explícito. |
 
 ## 6. Límites de garantía y cierre de producto
@@ -81,21 +81,25 @@ El motor coordina operaciones; un error o cancelación local no revierte efectos
 
 Rust es una elección de implementación, no evidencia de rendimiento. Los presupuestos iniciales y mediciones tempranas están definidos en CONTRACTS/ACCEPTANCE; las metas de producción se fijarán con P-07. La primera composición admite código confiable en proceso, sin aislamiento para código no confiable; ampliar ese alcance reabre P-08.
 
-El cierre de la refactorización exige los recorridos acordados, conformidad de módulos y backends, paridad de superficies y evidencia de recuperación. Las verificaciones se definen en [TDD](TDD.md#verificacion) y su orden en [ROADMAP](ROADMAP.md).
+El cierre de la refactorización del engine exige los casos de referencia acordados, conformidad de módulos y backends, autoría/extensión, paridad de superficies, evidencia de recuperación y pruebas esenciales. Las verificaciones se definen en [TDD](TDD.md#verificacion) y su orden en [ROADMAP](ROADMAP.md); PROJECT registra los resultados ya verificados.
+
+**Ajuste de verificación autorizado el 2026-09-27:** priorizar pruebas esenciales y casos borde, conservando contratos/errores, recuperación y efectos, cuotas/concurrencia, paridad y checks apropiados. Completar matrices de rendimiento, repetirlas o compararlas con fases anteriores pasa a ser opcional ante una necesidad de capacidad real, y deja de ser criterio de cierre técnico de F-5. Los resultados históricos conservan sus límites; las combinaciones omitidas no se presentan como ejecutadas. Este recorte no resuelve P-01/P-07 ni acredita producción.
+
+**Decisión posterior del usuario, 2026-09-27:** realizará las integraciones reales después de comprobar el funcionamiento del engine. P-01/P-07 pasan a esa etapa posterior y no bloquean F-5 ni su commit. El cierre técnico se acredita con los casos de referencia y verificaciones esenciales anteriores; no declara sistemas reales integrados ni metas de producción verificadas.
 
 ## 7. Registro canónico de decisiones pendientes
 
-La tabla conserva los IDs históricos de pendientes y registra ahora también sus decisiones. **Adoptada** significa elección de diseño para esta refactorización; **parcial** conserva un cierre obligatorio antes de la fase indicada. Los hechos de negocio desconocidos no se inventan para cerrar una fila.
+La tabla conserva los IDs históricos de pendientes y registra ahora también sus decisiones. **Adoptada** significa elección de diseño para esta refactorización; **posterior al engine** identifica trabajo del despliegue real fuera del cierre de F-5. Los hechos de negocio desconocidos no se inventan para cerrar una fila.
 
 | ID | Estado / decisión | Diseño adoptado y detalle pendiente | Condición de cierre |
 |---|---|---|---|
-| P-01 | Parcial: casos y destinos. | C-01/C-02 definen petición y archivo con fixtures y efectos; falta contrastarlos con dos integraciones reales. | Referencias permiten F-1/F-2; aceptación de producto y cargas finales requieren casos reales en F-5. |
-| P-02 | Adoptada: editor separado. | Contratos de autoría desde F-1; consumidor de conformidad en F-5. | Una UI completa necesita alcance propio; no bloquea el motor. |
+| P-01 | Posterior al engine: casos y destinos. | C-01/C-02 definen petición y archivo con fixtures y efectos. Por decisión del usuario del 2026-09-27, el contraste con dos integraciones reales se realizará después del cierre técnico. | Documentar y validar los casos cuando el usuario inicie sus integraciones. No bloquea F-5 ni su commit; los fixtures no acreditan esos sistemas. |
+| P-02 | Adoptada: editor separado. | Contratos de autoría desde F-1; PROJECT registra en F-5 el consumidor de catálogo, round-trip visual y diagnósticos estructurados. | Una UI completa necesita alcance propio; el consumidor de referencia cubre un nodo y no es un editor de controles anidados. |
 | P-03 | Adoptada: plugins compilados. | Crates Rust registrados por el host, protocolo público y kit de conformidad; sin carga dinámica inicial. | V-04/V-17 en F-1; otro mecanismo requiere revisar aislamiento/versionado. |
 | P-04 | Adoptada y verificada: perfiles y persistencia. | Memoria por defecto para embedding; SQLite local para referencia durable y servicio. Un coordinador propietario, sin filesystem compartido entre hosts. CONTRACTS §10–11 concreta paquete, codec, migraciones, artefactos y esperas; PROJECT registra caída, carreras y reconciliación durable. | V-08/V-18 y mediciones F-3 pasan; metas de producción siguen en P-07. |
 | P-05 | Adoptada y verificada: servicio. | [HTTP](HTTP.md) fija rutas/DTOs, autenticador sustituible con Bearer inicial, scope/grants del host, paginación por cursor, límites y lifecycle. Aceptación por RunId; desconexión no cancela; SQLite predeterminado. | PROJECT registra paridad V-10, lifecycle V-16 y pruebas del ejecutable; HTTP publica sus defaults. Capacidad del despliegue real pendiente en P-07. |
 | P-06 | Adoptada para F-1: formato/datos. | `forge.workflow/2`, JSON Schema 2020-12, refs de paquete y bindings literal/select/object/array según CONTRACTS. | Implementar parser/schema y V-01/V-03/V-19; nuevas instrucciones se concretan por fase. |
-| P-07 | Parcial: capacidad. | Presupuestos F-1/F-2, cuotas de SQLite/artefactos y reservas/señales en CONTRACTS. PROJECT registra mediciones F-1/F-2/F-3, ambos perfiles y análisis de regresiones. Faltan la campaña completa V-14 y objetivos del despliegue real. | Mediciones del perfil durable F-3 completadas; fijar y verificar metas de producción en F-5. |
+| P-07 | Posterior al engine: capacidad del despliegue. | Presupuestos, cuotas de SQLite/artefactos y reservas/señales en CONTRACTS; PROJECT conserva las mediciones realizadas y sus límites. V-14 mantiene pruebas funcionales esenciales; ampliar matrices, repetirlas o comparar rendimiento es opcional ante una necesidad real. Los objetivos del despliegue se definirán con las integraciones posteriores. | Fijar y verificar metas de producción cuando se acuerde el despliegue. No bloquea F-5 ni su commit. Las mediciones locales no sustituyen los casos reales y las campañas omitidas no se acreditan como realizadas. |
 | P-08 | Adoptada para primera topología: confianza. | Código confiable compilado, un ámbito por instancia; permisos del host y acceso acotado a recursos desde F-1. Sin multitenencia hostil ni sandbox. | V-19 desde F-1; autenticación del transporte en F-4 bajo P-05. |
 | P-09 | Adoptada y verificada: control avanzado. | Fork/join estructurado sobre ramas activadas; collect/abort explícitos; señales sin reserva rechazadas, pre-registro antes de iniciar trabajo; resolución según TDD-06. | Matriz F-2 y persistencia de carreras F-3 probadas; otra instrucción debe preservar identidad, efectos y recuperación. |
 

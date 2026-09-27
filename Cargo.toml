@@ -1,66 +1,34 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/extensions/*", "crates/forge", "crates/cli", "crates/protocol", "crates/engine", "crates/modules", "crates/conformance", "examples/reference-module", "crates/service"]
+members = ["crates/forge", "crates/cli", "crates/protocol", "crates/engine", "crates/modules", "crates/conformance", "examples/reference-module", "examples/authoring-client", "crates/service"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.98.1"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/rafael-arreola/workflow-forge"
 homepage = "https://github.com/rafael-arreola/workflow-forge"
-keywords = ["workflow", "orchestration", "json", "jsonpath", "declarative"]
+keywords = ["workflow", "orchestration", "json", "integration", "declarative"]
 categories = ["asynchronous"]
 
 [workspace.dependencies]
 workflow-forge-protocol = { path = "crates/protocol", version = "0.1.0" }
 workflow-forge-engine = { path = "crates/engine", version = "0.1.0" }
 workflow-forge-modules = { path = "crates/modules", version = "0.1.0" }
-workflow-forge-core = { path = "crates/core", version = "0.1.0" }
-workflow-forge-ext-util = { path = "crates/extensions/util", version = "0.1.0" }
-workflow-forge-ext-data = { path = "crates/extensions/data", version = "0.1.0" }
-workflow-forge-ext-http = { path = "crates/extensions/http", version = "0.1.0" }
-workflow-forge-ext-tabular = { path = "crates/extensions/tabular", version = "0.1.0" }
-workflow-forge-ext-sftp = { path = "crates/extensions/sftp", version = "0.1.0" }
-workflow-forge-ext-compress = { path = "crates/extensions/compress", version = "0.1.0" }
 workflow-forge = { path = "crates/forge", version = "0.1.0" }
 
-async-trait = "0.1"
 clap = { version = "4", features = ["derive"] }
-fastrand = "2"
-flate2 = { version = "1", default-features = false, features = [
-    "rust_backend",
-] }
-zip = { version = "2", default-features = false, features = ["deflate"] }
-chrono = { version = "0.4", default-features = false, features = [
-    "std",
-    "alloc",
-] }
-criterion = { version = "0.5", default-features = false, features = [
-    "html_reports",
-    "cargo_bench_support",
-    "async_tokio",
-] }
 futures = "0.3"
-jsonpath-rust = "1.0.4"
 jsonschema = "0.46"
-regex = "1"
 reqwest = { version = "0.13", default-features = false, features = [
     "json",
     "query",
-    "charset",
     "rustls",
-    "form",
-    "multipart",
     "stream",
 ] }
-httpmock = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["io"] }
-parking_lot = "0.12"
-tracing = "0.1"
 uuid = { version = "1", features = ["v5", "v7"] }
-schemars = "1.2.1"

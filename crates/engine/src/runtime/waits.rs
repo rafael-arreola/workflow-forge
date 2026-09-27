@@ -194,27 +194,27 @@ async fn run(
         start: Some((binding, operation)),
         ..
     } = &node.instruction
+        && !wait.start_confirmed
+        && wait.state != WaitState::Closed
     {
-        if !wait.start_confirmed && wait.state != WaitState::Closed {
-            let value = json!({"input":input,"wait":{"id":id,"correlation":match &kind { WaitKind::Signal{correlation,..}=>correlation,_=>unreachable!() },"deadline_at_ms":wait.deadline_at_ms}});
-            let input =
-                binding::evaluate(binding, &value, &BTreeMap::new(), limits).map_err(expected)?;
-            operation
-                .operation
-                .input
-                .validate(&input, limits)
-                .map_err(expected)?;
-            start(scope, id, &start_key, operation, input, wait.deadline_at_ms).await?;
-            state::update(&scope.shared, &scope.run_id, false, |run| {
-                let wait = run.waits.get_mut(id).expect("reserved");
-                if wait.state != WaitState::Open || wait.start_confirmed {
-                    return Ok(false);
-                }
-                wait.start_confirmed = true;
-                Ok(true)
-            })
-            .await?;
-        }
+        let value = json!({"input":input,"wait":{"id":id,"correlation":match &kind { WaitKind::Signal{correlation,..}=>correlation,_=>unreachable!() },"deadline_at_ms":wait.deadline_at_ms}});
+        let input =
+            binding::evaluate(binding, &value, &BTreeMap::new(), limits).map_err(expected)?;
+        operation
+            .operation
+            .input
+            .validate(&input, limits)
+            .map_err(expected)?;
+        start(scope, id, &start_key, operation, input, wait.deadline_at_ms).await?;
+        state::update(&scope.shared, &scope.run_id, false, |run| {
+            let wait = run.waits.get_mut(id).expect("reserved");
+            if wait.state != WaitState::Open || wait.start_confirmed {
+                return Ok(false);
+            }
+            wait.start_confirmed = true;
+            Ok(true)
+        })
+        .await?;
     }
     let committed = state::update(&scope.shared, &scope.run_id, false, |run| {
         if run.cancel_requested || scope.cancellation.is_cancelled() {

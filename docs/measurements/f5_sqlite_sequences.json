@@ -1,0 +1,373 @@
+{
+  "format": "workflow-forge.measurements/1",
+  "phase": "F-5",
+  "campaign": "sqlite-large-sequences-and-simulated-read",
+  "status": "archived_partial",
+  "recorded_utc": "2026-09-27 07:49:40 UTC",
+  "environment": {
+    "cpu": "Apple M1 Max",
+    "cpu_count": 10,
+    "memory_bytes": 68719476736,
+    "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "profile": "release"
+  },
+  "revisions": [
+    {
+      "base_commit": "6806fa0e8e62d50752342dd5670ff774f1ae877b",
+      "source_sha256": "49a0174a750898d5835f73c7adf302fbd67608c48f565a86df65e40b018a0de3",
+      "source_files": 140,
+      "executable_sha256": "6736855bbe789db8794d8a3348285ade2ce98bfc96345c435d8f94dedef7e6a7",
+      "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+      "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428"
+    }
+  ],
+  "method": {
+    "build_command": "cargo build --release -p workflow-forge --example v2_measure --features sqlite --locked",
+    "source_hash": "Sorted unique existing git ls-files --cached --others --exclude-standard paths: .rs/.sql/.json and Cargo.toml/Cargo.lock/rust-toolchain.toml; SHA-256 over path UTF-8, NUL, file bytes, NUL. Report created afterward.",
+    "warmup": 100,
+    "samples": 1000,
+    "terminal_runs": 64,
+    "run_bytes": 16777216,
+    "sqlite_max_database_bytes": 2147483648,
+    "execution_timer": "start through wait; final equality, retained-byte accounting and RunId checks follow the timer and are included in throughput",
+    "rss": "Whole-process peak RSS in bytes from macOS /usr/bin/time -l",
+    "disk": "Database and sidecar file lengths after process exit; not peak disk usage",
+    "retained_bytes": "max_retained_data_bytes is the largest observed final snapshot, not the peak within a run",
+    "simulated_latency": "Exactly one first operation sleeps for 10 ms; includes Tokio scheduling, not a real network",
+    "passes_per_combination": 1,
+    "scope": "1/10/100 nodes with 1 MiB, concurrency 1/8/32; plus 1 node, 1 KiB, first read 10 ms, concurrency 1/8/32. This is not a full Cartesian matrix of every payload/backend.",
+    "raw_logs": "/tmp/workflow-forge-f5-sqlite-sequences-Sq6P4t"
+  },
+  "totals": {
+    "planned_combinations": 12,
+    "completed_combinations": 3,
+    "verified_runs": 3300,
+    "measured_samples": 3000,
+    "expected_resource_rejections": 0,
+    "unexpected_results": 0,
+    "deferred_combinations": 9
+  },
+  "cases": [
+    {
+      "command": "/usr/bin/time -l target/release/examples/v2_measure 1 1048576 1000 1 --terminal-runs 64 --sqlite /tmp/workflow-forge-f5-sqlite-sequences-Sq6P4t/n1-b1048576-c1-l0.sqlite --sqlite-bytes 2147483648",
+      "revision": 0,
+      "metrics": {
+        "concurrency": 1,
+        "execute": {
+          "p50_us": 129086.541,
+          "p95_us": 230701.625,
+          "p99_us": 356755.459
+        },
+        "expected_outcome": "succeeded",
+        "failed_runs": 0,
+        "json_bytes": 1048576,
+        "limits": {
+          "activations": 10000,
+          "active_runs": 32,
+          "active_scopes": 128,
+          "attempt_timeout_ms": 30000,
+          "audit_entries": 256,
+          "binding_depth": 32,
+          "binding_steps": 10000,
+          "concurrent_attempts": 32,
+          "control_depth": 8,
+          "document_bytes": 1048576,
+          "evidence_bytes": 65536,
+          "foreach_items": 10000,
+          "group_branches": 32,
+          "group_concurrency": 32,
+          "json_depth": 64,
+          "late_response_grace_ms": 1000,
+          "loop_iterations": 1024,
+          "max_retry_attempts": 5,
+          "nodes": 256,
+          "pending_runs": 128,
+          "plan_bytes": 16777216,
+          "receipt_count": 10000,
+          "receipt_ttl_ms": 3600000,
+          "retention_ms": 3600000,
+          "run_bytes": 16777216,
+          "run_timeout_ms": 300000,
+          "schema_resources": 64,
+          "signal_bytes": 65536,
+          "terminal_runs": 64,
+          "value_bytes": 1048576,
+          "wait_timeout_ms": 86400000,
+          "waits_per_run": 256
+        },
+        "max_retained_data_bytes": 3145738,
+        "nodes": 1,
+        "prepare": {
+          "p50_us": 27.042,
+          "p95_us": 77.709,
+          "p99_us": 103.375
+        },
+        "profile": "sqlite-wal-full",
+        "provider_options": {
+          "artifact_grace_ms": 3600000,
+          "busy_timeout_ms": 5000,
+          "max_artifact_bytes": 67108864,
+          "max_artifacts": 1000,
+          "max_database_bytes": 2147483648,
+          "max_record_bytes": 33554432,
+          "queue_capacity": 64
+        },
+        "resource_rejections": 0,
+        "runs_per_second": 7.055961672879505,
+        "samples": 1000,
+        "simulated_read_ms": 0,
+        "verified_unique_runs": 1100,
+        "warmup": 100
+      },
+      "maximum_resident_bytes": 72089600,
+      "files_after_exit": {
+        "n1-b1048576-c1-l0.sqlite": 206012416,
+        "n1-b1048576-c1-l0.sqlite.owner.lock": 0
+      }
+    },
+    {
+      "command": "/usr/bin/time -l target/release/examples/v2_measure 1 1048576 1000 8 --terminal-runs 64 --sqlite /tmp/workflow-forge-f5-sqlite-sequences-Sq6P4t/n1-b1048576-c8-l0.sqlite --sqlite-bytes 2147483648",
+      "revision": 0,
+      "metrics": {
+        "concurrency": 8,
+        "execute": {
+          "p50_us": 831672.958,
+          "p95_us": 992566.084,
+          "p99_us": 1071288.542
+        },
+        "expected_outcome": "succeeded",
+        "failed_runs": 0,
+        "json_bytes": 1048576,
+        "limits": {
+          "activations": 10000,
+          "active_runs": 32,
+          "active_scopes": 128,
+          "attempt_timeout_ms": 30000,
+          "audit_entries": 256,
+          "binding_depth": 32,
+          "binding_steps": 10000,
+          "concurrent_attempts": 32,
+          "control_depth": 8,
+          "document_bytes": 1048576,
+          "evidence_bytes": 65536,
+          "foreach_items": 10000,
+          "group_branches": 32,
+          "group_concurrency": 32,
+          "json_depth": 64,
+          "late_response_grace_ms": 1000,
+          "loop_iterations": 1024,
+          "max_retry_attempts": 5,
+          "nodes": 256,
+          "pending_runs": 128,
+          "plan_bytes": 16777216,
+          "receipt_count": 10000,
+          "receipt_ttl_ms": 3600000,
+          "retention_ms": 3600000,
+          "run_bytes": 16777216,
+          "run_timeout_ms": 300000,
+          "schema_resources": 64,
+          "signal_bytes": 65536,
+          "terminal_runs": 64,
+          "value_bytes": 1048576,
+          "wait_timeout_ms": 86400000,
+          "waits_per_run": 256
+        },
+        "max_retained_data_bytes": 3145738,
+        "nodes": 1,
+        "prepare": {
+          "p50_us": 21.834,
+          "p95_us": 41.375,
+          "p99_us": 59.708
+        },
+        "profile": "sqlite-wal-full",
+        "provider_options": {
+          "artifact_grace_ms": 3600000,
+          "busy_timeout_ms": 5000,
+          "max_artifact_bytes": 67108864,
+          "max_artifacts": 1000,
+          "max_database_bytes": 2147483648,
+          "max_record_bytes": 33554432,
+          "queue_capacity": 64
+        },
+        "resource_rejections": 0,
+        "runs_per_second": 8.192724976920946,
+        "samples": 1000,
+        "simulated_read_ms": 0,
+        "verified_unique_runs": 1100,
+        "warmup": 100
+      },
+      "maximum_resident_bytes": 125173760,
+      "files_after_exit": {
+        "n1-b1048576-c8-l0.sqlite": 215482368,
+        "n1-b1048576-c8-l0.sqlite.owner.lock": 0
+      }
+    },
+    {
+      "command": "/usr/bin/time -l target/release/examples/v2_measure 1 1048576 1000 32 --terminal-runs 64 --sqlite /tmp/workflow-forge-f5-sqlite-sequences-Sq6P4t/n1-b1048576-c32-l0.sqlite --sqlite-bytes 2147483648",
+      "revision": 0,
+      "metrics": {
+        "concurrency": 32,
+        "execute": {
+          "p50_us": 2406106.417,
+          "p95_us": 3907690.25,
+          "p99_us": 4324559.125
+        },
+        "expected_outcome": "succeeded",
+        "failed_runs": 0,
+        "json_bytes": 1048576,
+        "limits": {
+          "activations": 10000,
+          "active_runs": 32,
+          "active_scopes": 128,
+          "attempt_timeout_ms": 30000,
+          "audit_entries": 256,
+          "binding_depth": 32,
+          "binding_steps": 10000,
+          "concurrent_attempts": 32,
+          "control_depth": 8,
+          "document_bytes": 1048576,
+          "evidence_bytes": 65536,
+          "foreach_items": 10000,
+          "group_branches": 32,
+          "group_concurrency": 32,
+          "json_depth": 64,
+          "late_response_grace_ms": 1000,
+          "loop_iterations": 1024,
+          "max_retry_attempts": 5,
+          "nodes": 256,
+          "pending_runs": 128,
+          "plan_bytes": 16777216,
+          "receipt_count": 10000,
+          "receipt_ttl_ms": 3600000,
+          "retention_ms": 3600000,
+          "run_bytes": 16777216,
+          "run_timeout_ms": 300000,
+          "schema_resources": 64,
+          "signal_bytes": 65536,
+          "terminal_runs": 64,
+          "value_bytes": 1048576,
+          "wait_timeout_ms": 86400000,
+          "waits_per_run": 256
+        },
+        "max_retained_data_bytes": 3145738,
+        "nodes": 1,
+        "prepare": {
+          "p50_us": 21,
+          "p95_us": 27.333,
+          "p99_us": 42.209
+        },
+        "profile": "sqlite-wal-full",
+        "provider_options": {
+          "artifact_grace_ms": 3600000,
+          "busy_timeout_ms": 5000,
+          "max_artifact_bytes": 67108864,
+          "max_artifacts": 1000,
+          "max_database_bytes": 2147483648,
+          "max_record_bytes": 33554432,
+          "queue_capacity": 64
+        },
+        "resource_rejections": 0,
+        "runs_per_second": 8.10242478542113,
+        "samples": 1000,
+        "simulated_read_ms": 0,
+        "verified_unique_runs": 1100,
+        "warmup": 100
+      },
+      "maximum_resident_bytes": 195641344,
+      "files_after_exit": {
+        "n1-b1048576-c32-l0.sqlite": 218632192,
+        "n1-b1048576-c32-l0.sqlite.owner.lock": 0
+      }
+    }
+  ],
+  "scope_adjustment": {
+    "date": "2026-09-27",
+    "reason": "User requested essential functional tests and edge cases only; remaining performance matrices, repetitions and historical comparisons are optional.",
+    "technical_closure_gate": false,
+    "production_targets": "P-01/P-07 remain open; no production capacity claim."
+  },
+  "deferred_cases": [
+    {
+      "nodes": 10,
+      "bytes": 1048576,
+      "concurrency": 1,
+      "latency": 0,
+      "reject": false,
+      "status": "deferred_optional",
+      "reason": "Reduced scope authorized 2026-09-27; not executed."
+    },
+    {
+      "nodes": 10,
+      "bytes": 1048576,
+      "concurrency": 8,
+      "latency": 0,
+      "reject": false,
+      "status": "deferred_optional",
+      "reason": "Reduced scope authorized 2026-09-27; not executed."
+    },
+    {
+      "nodes": 10,
+      "bytes": 1048576,
+      "concurrency": 32,
+      "latency": 0,
+      "reject": false,
+      "status": "deferred_optional",
+      "reason": "Reduced scope authorized 2026-09-27; not executed."
+    },
+    {
+      "nodes": 100,
+      "bytes": 1048576,
+      "concurrency": 1,
+      "latency": 0,
+      "reject": true,
+      "status": "deferred_optional",
+      "reason": "Reduced scope authorized 2026-09-27; not executed."
+    },
+    {
+      "nodes": 100,
+      "bytes": 1048576,
+      "concurrency": 8,
+      "latency": 0,
+      "reject": true,
+      "status": "deferred_optional",
+      "reason": "Reduced scope authorized 2026-09-27; not executed."
+    },
+    {
+      "nodes": 100,
+      "bytes": 1048576,
+      "concurrency": 32,
+      "latency": 0,
+      "reject": true,
+      "status": "deferred_optional",
+      "reason": "Reduced scope authorized 2026-09-27; not executed."
+    },
+    {
+      "nodes": 1,
+      "bytes": 1024,
+      "concurrency": 1,
+      "latency": 10,
+      "reject": false,
+      "status": "deferred_optional",
+      "reason": "Reduced scope authorized 2026-09-27; not executed."
+    },
+    {
+      "nodes": 1,
+      "bytes": 1024,
+      "concurrency": 8,
+      "latency": 10,
+      "reject": false,
+      "status": "deferred_optional",
+      "reason": "Reduced scope authorized 2026-09-27; not executed."
+    },
+    {
+      "nodes": 1,
+      "bytes": 1024,
+      "concurrency": 32,
+      "latency": 10,
+      "reject": false,
+      "status": "deferred_optional",
+      "reason": "Reduced scope authorized 2026-09-27; not executed."
+    }
+  ]
+}

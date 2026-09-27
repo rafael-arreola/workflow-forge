@@ -173,7 +173,7 @@ F-2 concreta los límites de ramas/iteraciones/profundidad; F-3 agrega cuotas pe
 
 ## 8. Qué se decide después sin invalidar F-1
 
-El checkpoint, SQL y esperas de F-3 se concretan en §10–11; rutas y DTOs HTTP se fijan antes de F-4; cifras objetivo de producción, con las cargas reales antes de F-5. La referencia durable es SQLite local para un coordinador, reemplazable por un proveedor conforme; embedding simple usa memoria por defecto. La elección aprovecha las [transacciones de SQLite](https://www.sqlite.org/transactional.html), y PROJECT registra su conformidad y pruebas de caída del TDD.
+El checkpoint, SQL y esperas de F-3 se concretan en §10–11; rutas y DTOs HTTP se fijan antes de F-4; cifras objetivo de producción, con las cargas reales durante la etapa de integración posterior al cierre del engine (P-01/P-07). La referencia durable es SQLite local para un coordinador, reemplazable por un proveedor conforme; embedding simple usa memoria por defecto. La elección aprovecha las [transacciones de SQLite](https://www.sqlite.org/transactional.html), y PROJECT registra su conformidad y pruebas de caída del TDD.
 
 El servicio inicial usará HTTP/JSON, acceso autenticado provisto por el host y aceptación consultable por `RunId`; desconectarse no cancela el run. El editor completo permanece como entrega separada. Estas decisiones se registran con sus límites y pendientes en P-01 a P-09; no existen defaults ocultos adicionales en los ejemplos.
 

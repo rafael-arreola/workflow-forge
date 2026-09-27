@@ -370,7 +370,7 @@ async fn start_run(
 }
 ```
 
-El transporte autentica/traduce su request y convierte `StartReceipt` al protocolo seleccionado. El engine recibe un contexto ya acreditado por el host y aplica las políticas de acceso configuradas; un caller no obtiene permiso por enviar un campo `tenant` o `user` en JSON. La librería llama al mismo handle desde Rust. Las rutas HTTP y tipos wire definitivos siguen en P-05; aquí no se elige un framework.
+El transporte autentica/traduce su request y convierte `StartReceipt` al protocolo seleccionado. El engine recibe un contexto ya acreditado por el host y aplica las políticas de acceso configuradas; un caller no obtiene permiso por enviar un campo `tenant` o `user` en JSON. La librería llama al mismo handle desde Rust. [HTTP](HTTP.md) concreta las rutas, tipos wire y lifecycle adoptados en P-05; la arquitectura no acopla el engine al framework del adaptador.
 
 `StartReceipt` confirma aceptación con `RunId`, no éxito del workflow. La vida del run está bajo el host/runtime; no depende de mantener abierto el future del handler. Una desconexión no invoca `cancel` por accidente. El host debe mantener vivo el runtime y cumplir su protocolo de apagado. TDD-10/12; V-10/V-14.
 
@@ -656,7 +656,7 @@ El consumidor usa revisión/identidad para reconocer mensajes repetidos y vuelve
 
 ## 7. Refactorización del prototipo
 
-| Origen actual | Destino lógico propuesto | Acción |
+| Origen del prototipo | Destino lógico | Acción |
 |---|---|---|
 | `core/spec`, errores y descriptores de tareas | Protocolos | Extraer y revisar formato/identidades. |
 | `core/validate`, expresiones, schemas e índices | Compilador del engine | Separar preparación de ejecución; fijar catálogo. |
@@ -664,9 +664,9 @@ El consumidor usa revisión/identidad para reconocer mensajes repetidos y vuelve
 | `core/task`, `io`, `observe` | Contratos públicos + implementaciones | Dividir traits/DTOs de proveedores concretos. |
 | `extensions/*` | Módulos oficiales | Adaptar al mismo contrato exigido a terceros. |
 | `forge` | Fachada | Mantener facilidad de adopción y hacer explícitas sustituciones. |
-| `cli` | Consumidor de la fachada | Revisar utilidad durante la fase de superficies; no sustituye al servicio. |
+| `cli` | Consumidor HTTP del servicio | Adapter de terminal/archivos a comandos públicos; el runtime pertenece al servicio. |
 
-Este mapeo es una dirección de refactorización, no una afirmación de que mover archivos baste. Primero se implementará un recorrido completo detrás de las nuevas fronteras; luego se ampliará el control de flujo y la recuperación.
+Este mapeo conserva la dirección de refactorización, no implica equivalencia entre todas las operaciones antiguas y nuevas. F-1 a F-4 implementaron las nuevas fronteras; F-5 retiró el motor anterior al sustituir sus consumidores. [ADOPTION §5](ADOPTION.md#5-migrar-desde-el-prototipo) enumera las diferencias y conectores aún sin reemplazo. [PROJECT](PROJECT.md) conserva la evidencia por fase.
 
 ### 7.1 Guía para ubicar un cambio
 

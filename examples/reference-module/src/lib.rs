@@ -1,5 +1,6 @@
 //! An external extension: no dependencies on the engine, facade or official modules.
 pub mod inventory;
+pub mod text;
 use serde_json::json;
 use std::{collections::BTreeMap, sync::Arc};
 use workflow_forge_protocol::*;

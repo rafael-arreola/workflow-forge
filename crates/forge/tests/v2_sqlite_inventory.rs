@@ -11,20 +11,13 @@ use workflow_forge::v2::*;
 use workflow_forge_reference_module::inventory::{
     InventoryDestination, InventoryUpdate, inventory_operations,
 };
+#[path = "support/directory.rs"]
+mod test_directory;
 
 struct Directory(PathBuf);
 impl Directory {
     fn new() -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "workflow-forge-durable-csv-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir(&path).unwrap();
-        Self(path)
+        Self(test_directory::create("workflow-forge-durable-csv"))
     }
 }
 impl Drop for Directory {

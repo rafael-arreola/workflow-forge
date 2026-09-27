@@ -5,6 +5,9 @@ use workflow_forge::v2::*;
 #[path = "support/wait_store.rs"]
 mod support;
 use support::GateStore;
+#[cfg(feature = "sqlite")]
+#[path = "support/directory.rs"]
+mod test_directory;
 
 struct Provider {
     state: Arc<dyn ExecutionStore>,
@@ -34,21 +37,7 @@ fn providers() -> Vec<Provider> {
 }
 #[cfg(feature = "sqlite")]
 fn sqlite() -> Provider {
-    // Parallel tests can observe the same clock tick, even with as_nanos().
-    // Reserve a directory atomically and skip leftovers from earlier processes.
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let path = loop {
-        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "workflow-forge-wait-races-{}-{sequence}",
-            std::process::id(),
-        ));
-        match std::fs::create_dir(&path) {
-            Ok(()) => break path,
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => panic!("Cannot create isolated test directory: {error}"),
-        }
-    };
+    let path = test_directory::create("workflow-forge-wait-races");
     let store = Arc::new(
         modules::SqliteExecutionStore::open(
             path.join("state.sqlite"),

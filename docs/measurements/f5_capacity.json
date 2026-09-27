@@ -1,0 +1,3246 @@
+{
+  "format": "workflow-forge.measurements/1",
+  "phase": "F-5",
+  "campaign": "saturation-and-live-instance-release",
+  "status": "archived_partial",
+  "recorded_utc": "2026-09-27 07:49:40 UTC",
+  "environment": {
+    "cpu": "Apple M1 Max",
+    "cpu_count": 10,
+    "memory_bytes": 68719476736,
+    "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "profile": "release"
+  },
+  "revisions": [
+    {
+      "base_commit": "6806fa0e8e62d50752342dd5670ff774f1ae877b",
+      "source_sha256": "abd19d61f0e363a9b00cfe428263cacb09ef5abb04993fd25004bd5596d8007a",
+      "source_files": 142,
+      "executable_sha256": "7c0d73ea201af6f95a85bbac2a481d614c94b0e51e1473771e325306de17da7b",
+      "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+      "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428"
+    },
+    {
+      "base_commit": "6806fa0e8e62d50752342dd5670ff774f1ae877b",
+      "source_sha256": "7b4a4742bce4367557d54354fbcac3e4c5b4a15c47db2fe38b8fa33ff92fa377",
+      "source_files": 143,
+      "executable_sha256": "67bdad5f4862dae98ec431e46cbdb391d87e39c56a2c3dbf89e9fbe51d1d7cbf",
+      "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+      "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428"
+    },
+    {
+      "base_commit": "6806fa0e8e62d50752342dd5670ff774f1ae877b",
+      "source_sha256": "81b496321bb920ae8b667c14edd44075af5567baddfe0c8df822c431ee8d94cc",
+      "source_files": 144,
+      "executable_sha256": "f16f2334e85799a93061cf2d4c3dbff78d3f69ed0e3be9abc32425ccf91f8902",
+      "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+      "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428"
+    },
+    {
+      "base_commit": "6806fa0e8e62d50752342dd5670ff774f1ae877b",
+      "source_sha256": "06d86802b7b21d4195d59ebdbff66a305e647a6c9df77c959fd3c78fdfcc6d1c",
+      "source_files": 144,
+      "executable_sha256": "052cd29463940ecaa66146f559c7e249b90dbd6a5347fed295f0c202a8e040fa",
+      "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+      "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428"
+    }
+  ],
+  "method": {
+    "build_command": "cargo build --release -p workflow-forge --example v2_capacity --features sqlite --locked",
+    "source_hash": "Sorted unique existing git ls-files --cached --others --exclude-standard paths: .rs/.sql/.json and Cargo.toml/Cargo.lock/rust-toolchain.toml; SHA-256 over path UTF-8, NUL, file bytes, NUL. Snapshot is captured before publishing the associated measurement; earlier reports may already exist.",
+    "saturation": "1/8/32 active runs and attempts; pending=2*C. Warmup=100 accepted runs. Each cycle accepts 3*C, verifies C blocked operations and exactly 3*C unfinished RunIds, rejects 3*C requests twice around a >=100 ms hold, then verifies one call and correct output per accepted run. At least 1000 measured runs and 30 seconds at full admission.",
+    "saturation_timing": "Acceptance/rejection timed at each app.start; complete includes the controlled gate and scheduling; throughput is not maximum engine capacity.",
+    "release": "32 concurrent runs, 1 MiB payload, 64 terminal results maximum, retention=2000 ms. 100 warmup runs, ten cycles of 100 measured runs. Drop snapshots; wait 2050 ms after each cycle, verify not_found for every known ID, no unfinished runs, readiness true; sample RSS while the same runtime lives.",
+    "release_rss": "ps -o rss= -p SELF_PID; KiB * 1024. Series retains warmup baseline, before-expiry and after-expiry RSS. Identity/latency metadata and one reusable input remain in the process; no payload snapshots kept by the harness.",
+    "peak_rss": "Whole-process peak RSS in bytes from macOS /usr/bin/time -l",
+    "interpretation": "Logical expiry does not require the allocator to return to startup RSS. A sustained trend or >15% post-warmup variation requires repetition/investigation.",
+    "raw_logs": "/tmp/workflow-forge-f5-capacity-6jxIF1",
+    "passes_per_combination": "One for saturation; memory release repeats ten cycles twice, extends to fifty, adds malloc counters, then adds final metadata-release probe; all observations retained.",
+    "revisions": "0: initial fixed ten-cycle harness. 1: optional release --cycles 10..100, unchanged default workload. 2: read-only macOS malloc counters outside timers, via target-specific dev-dependency libc 0.2.186. 3: final live-instance probe after dropping measurement IDs and latency vectors; compact report retained.",
+    "heap": "macOS: malloc_zone_statistics(NULL, stats), all zones; live/reserved heap counters differ from RSS. No pressure relief or alternate allocator. Other platforms: null.",
+    "heap_source": "https://github.com/apple-oss-distributions/libmalloc/blob/main/include/malloc/malloc.h",
+    "heap_peak": "max_size_in_use was returned as zero on this host and is not used as a peak measurement; /usr/bin/time supplies peak RSS.",
+    "release_observation": "Published release observations used a batch admission barrier before observing results. Static review found that early results may expire before the barrier completes. The current source observes start -> wait -> validate within each task. No full performance campaign was run on the corrected source; timings below belong to the recorded revisions.",
+    "release_retention": "before_expiry_* means after executing a batch but before the explicit retention wait. With terminal_runs=64, it does not mean all 100 results remain retained. verified_expired_runs checks absence under count/age retention, not age-based expiry of every result."
+  },
+  "totals": {
+    "planned_combinations": 8,
+    "completed_combinations": 5,
+    "verified_runs": 54344,
+    "measured_samples": 53444,
+    "verified_admission_rejections": 72888,
+    "incorrect_runs": 0,
+    "observations": 9,
+    "deferred_combinations": 3
+  },
+  "cases": [
+    {
+      "command": "/usr/bin/time -l target/release/examples/v2_capacity saturation 1",
+      "revision": 0,
+      "observation": 0,
+      "metrics": {
+        "concurrency": 1,
+        "json_bytes": 1024,
+        "limits": {
+          "activations": 10000,
+          "active_runs": 1,
+          "active_scopes": 128,
+          "attempt_timeout_ms": 30000,
+          "audit_entries": 256,
+          "binding_depth": 32,
+          "binding_steps": 10000,
+          "concurrent_attempts": 1,
+          "control_depth": 8,
+          "document_bytes": 1048576,
+          "evidence_bytes": 65536,
+          "foreach_items": 10000,
+          "group_branches": 32,
+          "group_concurrency": 32,
+          "json_depth": 64,
+          "late_response_grace_ms": 1000,
+          "loop_iterations": 1024,
+          "max_retry_attempts": 5,
+          "nodes": 256,
+          "pending_runs": 2,
+          "plan_bytes": 16777216,
+          "receipt_count": 10000,
+          "receipt_ttl_ms": 3600000,
+          "retention_ms": 3600000,
+          "run_bytes": 16777216,
+          "run_timeout_ms": 300000,
+          "schema_resources": 64,
+          "signal_bytes": 65536,
+          "terminal_runs": 128,
+          "value_bytes": 1048576,
+          "wait_timeout_ms": 86400000,
+          "waits_per_run": 256
+        },
+        "measurements": {
+          "accept": {
+            "p50_us": 70.375,
+            "p95_us": 231.042,
+            "p99_us": 441.334
+          },
+          "admission_capacity": 3,
+          "complete": {
+            "p50_us": 104509.75,
+            "p95_us": 106863.75,
+            "p99_us": 109082.291
+          },
+          "cycles": 334,
+          "incorrect_runs": 0,
+          "max_operation_concurrency": 1,
+          "minimum_hold_ms_per_cycle": 100,
+          "reject": {
+            "p50_us": 71.334,
+            "p95_us": 216.666,
+            "p99_us": 485.416
+          },
+          "rejected_requests": 2004,
+          "runs_per_second_including_gate": 28.644203866976465,
+          "samples": 1002,
+          "seconds": 34.980898916,
+          "verified_full_seconds": 34.14834941,
+          "verified_unique_runs": 1102,
+          "warmup": 100
+        },
+        "mode": "saturation",
+        "profile": "default-memory",
+        "provider_options": {}
+      },
+      "maximum_resident_bytes": 15040512
+    },
+    {
+      "command": "/usr/bin/time -l target/release/examples/v2_capacity saturation 8",
+      "revision": 0,
+      "observation": 0,
+      "metrics": {
+        "concurrency": 8,
+        "json_bytes": 1024,
+        "limits": {
+          "activations": 10000,
+          "active_runs": 8,
+          "active_scopes": 128,
+          "attempt_timeout_ms": 30000,
+          "audit_entries": 256,
+          "binding_depth": 32,
+          "binding_steps": 10000,
+          "concurrent_attempts": 8,
+          "control_depth": 8,
+          "document_bytes": 1048576,
+          "evidence_bytes": 65536,
+          "foreach_items": 10000,
+          "group_branches": 32,
+          "group_concurrency": 32,
+          "json_depth": 64,
+          "late_response_grace_ms": 1000,
+          "loop_iterations": 1024,
+          "max_retry_attempts": 5,
+          "nodes": 256,
+          "pending_runs": 16,
+          "plan_bytes": 16777216,
+          "receipt_count": 10000,
+          "receipt_ttl_ms": 3600000,
+          "retention_ms": 3600000,
+          "run_bytes": 16777216,
+          "run_timeout_ms": 300000,
+          "schema_resources": 64,
+          "signal_bytes": 65536,
+          "terminal_runs": 128,
+          "value_bytes": 1048576,
+          "wait_timeout_ms": 86400000,
+          "waits_per_run": 256
+        },
+        "measurements": {
+          "accept": {
+            "p50_us": 501.5,
+            "p95_us": 874.875,
+            "p99_us": 1223.083
+          },
+          "admission_capacity": 24,
+          "complete": {
+            "p50_us": 106350.584,
+            "p95_us": 110026.875,
+            "p99_us": 112636
+          },
+          "cycles": 291,
+          "incorrect_runs": 0,
+          "max_operation_concurrency": 8,
+          "minimum_hold_ms_per_cycle": 100,
+          "reject": {
+            "p50_us": 176.208,
+            "p95_us": 736.292,
+            "p99_us": 1386.75
+          },
+          "rejected_requests": 13968,
+          "runs_per_second_including_gate": 222.63829530342952,
+          "samples": 6984,
+          "seconds": 31.369266417,
+          "verified_full_seconds": 30.088715583,
+          "verified_unique_runs": 7084,
+          "warmup": 100
+        },
+        "mode": "saturation",
+        "profile": "default-memory",
+        "provider_options": {}
+      },
+      "maximum_resident_bytes": 17252352
+    },
+    {
+      "command": "/usr/bin/time -l target/release/examples/v2_capacity saturation 32",
+      "revision": 0,
+      "observation": 0,
+      "metrics": {
+        "concurrency": 32,
+        "json_bytes": 1024,
+        "limits": {
+          "activations": 10000,
+          "active_runs": 32,
+          "active_scopes": 128,
+          "attempt_timeout_ms": 30000,
+          "audit_entries": 256,
+          "binding_depth": 32,
+          "binding_steps": 10000,
+          "concurrent_attempts": 32,
+          "control_depth": 8,
+          "document_bytes": 1048576,
+          "evidence_bytes": 65536,
+          "foreach_items": 10000,
+          "group_branches": 32,
+          "group_concurrency": 32,
+          "json_depth": 64,
+          "late_response_grace_ms": 1000,
+          "loop_iterations": 1024,
+          "max_retry_attempts": 5,
+          "nodes": 256,
+          "pending_runs": 64,
+          "plan_bytes": 16777216,
+          "receipt_count": 10000,
+          "receipt_ttl_ms": 3600000,
+          "retention_ms": 3600000,
+          "run_bytes": 16777216,
+          "run_timeout_ms": 300000,
+          "schema_resources": 64,
+          "signal_bytes": 65536,
+          "terminal_runs": 128,
+          "value_bytes": 1048576,
+          "wait_timeout_ms": 86400000,
+          "waits_per_run": 256
+        },
+        "measurements": {
+          "accept": {
+            "p50_us": 2079.667,
+            "p95_us": 3123.25,
+            "p99_us": 3421.917
+          },
+          "admission_capacity": 96,
+          "complete": {
+            "p50_us": 114009.25,
+            "p95_us": 119466.375,
+            "p99_us": 124968.042
+          },
+          "cycles": 286,
+          "incorrect_runs": 0,
+          "max_operation_concurrency": 32,
+          "minimum_hold_ms_per_cycle": 100,
+          "reject": {
+            "p50_us": 648.959,
+            "p95_us": 2249.334,
+            "p99_us": 3463.542
+          },
+          "rejected_requests": 54912,
+          "runs_per_second_including_gate": 809.1013221051197,
+          "samples": 27456,
+          "seconds": 33.933945292,
+          "verified_full_seconds": 30.101776988,
+          "verified_unique_runs": 27556,
+          "warmup": 100
+        },
+        "mode": "saturation",
+        "profile": "default-memory",
+        "provider_options": {}
+      },
+      "maximum_resident_bytes": 23101440
+    },
+    {
+      "command": "/usr/bin/time -l target/release/examples/v2_capacity release 32 1048576",
+      "revision": 0,
+      "observation": 0,
+      "metrics": {
+        "concurrency": 32,
+        "json_bytes": 1048576,
+        "limits": {
+          "activations": 10000,
+          "active_runs": 32,
+          "active_scopes": 128,
+          "attempt_timeout_ms": 30000,
+          "audit_entries": 256,
+          "binding_depth": 32,
+          "binding_steps": 10000,
+          "concurrent_attempts": 32,
+          "control_depth": 8,
+          "document_bytes": 1048576,
+          "evidence_bytes": 65536,
+          "foreach_items": 10000,
+          "group_branches": 32,
+          "group_concurrency": 32,
+          "json_depth": 64,
+          "late_response_grace_ms": 1000,
+          "loop_iterations": 1024,
+          "max_retry_attempts": 5,
+          "nodes": 256,
+          "pending_runs": 64,
+          "plan_bytes": 16777216,
+          "receipt_count": 10000,
+          "receipt_ttl_ms": 3600000,
+          "retention_ms": 2000,
+          "run_bytes": 16777216,
+          "run_timeout_ms": 300000,
+          "schema_resources": 64,
+          "signal_bytes": 65536,
+          "terminal_runs": 64,
+          "value_bytes": 1048576,
+          "wait_timeout_ms": 86400000,
+          "waits_per_run": 256
+        },
+        "measurements": {
+          "accept": {
+            "p50_us": 43898.792,
+            "p95_us": 89936.166,
+            "p99_us": 107629.25
+          },
+          "baseline_after_warmup_rss_bytes": 341999616,
+          "complete": {
+            "p50_us": 93058.25,
+            "p95_us": 123805.833,
+            "p99_us": 133142.666
+          },
+          "incorrect_runs": 0,
+          "ready_after_expiry": true,
+          "reject": null,
+          "rejected_requests": 0,
+          "rss_final_vs_warmup_percent": 27.455207435086713,
+          "rss_method": "ps -o rss= -p SELF_PID; KiB * 1024; runtime remains alive",
+          "rss_range_growth_percent": 27.04741893892364,
+          "rss_series": [
+            {
+              "after_expiry_rss_bytes": 343097344,
+              "before_expiry_rss_bytes": 343097344,
+              "cycle": 1,
+              "execution_seconds": 0.330870458,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 343130112,
+              "before_expiry_rss_bytes": 343130112,
+              "cycle": 2,
+              "execution_seconds": 0.326933041,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 345276416,
+              "before_expiry_rss_bytes": 345276416,
+              "cycle": 3,
+              "execution_seconds": 0.327250417,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 356827136,
+              "before_expiry_rss_bytes": 356843520,
+              "cycle": 4,
+              "execution_seconds": 0.323628042,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 371572736,
+              "before_expiry_rss_bytes": 371572736,
+              "cycle": 5,
+              "execution_seconds": 0.327166042,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 405307392,
+              "before_expiry_rss_bytes": 405307392,
+              "cycle": 6,
+              "execution_seconds": 0.338627125,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 416907264,
+              "before_expiry_rss_bytes": 416907264,
+              "cycle": 7,
+              "execution_seconds": 0.346760917,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 428507136,
+              "before_expiry_rss_bytes": 428507136,
+              "cycle": 8,
+              "execution_seconds": 0.357393083,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 428507136,
+              "before_expiry_rss_bytes": 428507136,
+              "cycle": 9,
+              "execution_seconds": 0.399902042,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 435896320,
+              "before_expiry_rss_bytes": 435896320,
+              "cycle": 10,
+              "execution_seconds": 0.346178458,
+              "verified_expired_runs": 100
+            }
+          ],
+          "runs_per_second_excluding_expiry_probes": 291.99555860155596,
+          "samples": 1000,
+          "verified_expired_runs": 1100,
+          "verified_unique_runs": 1100,
+          "warmup": 100
+        },
+        "mode": "release",
+        "profile": "default-memory",
+        "provider_options": {}
+      },
+      "maximum_resident_bytes": 435961856,
+      "investigation": "RSS grew 27.46% versus warmup and 27.05% across cycles; logical expiration passed. Repeat required."
+    },
+    {
+      "command": "/usr/bin/time -l target/release/examples/v2_capacity release 32 1048576",
+      "revision": 0,
+      "observation": 1,
+      "metrics": {
+        "concurrency": 32,
+        "json_bytes": 1048576,
+        "limits": {
+          "activations": 10000,
+          "active_runs": 32,
+          "active_scopes": 128,
+          "attempt_timeout_ms": 30000,
+          "audit_entries": 256,
+          "binding_depth": 32,
+          "binding_steps": 10000,
+          "concurrent_attempts": 32,
+          "control_depth": 8,
+          "document_bytes": 1048576,
+          "evidence_bytes": 65536,
+          "foreach_items": 10000,
+          "group_branches": 32,
+          "group_concurrency": 32,
+          "json_depth": 64,
+          "late_response_grace_ms": 1000,
+          "loop_iterations": 1024,
+          "max_retry_attempts": 5,
+          "nodes": 256,
+          "pending_runs": 64,
+          "plan_bytes": 16777216,
+          "receipt_count": 10000,
+          "receipt_ttl_ms": 3600000,
+          "retention_ms": 2000,
+          "run_bytes": 16777216,
+          "run_timeout_ms": 300000,
+          "schema_resources": 64,
+          "signal_bytes": 65536,
+          "terminal_runs": 64,
+          "value_bytes": 1048576,
+          "wait_timeout_ms": 86400000,
+          "waits_per_run": 256
+        },
+        "measurements": {
+          "accept": {
+            "p50_us": 41384.375,
+            "p95_us": 83833.458,
+            "p99_us": 94385.167
+          },
+          "baseline_after_warmup_rss_bytes": 317702144,
+          "complete": {
+            "p50_us": 92239.25,
+            "p95_us": 107898.459,
+            "p99_us": 111133.875
+          },
+          "incorrect_runs": 0,
+          "ready_after_expiry": true,
+          "reject": null,
+          "rejected_requests": 0,
+          "rss_final_vs_warmup_percent": 24.573255634057034,
+          "rss_method": "ps -o rss= -p SELF_PID; KiB * 1024; runtime remains alive",
+          "rss_range_growth_percent": 19.03025524785651,
+          "rss_series": [
+            {
+              "after_expiry_rss_bytes": 332496896,
+              "before_expiry_rss_bytes": 332496896,
+              "cycle": 1,
+              "execution_seconds": 0.329722875,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 350404608,
+              "before_expiry_rss_bytes": 350404608,
+              "cycle": 2,
+              "execution_seconds": 0.330503666,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 350437376,
+              "before_expiry_rss_bytes": 350437376,
+              "cycle": 3,
+              "execution_seconds": 0.328049667,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 355696640,
+              "before_expiry_rss_bytes": 355713024,
+              "cycle": 4,
+              "execution_seconds": 0.328052459,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 363053056,
+              "before_expiry_rss_bytes": 363053056,
+              "cycle": 5,
+              "execution_seconds": 0.328568375,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 365182976,
+              "before_expiry_rss_bytes": 365182976,
+              "cycle": 6,
+              "execution_seconds": 0.32856525,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 390496256,
+              "before_expiry_rss_bytes": 390496256,
+              "cycle": 7,
+              "execution_seconds": 0.3195705,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 395771904,
+              "before_expiry_rss_bytes": 395771904,
+              "cycle": 8,
+              "execution_seconds": 0.353237334,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 395771904,
+              "before_expiry_rss_bytes": 395771904,
+              "cycle": 9,
+              "execution_seconds": 0.328901291,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 395771904,
+              "before_expiry_rss_bytes": 395771904,
+              "cycle": 10,
+              "execution_seconds": 0.321816291,
+              "verified_expired_runs": 100
+            }
+          ],
+          "runs_per_second_excluding_expiry_probes": 303.3071665913532,
+          "samples": 1000,
+          "verified_expired_runs": 1100,
+          "verified_unique_runs": 1100,
+          "warmup": 100
+        },
+        "mode": "release",
+        "profile": "default-memory",
+        "provider_options": {}
+      },
+      "maximum_resident_bytes": 395821056,
+      "investigation": "Repeated fixed workload. RSS +24.57% versus warmup; +19.03% across cycles; cycles 8..10 plateau. Extend the observation window before concluding stability."
+    },
+    {
+      "command": "/usr/bin/time -l target/release/examples/v2_capacity release 32 1048576 --cycles 50",
+      "revision": 1,
+      "observation": 2,
+      "metrics": {
+        "concurrency": 32,
+        "json_bytes": 1048576,
+        "limits": {
+          "activations": 10000,
+          "active_runs": 32,
+          "active_scopes": 128,
+          "attempt_timeout_ms": 30000,
+          "audit_entries": 256,
+          "binding_depth": 32,
+          "binding_steps": 10000,
+          "concurrent_attempts": 32,
+          "control_depth": 8,
+          "document_bytes": 1048576,
+          "evidence_bytes": 65536,
+          "foreach_items": 10000,
+          "group_branches": 32,
+          "group_concurrency": 32,
+          "json_depth": 64,
+          "late_response_grace_ms": 1000,
+          "loop_iterations": 1024,
+          "max_retry_attempts": 5,
+          "nodes": 256,
+          "pending_runs": 64,
+          "plan_bytes": 16777216,
+          "receipt_count": 10000,
+          "receipt_ttl_ms": 3600000,
+          "retention_ms": 2000,
+          "run_bytes": 16777216,
+          "run_timeout_ms": 300000,
+          "schema_resources": 64,
+          "signal_bytes": 65536,
+          "terminal_runs": 64,
+          "value_bytes": 1048576,
+          "wait_timeout_ms": 86400000,
+          "waits_per_run": 256
+        },
+        "measurements": {
+          "accept": {
+            "p50_us": 42338.75,
+            "p95_us": 85592.958,
+            "p99_us": 99195.167
+          },
+          "baseline_after_warmup_rss_bytes": 324108288,
+          "complete": {
+            "p50_us": 92696.709,
+            "p95_us": 110907.416,
+            "p99_us": 362628.292
+          },
+          "cycles": 50,
+          "incorrect_runs": 0,
+          "ready_after_expiry": true,
+          "reject": null,
+          "rejected_requests": 0,
+          "rss_final_vs_warmup_percent": 54.17551309271054,
+          "rss_method": "ps -o rss= -p SELF_PID; KiB * 1024; runtime remains alive",
+          "rss_range_growth_percent": 44.31931103014244,
+          "rss_series": [
+            {
+              "after_expiry_rss_bytes": 346243072,
+              "before_expiry_rss_bytes": 346243072,
+              "cycle": 1,
+              "execution_seconds": 0.339250209,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 392658944,
+              "before_expiry_rss_bytes": 392658944,
+              "cycle": 2,
+              "execution_seconds": 0.330244334,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 419020800,
+              "before_expiry_rss_bytes": 419020800,
+              "cycle": 3,
+              "execution_seconds": 0.32535475,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 419037184,
+              "before_expiry_rss_bytes": 419037184,
+              "cycle": 4,
+              "execution_seconds": 0.330280375,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 419037184,
+              "before_expiry_rss_bytes": 419037184,
+              "cycle": 5,
+              "execution_seconds": 0.336068,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 419053568,
+              "before_expiry_rss_bytes": 419069952,
+              "cycle": 6,
+              "execution_seconds": 0.335591958,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 419069952,
+              "before_expiry_rss_bytes": 419069952,
+              "cycle": 7,
+              "execution_seconds": 0.327495625,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 420167680,
+              "before_expiry_rss_bytes": 420167680,
+              "cycle": 8,
+              "execution_seconds": 0.320384875,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 420184064,
+              "before_expiry_rss_bytes": 420184064,
+              "cycle": 9,
+              "execution_seconds": 0.322793041,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 423346176,
+              "before_expiry_rss_bytes": 423346176,
+              "cycle": 10,
+              "execution_seconds": 0.333873041,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 423428096,
+              "before_expiry_rss_bytes": 423428096,
+              "cycle": 11,
+              "execution_seconds": 0.326723541,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 424476672,
+              "before_expiry_rss_bytes": 424476672,
+              "cycle": 12,
+              "execution_seconds": 0.33774375,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 424476672,
+              "before_expiry_rss_bytes": 424476672,
+              "cycle": 13,
+              "execution_seconds": 0.328392666,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 427622400,
+              "before_expiry_rss_bytes": 427622400,
+              "cycle": 14,
+              "execution_seconds": 0.32683575,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 433979392,
+              "before_expiry_rss_bytes": 433979392,
+              "cycle": 15,
+              "execution_seconds": 0.337775584,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 445562880,
+              "before_expiry_rss_bytes": 445562880,
+              "cycle": 16,
+              "execution_seconds": 0.337869792,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 445579264,
+              "before_expiry_rss_bytes": 445579264,
+              "cycle": 17,
+              "execution_seconds": 0.330487708,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 445612032,
+              "before_expiry_rss_bytes": 445612032,
+              "cycle": 18,
+              "execution_seconds": 0.35421325,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 445644800,
+              "before_expiry_rss_bytes": 445644800,
+              "cycle": 19,
+              "execution_seconds": 0.322683417,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 445644800,
+              "before_expiry_rss_bytes": 445644800,
+              "cycle": 20,
+              "execution_seconds": 0.331964292,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 445644800,
+              "before_expiry_rss_bytes": 445644800,
+              "cycle": 21,
+              "execution_seconds": 0.326618208,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 445661184,
+              "before_expiry_rss_bytes": 445661184,
+              "cycle": 22,
+              "execution_seconds": 0.330491208,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 445677568,
+              "before_expiry_rss_bytes": 445677568,
+              "cycle": 23,
+              "execution_seconds": 0.332787458,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 445677568,
+              "before_expiry_rss_bytes": 445677568,
+              "cycle": 24,
+              "execution_seconds": 0.329941417,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499449856,
+              "before_expiry_rss_bytes": 499449856,
+              "cycle": 25,
+              "execution_seconds": 1.1874357500000001,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499449856,
+              "before_expiry_rss_bytes": 499449856,
+              "cycle": 26,
+              "execution_seconds": 0.331804042,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499466240,
+              "before_expiry_rss_bytes": 499466240,
+              "cycle": 27,
+              "execution_seconds": 0.339207125,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499449856,
+              "before_expiry_rss_bytes": 499482624,
+              "cycle": 28,
+              "execution_seconds": 0.332395042,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499482624,
+              "before_expiry_rss_bytes": 499482624,
+              "cycle": 29,
+              "execution_seconds": 0.334049542,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499482624,
+              "before_expiry_rss_bytes": 499482624,
+              "cycle": 30,
+              "execution_seconds": 0.330335458,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499499008,
+              "before_expiry_rss_bytes": 499499008,
+              "cycle": 31,
+              "execution_seconds": 0.33097175,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499515392,
+              "before_expiry_rss_bytes": 499515392,
+              "cycle": 32,
+              "execution_seconds": 0.328172916,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499515392,
+              "before_expiry_rss_bytes": 499515392,
+              "cycle": 33,
+              "execution_seconds": 0.316779417,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499515392,
+              "before_expiry_rss_bytes": 499515392,
+              "cycle": 34,
+              "execution_seconds": 0.330803916,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499548160,
+              "before_expiry_rss_bytes": 499548160,
+              "cycle": 35,
+              "execution_seconds": 0.313144708,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499564544,
+              "before_expiry_rss_bytes": 499564544,
+              "cycle": 36,
+              "execution_seconds": 0.321162958,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499564544,
+              "before_expiry_rss_bytes": 499564544,
+              "cycle": 37,
+              "execution_seconds": 0.332802084,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499564544,
+              "before_expiry_rss_bytes": 499564544,
+              "cycle": 38,
+              "execution_seconds": 0.334705458,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499597312,
+              "before_expiry_rss_bytes": 499597312,
+              "cycle": 39,
+              "execution_seconds": 0.344507416,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499597312,
+              "before_expiry_rss_bytes": 499597312,
+              "cycle": 40,
+              "execution_seconds": 0.335658875,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499597312,
+              "before_expiry_rss_bytes": 499597312,
+              "cycle": 41,
+              "execution_seconds": 0.319253959,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499597312,
+              "before_expiry_rss_bytes": 499597312,
+              "cycle": 42,
+              "execution_seconds": 0.318494875,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499613696,
+              "before_expiry_rss_bytes": 499613696,
+              "cycle": 43,
+              "execution_seconds": 0.328925875,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499613696,
+              "before_expiry_rss_bytes": 499613696,
+              "cycle": 44,
+              "execution_seconds": 0.328187875,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499630080,
+              "before_expiry_rss_bytes": 499630080,
+              "cycle": 45,
+              "execution_seconds": 0.314521334,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499630080,
+              "before_expiry_rss_bytes": 499630080,
+              "cycle": 46,
+              "execution_seconds": 0.328240917,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499646464,
+              "before_expiry_rss_bytes": 499646464,
+              "cycle": 47,
+              "execution_seconds": 0.344103667,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499679232,
+              "before_expiry_rss_bytes": 499679232,
+              "cycle": 48,
+              "execution_seconds": 0.31142875,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499695616,
+              "before_expiry_rss_bytes": 499695616,
+              "cycle": 49,
+              "execution_seconds": 0.329719334,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_rss_bytes": 499695616,
+              "before_expiry_rss_bytes": 499695616,
+              "cycle": 50,
+              "execution_seconds": 0.350778625,
+              "verified_expired_runs": 100
+            }
+          ],
+          "runs_per_second_excluding_expiry_probes": 287.7953599955596,
+          "samples": 5000,
+          "verified_expired_runs": 5100,
+          "verified_unique_runs": 5100,
+          "warmup": 100
+        },
+        "mode": "release",
+        "profile": "default-memory",
+        "provider_options": {}
+      },
+      "maximum_resident_bytes": 499777536,
+      "investigation": "50-cycle diagnostic: initial RSS growth persists, then cycles 25..50 plateau near 477 MiB. Add read-only malloc counters before attributing retained RSS."
+    },
+    {
+      "command": "/usr/bin/time -l target/release/examples/v2_capacity release 32 1048576 --cycles 50",
+      "revision": 2,
+      "observation": 3,
+      "metrics": {
+        "concurrency": 32,
+        "json_bytes": 1048576,
+        "limits": {
+          "activations": 10000,
+          "active_runs": 32,
+          "active_scopes": 128,
+          "attempt_timeout_ms": 30000,
+          "audit_entries": 256,
+          "binding_depth": 32,
+          "binding_steps": 10000,
+          "concurrent_attempts": 32,
+          "control_depth": 8,
+          "document_bytes": 1048576,
+          "evidence_bytes": 65536,
+          "foreach_items": 10000,
+          "group_branches": 32,
+          "group_concurrency": 32,
+          "json_depth": 64,
+          "late_response_grace_ms": 1000,
+          "loop_iterations": 1024,
+          "max_retry_attempts": 5,
+          "nodes": 256,
+          "pending_runs": 64,
+          "plan_bytes": 16777216,
+          "receipt_count": 10000,
+          "receipt_ttl_ms": 3600000,
+          "retention_ms": 2000,
+          "run_bytes": 16777216,
+          "run_timeout_ms": 300000,
+          "schema_resources": 64,
+          "signal_bytes": 65536,
+          "terminal_runs": 64,
+          "value_bytes": 1048576,
+          "wait_timeout_ms": 86400000,
+          "waits_per_run": 256
+        },
+        "measurements": {
+          "accept": {
+            "p50_us": 43366.75,
+            "p95_us": 89029.833,
+            "p99_us": 105155.75
+          },
+          "baseline_after_warmup_heap": {
+            "blocks_in_use": 6227,
+            "max_size_in_use": 0,
+            "size_allocated": 373293056,
+            "size_in_use": 1745440
+          },
+          "baseline_after_warmup_rss_bytes": 347242496,
+          "complete": {
+            "p50_us": 91538.5,
+            "p95_us": 119532.416,
+            "p99_us": 123726.5
+          },
+          "cycles": 50,
+          "heap_method": "macOS: malloc_zone_statistics(NULL, stats), all zones; other platforms: null; not RSS",
+          "incorrect_runs": 0,
+          "ready_after_expiry": true,
+          "reject": null,
+          "rejected_requests": 0,
+          "rss_final_vs_warmup_percent": 28.125884684344626,
+          "rss_method": "ps -o rss= -p SELF_PID; KiB * 1024; runtime remains alive",
+          "rss_range_growth_percent": 21.82046565878606,
+          "rss_series": [
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 6353,
+                "max_size_in_use": 0,
+                "size_allocated": 390070272,
+                "size_in_use": 1761760
+              },
+              "after_expiry_rss_bytes": 365215744,
+              "before_expiry_heap": {
+                "blocks_in_use": 8218,
+                "max_size_in_use": 0,
+                "size_allocated": 390070272,
+                "size_in_use": 203597696
+              },
+              "before_expiry_rss_bytes": 365215744,
+              "cycle": 1,
+              "execution_seconds": 0.346501542,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 6485,
+                "max_size_in_use": 0,
+                "size_allocated": 427819008,
+                "size_in_use": 1777520
+              },
+              "after_expiry_rss_bytes": 401014784,
+              "before_expiry_heap": {
+                "blocks_in_use": 8350,
+                "max_size_in_use": 0,
+                "size_allocated": 427819008,
+                "size_in_use": 203613456
+              },
+              "before_expiry_rss_bytes": 401014784,
+              "cycle": 2,
+              "execution_seconds": 0.339043875,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 6619,
+                "max_size_in_use": 0,
+                "size_allocated": 427819008,
+                "size_in_use": 1798016
+              },
+              "after_expiry_rss_bytes": 401063936,
+              "before_expiry_heap": {
+                "blocks_in_use": 8484,
+                "max_size_in_use": 0,
+                "size_allocated": 427819008,
+                "size_in_use": 203633952
+              },
+              "before_expiry_rss_bytes": 401063936,
+              "cycle": 3,
+              "execution_seconds": 0.339894625,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 6744,
+                "max_size_in_use": 0,
+                "size_allocated": 427819008,
+                "size_in_use": 1807344
+              },
+              "after_expiry_rss_bytes": 401047552,
+              "before_expiry_heap": {
+                "blocks_in_use": 8609,
+                "max_size_in_use": 0,
+                "size_allocated": 427819008,
+                "size_in_use": 203643280
+              },
+              "before_expiry_rss_bytes": 401047552,
+              "cycle": 4,
+              "execution_seconds": 0.345424667,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 6876,
+                "max_size_in_use": 0,
+                "size_allocated": 427819008,
+                "size_in_use": 1819008
+              },
+              "after_expiry_rss_bytes": 401080320,
+              "before_expiry_heap": {
+                "blocks_in_use": 8741,
+                "max_size_in_use": 0,
+                "size_allocated": 427819008,
+                "size_in_use": 203654944
+              },
+              "before_expiry_rss_bytes": 401080320,
+              "cycle": 5,
+              "execution_seconds": 0.339758959,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 7007,
+                "max_size_in_use": 0,
+                "size_allocated": 432013312,
+                "size_in_use": 1846672
+              },
+              "after_expiry_rss_bytes": 405340160,
+              "before_expiry_heap": {
+                "blocks_in_use": 8872,
+                "max_size_in_use": 0,
+                "size_allocated": 432013312,
+                "size_in_use": 203682608
+              },
+              "before_expiry_rss_bytes": 405340160,
+              "cycle": 6,
+              "execution_seconds": 0.341784667,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 7141,
+                "max_size_in_use": 0,
+                "size_allocated": 448790528,
+                "size_in_use": 1859104
+              },
+              "after_expiry_rss_bytes": 425345024,
+              "before_expiry_heap": {
+                "blocks_in_use": 9006,
+                "max_size_in_use": 0,
+                "size_allocated": 448790528,
+                "size_in_use": 203695040
+              },
+              "before_expiry_rss_bytes": 425345024,
+              "cycle": 7,
+              "execution_seconds": 0.332467958,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 7273,
+                "max_size_in_use": 0,
+                "size_allocated": 448790528,
+                "size_in_use": 1870768
+              },
+              "after_expiry_rss_bytes": 425361408,
+              "before_expiry_heap": {
+                "blocks_in_use": 9138,
+                "max_size_in_use": 0,
+                "size_allocated": 448790528,
+                "size_in_use": 203706704
+              },
+              "before_expiry_rss_bytes": 425361408,
+              "cycle": 8,
+              "execution_seconds": 0.336908333,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 7406,
+                "max_size_in_use": 0,
+                "size_allocated": 448790528,
+                "size_in_use": 1882752
+              },
+              "after_expiry_rss_bytes": 425361408,
+              "before_expiry_heap": {
+                "blocks_in_use": 9271,
+                "max_size_in_use": 0,
+                "size_allocated": 448790528,
+                "size_in_use": 203718688
+              },
+              "before_expiry_rss_bytes": 425361408,
+              "cycle": 9,
+              "execution_seconds": 0.350183042,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 7537,
+                "max_size_in_use": 0,
+                "size_allocated": 465567744,
+                "size_in_use": 1894032
+              },
+              "after_expiry_rss_bytes": 440139776,
+              "before_expiry_heap": {
+                "blocks_in_use": 9402,
+                "max_size_in_use": 0,
+                "size_allocated": 465567744,
+                "size_in_use": 203729968
+              },
+              "before_expiry_rss_bytes": 440139776,
+              "cycle": 10,
+              "execution_seconds": 0.344093333,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 7671,
+                "max_size_in_use": 0,
+                "size_allocated": 465567744,
+                "size_in_use": 1939168
+              },
+              "after_expiry_rss_bytes": 440221696,
+              "before_expiry_heap": {
+                "blocks_in_use": 9536,
+                "max_size_in_use": 0,
+                "size_allocated": 465567744,
+                "size_in_use": 203775104
+              },
+              "before_expiry_rss_bytes": 440221696,
+              "cycle": 11,
+              "execution_seconds": 0.340853792,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 7803,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 1950832
+              },
+              "after_expiry_rss_bytes": 442335232,
+              "before_expiry_heap": {
+                "blocks_in_use": 9668,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 203786768
+              },
+              "before_expiry_rss_bytes": 442335232,
+              "cycle": 12,
+              "execution_seconds": 0.352292541,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 7935,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 1962496
+              },
+              "after_expiry_rss_bytes": 442335232,
+              "before_expiry_heap": {
+                "blocks_in_use": 9800,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 203798432
+              },
+              "before_expiry_rss_bytes": 442335232,
+              "cycle": 13,
+              "execution_seconds": 0.345726125,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 8070,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 1975184
+              },
+              "after_expiry_rss_bytes": 442351616,
+              "before_expiry_heap": {
+                "blocks_in_use": 9935,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 203811120
+              },
+              "before_expiry_rss_bytes": 442351616,
+              "cycle": 14,
+              "execution_seconds": 0.345238875,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 8201,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 1986464
+              },
+              "after_expiry_rss_bytes": 442351616,
+              "before_expiry_heap": {
+                "blocks_in_use": 10066,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 203822400
+              },
+              "before_expiry_rss_bytes": 442351616,
+              "cycle": 15,
+              "execution_seconds": 0.34118825,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 8334,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 1998448
+              },
+              "after_expiry_rss_bytes": 442351616,
+              "before_expiry_heap": {
+                "blocks_in_use": 10199,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 203834384
+              },
+              "before_expiry_rss_bytes": 442351616,
+              "cycle": 16,
+              "execution_seconds": 0.354233708,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 8468,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2010752
+              },
+              "after_expiry_rss_bytes": 442384384,
+              "before_expiry_heap": {
+                "blocks_in_use": 10333,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 203846688
+              },
+              "before_expiry_rss_bytes": 442384384,
+              "cycle": 17,
+              "execution_seconds": 0.343392208,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 8602,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2023120
+              },
+              "after_expiry_rss_bytes": 442417152,
+              "before_expiry_heap": {
+                "blocks_in_use": 10467,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 203859056
+              },
+              "before_expiry_rss_bytes": 442417152,
+              "cycle": 18,
+              "execution_seconds": 0.31438875,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 8734,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2034784
+              },
+              "after_expiry_rss_bytes": 442417152,
+              "before_expiry_heap": {
+                "blocks_in_use": 10599,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 203870720
+              },
+              "before_expiry_rss_bytes": 442417152,
+              "cycle": 19,
+              "execution_seconds": 0.317650916,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 8867,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2046768
+              },
+              "after_expiry_rss_bytes": 442417152,
+              "before_expiry_heap": {
+                "blocks_in_use": 10732,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 203882704
+              },
+              "before_expiry_rss_bytes": 442417152,
+              "cycle": 20,
+              "execution_seconds": 0.319834666,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 8999,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2123904
+              },
+              "after_expiry_rss_bytes": 442417152,
+              "before_expiry_heap": {
+                "blocks_in_use": 10864,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 203959840
+              },
+              "before_expiry_rss_bytes": 442417152,
+              "cycle": 21,
+              "execution_seconds": 0.318652042,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 9132,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2135952
+              },
+              "after_expiry_rss_bytes": 442433536,
+              "before_expiry_heap": {
+                "blocks_in_use": 10997,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 203971888
+              },
+              "before_expiry_rss_bytes": 442433536,
+              "cycle": 22,
+              "execution_seconds": 0.324182792,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 9266,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2148256
+              },
+              "after_expiry_rss_bytes": 442433536,
+              "before_expiry_heap": {
+                "blocks_in_use": 11131,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 203984192
+              },
+              "before_expiry_rss_bytes": 442433536,
+              "cycle": 23,
+              "execution_seconds": 0.328287,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 9398,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2159920
+              },
+              "after_expiry_rss_bytes": 442449920,
+              "before_expiry_heap": {
+                "blocks_in_use": 11263,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 203995856
+              },
+              "before_expiry_rss_bytes": 442449920,
+              "cycle": 24,
+              "execution_seconds": 0.326386625,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 9530,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2171584
+              },
+              "after_expiry_rss_bytes": 442482688,
+              "before_expiry_heap": {
+                "blocks_in_use": 11395,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204007520
+              },
+              "before_expiry_rss_bytes": 442482688,
+              "cycle": 25,
+              "execution_seconds": 0.31632925,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 9663,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2183568
+              },
+              "after_expiry_rss_bytes": 442499072,
+              "before_expiry_heap": {
+                "blocks_in_use": 11528,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204019504
+              },
+              "before_expiry_rss_bytes": 442499072,
+              "cycle": 26,
+              "execution_seconds": 0.330320333,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 9794,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2194912
+              },
+              "after_expiry_rss_bytes": 442499072,
+              "before_expiry_heap": {
+                "blocks_in_use": 11659,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204030848
+              },
+              "before_expiry_rss_bytes": 442499072,
+              "cycle": 27,
+              "execution_seconds": 0.328494833,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 9927,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2206896
+              },
+              "after_expiry_rss_bytes": 442531840,
+              "before_expiry_heap": {
+                "blocks_in_use": 11792,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204042832
+              },
+              "before_expiry_rss_bytes": 442531840,
+              "cycle": 28,
+              "execution_seconds": 0.317102292,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 10060,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2218880
+              },
+              "after_expiry_rss_bytes": 442531840,
+              "before_expiry_heap": {
+                "blocks_in_use": 11925,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204054816
+              },
+              "before_expiry_rss_bytes": 442531840,
+              "cycle": 29,
+              "execution_seconds": 0.316842458,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 10192,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2230544
+              },
+              "after_expiry_rss_bytes": 442548224,
+              "before_expiry_heap": {
+                "blocks_in_use": 12057,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204066480
+              },
+              "before_expiry_rss_bytes": 442548224,
+              "cycle": 30,
+              "execution_seconds": 0.316537166,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 10325,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2242528
+              },
+              "after_expiry_rss_bytes": 442548224,
+              "before_expiry_heap": {
+                "blocks_in_use": 12190,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204078464
+              },
+              "before_expiry_rss_bytes": 442548224,
+              "cycle": 31,
+              "execution_seconds": 0.324147208,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 10457,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2254192
+              },
+              "after_expiry_rss_bytes": 442564608,
+              "before_expiry_heap": {
+                "blocks_in_use": 12322,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204090128
+              },
+              "before_expiry_rss_bytes": 442564608,
+              "cycle": 32,
+              "execution_seconds": 0.326808875,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 10590,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2266176
+              },
+              "after_expiry_rss_bytes": 444678144,
+              "before_expiry_heap": {
+                "blocks_in_use": 12455,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204102112
+              },
+              "before_expiry_rss_bytes": 444678144,
+              "cycle": 33,
+              "execution_seconds": 0.325829292,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 10724,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2278544
+              },
+              "after_expiry_rss_bytes": 444694528,
+              "before_expiry_heap": {
+                "blocks_in_use": 12589,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204114480
+              },
+              "before_expiry_rss_bytes": 444694528,
+              "cycle": 34,
+              "execution_seconds": 0.340767708,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 10857,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2290528
+              },
+              "after_expiry_rss_bytes": 444710912,
+              "before_expiry_heap": {
+                "blocks_in_use": 12722,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204126464
+              },
+              "before_expiry_rss_bytes": 444710912,
+              "cycle": 35,
+              "execution_seconds": 0.322829875,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 10988,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2301808
+              },
+              "after_expiry_rss_bytes": 444710912,
+              "before_expiry_heap": {
+                "blocks_in_use": 12853,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204137744
+              },
+              "before_expiry_rss_bytes": 444710912,
+              "cycle": 36,
+              "execution_seconds": 0.340667458,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 11121,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2313792
+              },
+              "after_expiry_rss_bytes": 444710912,
+              "before_expiry_heap": {
+                "blocks_in_use": 12986,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204149728
+              },
+              "before_expiry_rss_bytes": 444710912,
+              "cycle": 37,
+              "execution_seconds": 0.33717725,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 11255,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2326160
+              },
+              "after_expiry_rss_bytes": 444727296,
+              "before_expiry_heap": {
+                "blocks_in_use": 13120,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204162096
+              },
+              "before_expiry_rss_bytes": 444727296,
+              "cycle": 38,
+              "execution_seconds": 0.34554675,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 11388,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2338144
+              },
+              "after_expiry_rss_bytes": 444760064,
+              "before_expiry_heap": {
+                "blocks_in_use": 13253,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204174080
+              },
+              "before_expiry_rss_bytes": 444760064,
+              "cycle": 39,
+              "execution_seconds": 0.349514833,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 11521,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2350128
+              },
+              "after_expiry_rss_bytes": 444760064,
+              "before_expiry_heap": {
+                "blocks_in_use": 13386,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204186064
+              },
+              "before_expiry_rss_bytes": 444760064,
+              "cycle": 40,
+              "execution_seconds": 0.344960375,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 11655,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2493568
+              },
+              "after_expiry_rss_bytes": 444792832,
+              "before_expiry_heap": {
+                "blocks_in_use": 13520,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204329504
+              },
+              "before_expiry_rss_bytes": 444792832,
+              "cycle": 41,
+              "execution_seconds": 0.346339208,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 11786,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2504848
+              },
+              "after_expiry_rss_bytes": 444809216,
+              "before_expiry_heap": {
+                "blocks_in_use": 13651,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204340784
+              },
+              "before_expiry_rss_bytes": 444809216,
+              "cycle": 42,
+              "execution_seconds": 0.340353625,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 11919,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2516832
+              },
+              "after_expiry_rss_bytes": 444809216,
+              "before_expiry_heap": {
+                "blocks_in_use": 13784,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204352768
+              },
+              "before_expiry_rss_bytes": 444809216,
+              "cycle": 43,
+              "execution_seconds": 0.337960875,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 12053,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2529136
+              },
+              "after_expiry_rss_bytes": 444809216,
+              "before_expiry_heap": {
+                "blocks_in_use": 13918,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204365072
+              },
+              "before_expiry_rss_bytes": 444809216,
+              "cycle": 44,
+              "execution_seconds": 0.317241291,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 12186,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2541184
+              },
+              "after_expiry_rss_bytes": 444825600,
+              "before_expiry_heap": {
+                "blocks_in_use": 14051,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204377120
+              },
+              "before_expiry_rss_bytes": 444825600,
+              "cycle": 45,
+              "execution_seconds": 0.32807,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 12319,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2553168
+              },
+              "after_expiry_rss_bytes": 444874752,
+              "before_expiry_heap": {
+                "blocks_in_use": 14184,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204389104
+              },
+              "before_expiry_rss_bytes": 444874752,
+              "cycle": 46,
+              "execution_seconds": 0.341202625,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 12452,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2565152
+              },
+              "after_expiry_rss_bytes": 444874752,
+              "before_expiry_heap": {
+                "blocks_in_use": 14317,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204401088
+              },
+              "before_expiry_rss_bytes": 444874752,
+              "cycle": 47,
+              "execution_seconds": 0.349286834,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 12584,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2576752
+              },
+              "after_expiry_rss_bytes": 444874752,
+              "before_expiry_heap": {
+                "blocks_in_use": 14449,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204412688
+              },
+              "before_expiry_rss_bytes": 444874752,
+              "cycle": 48,
+              "execution_seconds": 0.335410584,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 12721,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2590208
+              },
+              "after_expiry_rss_bytes": 444891136,
+              "before_expiry_heap": {
+                "blocks_in_use": 14586,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204426144
+              },
+              "before_expiry_rss_bytes": 444891136,
+              "cycle": 49,
+              "execution_seconds": 0.349543792,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 12853,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 2601872
+              },
+              "after_expiry_rss_bytes": 444907520,
+              "before_expiry_heap": {
+                "blocks_in_use": 14718,
+                "max_size_in_use": 0,
+                "size_allocated": 469762048,
+                "size_in_use": 204437808
+              },
+              "before_expiry_rss_bytes": 444907520,
+              "cycle": 50,
+              "execution_seconds": 0.34239325,
+              "verified_expired_runs": 100
+            }
+          ],
+          "runs_per_second_excluding_expiry_probes": 298.32851311534284,
+          "samples": 5000,
+          "verified_expired_runs": 5100,
+          "verified_unique_runs": 5100,
+          "warmup": 100
+        },
+        "mode": "release",
+        "profile": "default-memory",
+        "provider_options": {}
+      },
+      "maximum_resident_bytes": 445054976,
+      "investigation": "Read-only allocator counters: each expiry releases about 192.5 MiB of live allocations; RSS plateaus near 424 MiB. Remaining live-heap growth includes retained measurement IDs/timings. Final probe will drop that metadata while the runtime stays alive."
+    },
+    {
+      "command": "/usr/bin/time -l target/release/examples/v2_capacity release 32 1048576 --cycles 50",
+      "revision": 3,
+      "observation": 4,
+      "metrics": {
+        "concurrency": 32,
+        "json_bytes": 1048576,
+        "limits": {
+          "activations": 10000,
+          "active_runs": 32,
+          "active_scopes": 128,
+          "attempt_timeout_ms": 30000,
+          "audit_entries": 256,
+          "binding_depth": 32,
+          "binding_steps": 10000,
+          "concurrent_attempts": 32,
+          "control_depth": 8,
+          "document_bytes": 1048576,
+          "evidence_bytes": 65536,
+          "foreach_items": 10000,
+          "group_branches": 32,
+          "group_concurrency": 32,
+          "json_depth": 64,
+          "late_response_grace_ms": 1000,
+          "loop_iterations": 1024,
+          "max_retry_attempts": 5,
+          "nodes": 256,
+          "pending_runs": 64,
+          "plan_bytes": 16777216,
+          "receipt_count": 10000,
+          "receipt_ttl_ms": 3600000,
+          "retention_ms": 2000,
+          "run_bytes": 16777216,
+          "run_timeout_ms": 300000,
+          "schema_resources": 64,
+          "signal_bytes": 65536,
+          "terminal_runs": 64,
+          "value_bytes": 1048576,
+          "wait_timeout_ms": 86400000,
+          "waits_per_run": 256
+        },
+        "measurements": {
+          "accept": {
+            "p50_us": 44808.667,
+            "p95_us": 92837.5,
+            "p99_us": 106022.416
+          },
+          "after_measurement_metadata_release_heap": {
+            "blocks_in_use": 7943,
+            "max_size_in_use": 0,
+            "size_allocated": 486539264,
+            "size_in_use": 1967056
+          },
+          "after_measurement_metadata_release_rss_bytes": 466206720,
+          "baseline_after_warmup_heap": {
+            "blocks_in_use": 6226,
+            "max_size_in_use": 0,
+            "size_allocated": 390070272,
+            "size_in_use": 1745120
+          },
+          "baseline_after_warmup_rss_bytes": 362119168,
+          "complete": {
+            "p50_us": 93355.583,
+            "p95_us": 121528.541,
+            "p99_us": 131764.75
+          },
+          "cycles": 50,
+          "heap_method": "macOS: malloc_zone_statistics(NULL, stats), all zones; other platforms: null; not RSS",
+          "incorrect_runs": 0,
+          "ready_after_expiry": true,
+          "reject": null,
+          "rejected_requests": 0,
+          "rss_final_vs_warmup_percent": 28.71685820287757,
+          "rss_method": "ps -o rss= -p SELF_PID; KiB * 1024; runtime remains alive",
+          "rss_range_growth_percent": 28.310481688616274,
+          "rss_series": [
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 6353,
+                "max_size_in_use": 0,
+                "size_allocated": 390070272,
+                "size_in_use": 1761760
+              },
+              "after_expiry_rss_bytes": 363266048,
+              "before_expiry_heap": {
+                "blocks_in_use": 8218,
+                "max_size_in_use": 0,
+                "size_allocated": 390070272,
+                "size_in_use": 203597696
+              },
+              "before_expiry_rss_bytes": 363266048,
+              "cycle": 1,
+              "execution_seconds": 0.331484417,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 6486,
+                "max_size_in_use": 0,
+                "size_allocated": 444596224,
+                "size_in_use": 1777840
+              },
+              "after_expiry_rss_bytes": 419086336,
+              "before_expiry_heap": {
+                "blocks_in_use": 8351,
+                "max_size_in_use": 0,
+                "size_allocated": 444596224,
+                "size_in_use": 203613776
+              },
+              "before_expiry_rss_bytes": 419086336,
+              "cycle": 2,
+              "execution_seconds": 0.353839167,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 6619,
+                "max_size_in_use": 0,
+                "size_allocated": 448790528,
+                "size_in_use": 1798016
+              },
+              "after_expiry_rss_bytes": 423346176,
+              "before_expiry_heap": {
+                "blocks_in_use": 8484,
+                "max_size_in_use": 0,
+                "size_allocated": 448790528,
+                "size_in_use": 203633952
+              },
+              "before_expiry_rss_bytes": 423346176,
+              "cycle": 3,
+              "execution_seconds": 0.340177625,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 6745,
+                "max_size_in_use": 0,
+                "size_allocated": 448790528,
+                "size_in_use": 1807664
+              },
+              "after_expiry_rss_bytes": 423346176,
+              "before_expiry_heap": {
+                "blocks_in_use": 8610,
+                "max_size_in_use": 0,
+                "size_allocated": 448790528,
+                "size_in_use": 203643600
+              },
+              "before_expiry_rss_bytes": 423346176,
+              "cycle": 4,
+              "execution_seconds": 0.348488,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 6877,
+                "max_size_in_use": 0,
+                "size_allocated": 448790528,
+                "size_in_use": 1819328
+              },
+              "after_expiry_rss_bytes": 423362560,
+              "before_expiry_heap": {
+                "blocks_in_use": 8742,
+                "max_size_in_use": 0,
+                "size_allocated": 448790528,
+                "size_in_use": 203655264
+              },
+              "before_expiry_rss_bytes": 423362560,
+              "cycle": 5,
+              "execution_seconds": 0.3432475,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 7012,
+                "max_size_in_use": 0,
+                "size_allocated": 457179136,
+                "size_in_use": 1848464
+              },
+              "after_expiry_rss_bytes": 430800896,
+              "before_expiry_heap": {
+                "blocks_in_use": 8877,
+                "max_size_in_use": 0,
+                "size_allocated": 457179136,
+                "size_in_use": 203684400
+              },
+              "before_expiry_rss_bytes": 430784512,
+              "cycle": 6,
+              "execution_seconds": 0.338130417,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 7144,
+                "max_size_in_use": 0,
+                "size_allocated": 457179136,
+                "size_in_use": 1860064
+              },
+              "after_expiry_rss_bytes": 431865856,
+              "before_expiry_heap": {
+                "blocks_in_use": 9009,
+                "max_size_in_use": 0,
+                "size_allocated": 457179136,
+                "size_in_use": 203696000
+              },
+              "before_expiry_rss_bytes": 431865856,
+              "cycle": 7,
+              "execution_seconds": 0.3310245,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 7276,
+                "max_size_in_use": 0,
+                "size_allocated": 457179136,
+                "size_in_use": 1871728
+              },
+              "after_expiry_rss_bytes": 431865856,
+              "before_expiry_heap": {
+                "blocks_in_use": 9141,
+                "max_size_in_use": 0,
+                "size_allocated": 457179136,
+                "size_in_use": 203707664
+              },
+              "before_expiry_rss_bytes": 431865856,
+              "cycle": 8,
+              "execution_seconds": 0.332267375,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 7409,
+                "max_size_in_use": 0,
+                "size_allocated": 457179136,
+                "size_in_use": 1883712
+              },
+              "after_expiry_rss_bytes": 431882240,
+              "before_expiry_heap": {
+                "blocks_in_use": 9274,
+                "max_size_in_use": 0,
+                "size_allocated": 457179136,
+                "size_in_use": 203719648
+              },
+              "before_expiry_rss_bytes": 431882240,
+              "cycle": 9,
+              "execution_seconds": 0.344019792,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 7542,
+                "max_size_in_use": 0,
+                "size_allocated": 457179136,
+                "size_in_use": 1895760
+              },
+              "after_expiry_rss_bytes": 431882240,
+              "before_expiry_heap": {
+                "blocks_in_use": 9407,
+                "max_size_in_use": 0,
+                "size_allocated": 457179136,
+                "size_in_use": 203731696
+              },
+              "before_expiry_rss_bytes": 431882240,
+              "cycle": 10,
+              "execution_seconds": 0.349755958,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 7675,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 1940512
+              },
+              "after_expiry_rss_bytes": 455131136,
+              "before_expiry_heap": {
+                "blocks_in_use": 9540,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 203776448
+              },
+              "before_expiry_rss_bytes": 455131136,
+              "cycle": 11,
+              "execution_seconds": 0.369922417,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 7805,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 1951472
+              },
+              "after_expiry_rss_bytes": 455147520,
+              "before_expiry_heap": {
+                "blocks_in_use": 9670,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 203787408
+              },
+              "before_expiry_rss_bytes": 455147520,
+              "cycle": 12,
+              "execution_seconds": 0.340207833,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 7939,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 1963776
+              },
+              "after_expiry_rss_bytes": 455147520,
+              "before_expiry_heap": {
+                "blocks_in_use": 9804,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 203799712
+              },
+              "before_expiry_rss_bytes": 455147520,
+              "cycle": 13,
+              "execution_seconds": 0.340904833,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 8074,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 1976464
+              },
+              "after_expiry_rss_bytes": 458293248,
+              "before_expiry_heap": {
+                "blocks_in_use": 9939,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 203812400
+              },
+              "before_expiry_rss_bytes": 458293248,
+              "cycle": 14,
+              "execution_seconds": 0.3311985,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 8206,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 1988128
+              },
+              "after_expiry_rss_bytes": 458342400,
+              "before_expiry_heap": {
+                "blocks_in_use": 10071,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 203824064
+              },
+              "before_expiry_rss_bytes": 458342400,
+              "cycle": 15,
+              "execution_seconds": 0.348233667,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 8339,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 2000112
+              },
+              "after_expiry_rss_bytes": 458342400,
+              "before_expiry_heap": {
+                "blocks_in_use": 10204,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 203836048
+              },
+              "before_expiry_rss_bytes": 458342400,
+              "cycle": 16,
+              "execution_seconds": 0.33534575,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 8470,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 2011392
+              },
+              "after_expiry_rss_bytes": 458342400,
+              "before_expiry_heap": {
+                "blocks_in_use": 10335,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 203847328
+              },
+              "before_expiry_rss_bytes": 458342400,
+              "cycle": 17,
+              "execution_seconds": 0.328420375,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 8604,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 2023760
+              },
+              "after_expiry_rss_bytes": 458358784,
+              "before_expiry_heap": {
+                "blocks_in_use": 10469,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 203859696
+              },
+              "before_expiry_rss_bytes": 458358784,
+              "cycle": 18,
+              "execution_seconds": 0.342178,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 8738,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 2036064
+              },
+              "after_expiry_rss_bytes": 458375168,
+              "before_expiry_heap": {
+                "blocks_in_use": 10603,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 203872000
+              },
+              "before_expiry_rss_bytes": 458375168,
+              "cycle": 19,
+              "execution_seconds": 0.348673083,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 8870,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 2047728
+              },
+              "after_expiry_rss_bytes": 458375168,
+              "before_expiry_heap": {
+                "blocks_in_use": 10735,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 203883664
+              },
+              "before_expiry_rss_bytes": 458375168,
+              "cycle": 20,
+              "execution_seconds": 0.327081875,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 9004,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 2125568
+              },
+              "after_expiry_rss_bytes": 458375168,
+              "before_expiry_heap": {
+                "blocks_in_use": 10869,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 203961504
+              },
+              "before_expiry_rss_bytes": 458375168,
+              "cycle": 21,
+              "execution_seconds": 0.348493042,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 9137,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 2137616
+              },
+              "after_expiry_rss_bytes": 458375168,
+              "before_expiry_heap": {
+                "blocks_in_use": 11002,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 203973552
+              },
+              "before_expiry_rss_bytes": 458375168,
+              "cycle": 22,
+              "execution_seconds": 0.341914959,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 9270,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 2149600
+              },
+              "after_expiry_rss_bytes": 458424320,
+              "before_expiry_heap": {
+                "blocks_in_use": 11135,
+                "max_size_in_use": 0,
+                "size_allocated": 478150656,
+                "size_in_use": 203985536
+              },
+              "before_expiry_rss_bytes": 458424320,
+              "cycle": 23,
+              "execution_seconds": 0.354587042,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 9401,
+                "max_size_in_use": 0,
+                "size_allocated": 482344960,
+                "size_in_use": 2160880
+              },
+              "after_expiry_rss_bytes": 461602816,
+              "before_expiry_heap": {
+                "blocks_in_use": 11266,
+                "max_size_in_use": 0,
+                "size_allocated": 482344960,
+                "size_in_use": 203996816
+              },
+              "before_expiry_rss_bytes": 461602816,
+              "cycle": 24,
+              "execution_seconds": 0.358716542,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 9532,
+                "max_size_in_use": 0,
+                "size_allocated": 482344960,
+                "size_in_use": 2172224
+              },
+              "after_expiry_rss_bytes": 461602816,
+              "before_expiry_heap": {
+                "blocks_in_use": 11397,
+                "max_size_in_use": 0,
+                "size_allocated": 482344960,
+                "size_in_use": 204008160
+              },
+              "before_expiry_rss_bytes": 461602816,
+              "cycle": 25,
+              "execution_seconds": 0.352948042,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 9666,
+                "max_size_in_use": 0,
+                "size_allocated": 482344960,
+                "size_in_use": 2184592
+              },
+              "after_expiry_rss_bytes": 461602816,
+              "before_expiry_heap": {
+                "blocks_in_use": 11531,
+                "max_size_in_use": 0,
+                "size_allocated": 482344960,
+                "size_in_use": 204020528
+              },
+              "before_expiry_rss_bytes": 461602816,
+              "cycle": 26,
+              "execution_seconds": 0.332872042,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 9799,
+                "max_size_in_use": 0,
+                "size_allocated": 482344960,
+                "size_in_use": 2196576
+              },
+              "after_expiry_rss_bytes": 461602816,
+              "before_expiry_heap": {
+                "blocks_in_use": 11664,
+                "max_size_in_use": 0,
+                "size_allocated": 482344960,
+                "size_in_use": 204032512
+              },
+              "before_expiry_rss_bytes": 461602816,
+              "cycle": 27,
+              "execution_seconds": 0.336586959,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 9930,
+                "max_size_in_use": 0,
+                "size_allocated": 482344960,
+                "size_in_use": 2207856
+              },
+              "after_expiry_rss_bytes": 461635584,
+              "before_expiry_heap": {
+                "blocks_in_use": 11795,
+                "max_size_in_use": 0,
+                "size_allocated": 482344960,
+                "size_in_use": 204043792
+              },
+              "before_expiry_rss_bytes": 461635584,
+              "cycle": 28,
+              "execution_seconds": 0.339930208,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 10062,
+                "max_size_in_use": 0,
+                "size_allocated": 482344960,
+                "size_in_use": 2219520
+              },
+              "after_expiry_rss_bytes": 462684160,
+              "before_expiry_heap": {
+                "blocks_in_use": 11927,
+                "max_size_in_use": 0,
+                "size_allocated": 482344960,
+                "size_in_use": 204055456
+              },
+              "before_expiry_rss_bytes": 462684160,
+              "cycle": 29,
+              "execution_seconds": 0.356788625,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 10196,
+                "max_size_in_use": 0,
+                "size_allocated": 482344960,
+                "size_in_use": 2231888
+              },
+              "after_expiry_rss_bytes": 462684160,
+              "before_expiry_heap": {
+                "blocks_in_use": 12061,
+                "max_size_in_use": 0,
+                "size_allocated": 482344960,
+                "size_in_use": 204067824
+              },
+              "before_expiry_rss_bytes": 462684160,
+              "cycle": 30,
+              "execution_seconds": 0.352895,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 10328,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2243552
+              },
+              "after_expiry_rss_bytes": 464830464,
+              "before_expiry_heap": {
+                "blocks_in_use": 12193,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204079488
+              },
+              "before_expiry_rss_bytes": 464814080,
+              "cycle": 31,
+              "execution_seconds": 0.369608542,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 10462,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2255856
+              },
+              "after_expiry_rss_bytes": 464863232,
+              "before_expiry_heap": {
+                "blocks_in_use": 12327,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204091792
+              },
+              "before_expiry_rss_bytes": 464863232,
+              "cycle": 32,
+              "execution_seconds": 0.3589455,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 10593,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2267136
+              },
+              "after_expiry_rss_bytes": 464863232,
+              "before_expiry_heap": {
+                "blocks_in_use": 12458,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204103072
+              },
+              "before_expiry_rss_bytes": 464863232,
+              "cycle": 33,
+              "execution_seconds": 0.364674042,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 10728,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2279824
+              },
+              "after_expiry_rss_bytes": 464863232,
+              "before_expiry_heap": {
+                "blocks_in_use": 12593,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204115760
+              },
+              "before_expiry_rss_bytes": 464863232,
+              "cycle": 34,
+              "execution_seconds": 0.354996333,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 10861,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2291808
+              },
+              "after_expiry_rss_bytes": 465911808,
+              "before_expiry_heap": {
+                "blocks_in_use": 12726,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204127744
+              },
+              "before_expiry_rss_bytes": 465911808,
+              "cycle": 35,
+              "execution_seconds": 0.359846792,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 10994,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2303792
+              },
+              "after_expiry_rss_bytes": 465928192,
+              "before_expiry_heap": {
+                "blocks_in_use": 12859,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204139728
+              },
+              "before_expiry_rss_bytes": 465928192,
+              "cycle": 36,
+              "execution_seconds": 0.3320295,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 11127,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2315840
+              },
+              "after_expiry_rss_bytes": 465928192,
+              "before_expiry_heap": {
+                "blocks_in_use": 12992,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204151776
+              },
+              "before_expiry_rss_bytes": 465928192,
+              "cycle": 37,
+              "execution_seconds": 0.380447833,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 11258,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2327120
+              },
+              "after_expiry_rss_bytes": 465944576,
+              "before_expiry_heap": {
+                "blocks_in_use": 13123,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204163056
+              },
+              "before_expiry_rss_bytes": 465944576,
+              "cycle": 38,
+              "execution_seconds": 0.353925166,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 11390,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2338784
+              },
+              "after_expiry_rss_bytes": 465944576,
+              "before_expiry_heap": {
+                "blocks_in_use": 13255,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204174720
+              },
+              "before_expiry_rss_bytes": 465944576,
+              "cycle": 39,
+              "execution_seconds": 0.336783708,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 11523,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2350768
+              },
+              "after_expiry_rss_bytes": 465977344,
+              "before_expiry_heap": {
+                "blocks_in_use": 13388,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204186704
+              },
+              "before_expiry_rss_bytes": 465977344,
+              "cycle": 40,
+              "execution_seconds": 0.338600292,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 11657,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2494208
+              },
+              "after_expiry_rss_bytes": 465977344,
+              "before_expiry_heap": {
+                "blocks_in_use": 13522,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204330144
+              },
+              "before_expiry_rss_bytes": 465977344,
+              "cycle": 41,
+              "execution_seconds": 0.3354655,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 11789,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2505872
+              },
+              "after_expiry_rss_bytes": 465993728,
+              "before_expiry_heap": {
+                "blocks_in_use": 13654,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204341808
+              },
+              "before_expiry_rss_bytes": 465993728,
+              "cycle": 42,
+              "execution_seconds": 0.321529542,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 11921,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2517472
+              },
+              "after_expiry_rss_bytes": 466026496,
+              "before_expiry_heap": {
+                "blocks_in_use": 13786,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204353408
+              },
+              "before_expiry_rss_bytes": 466026496,
+              "cycle": 43,
+              "execution_seconds": 0.3488655,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 12054,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2529456
+              },
+              "after_expiry_rss_bytes": 466042880,
+              "before_expiry_heap": {
+                "blocks_in_use": 13919,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204365392
+              },
+              "before_expiry_rss_bytes": 466042880,
+              "cycle": 44,
+              "execution_seconds": 0.328429459,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 12189,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2542144
+              },
+              "after_expiry_rss_bytes": 466042880,
+              "before_expiry_heap": {
+                "blocks_in_use": 14054,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204378080
+              },
+              "before_expiry_rss_bytes": 466042880,
+              "cycle": 45,
+              "execution_seconds": 0.342035875,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 12322,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2554128
+              },
+              "after_expiry_rss_bytes": 466042880,
+              "before_expiry_heap": {
+                "blocks_in_use": 14187,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204390064
+              },
+              "before_expiry_rss_bytes": 466042880,
+              "cycle": 46,
+              "execution_seconds": 0.342184667,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 12455,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2566112
+              },
+              "after_expiry_rss_bytes": 466042880,
+              "before_expiry_heap": {
+                "blocks_in_use": 14320,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204402048
+              },
+              "before_expiry_rss_bytes": 466042880,
+              "cycle": 47,
+              "execution_seconds": 0.341806542,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 12588,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2578096
+              },
+              "after_expiry_rss_bytes": 466092032,
+              "before_expiry_heap": {
+                "blocks_in_use": 14453,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204414032
+              },
+              "before_expiry_rss_bytes": 466092032,
+              "cycle": 48,
+              "execution_seconds": 0.351346166,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 12724,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2591232
+              },
+              "after_expiry_rss_bytes": 466092032,
+              "before_expiry_heap": {
+                "blocks_in_use": 14589,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204427168
+              },
+              "before_expiry_rss_bytes": 466092032,
+              "cycle": 49,
+              "execution_seconds": 0.335985333,
+              "verified_expired_runs": 100
+            },
+            {
+              "after_expiry_heap": {
+                "blocks_in_use": 12858,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 2603536
+              },
+              "after_expiry_rss_bytes": 466108416,
+              "before_expiry_heap": {
+                "blocks_in_use": 14723,
+                "max_size_in_use": 0,
+                "size_allocated": 486539264,
+                "size_in_use": 204439472
+              },
+              "before_expiry_rss_bytes": 466108416,
+              "cycle": 50,
+              "execution_seconds": 0.3396655,
+              "verified_expired_runs": 100
+            }
+          ],
+          "runs_per_second_excluding_expiry_probes": 290.0651748758324,
+          "samples": 5000,
+          "verified_expired_runs": 5100,
+          "verified_unique_runs": 5100,
+          "warmup": 100
+        },
+        "mode": "release",
+        "profile": "default-memory",
+        "provider_options": {}
+      },
+      "maximum_resident_bytes": 466272256,
+      "analysis": {
+        "baseline_live_heap_bytes": 1745120,
+        "final_live_heap_after_metadata_release_bytes": 1967056,
+        "live_heap_change_percent": 12.717520858164487,
+        "last_twenty_cycles_rss_min_bytes": 464830464,
+        "last_twenty_cycles_rss_max_bytes": 466108416,
+        "last_twenty_cycles_rss_range_percent": 0.2749286242994531,
+        "per_cycle_live_bytes_released_min": 201835936,
+        "per_cycle_live_bytes_released_max": 201835936,
+        "retained_metadata_bytes_released": 636480,
+        "interpretation": "Initial RSS grows; the last 20 of 50 cycles vary below 0.3%. Every payload result expires and live allocations fall by about 192.5 MiB per cycle. After dropping IDs/timing vectors, live heap is about 1.88 MiB versus 1.66 MiB after warmup; compact report remains. This supports a local plateau with allocator reservation and instrument metadata, not a claim of universally bounded RSS or leak absence."
+      }
+    },
+    {
+      "command": "/usr/bin/time -l target/release/examples/v2_capacity saturation 1 --sqlite /tmp/workflow-forge-f5-capacity-6jxIF1/sqlite-saturation-c1.sqlite",
+      "revision": 3,
+      "observation": 0,
+      "metrics": {
+        "concurrency": 1,
+        "json_bytes": 1024,
+        "limits": {
+          "activations": 10000,
+          "active_runs": 1,
+          "active_scopes": 128,
+          "attempt_timeout_ms": 30000,
+          "audit_entries": 256,
+          "binding_depth": 32,
+          "binding_steps": 10000,
+          "concurrent_attempts": 1,
+          "control_depth": 8,
+          "document_bytes": 1048576,
+          "evidence_bytes": 65536,
+          "foreach_items": 10000,
+          "group_branches": 32,
+          "group_concurrency": 32,
+          "json_depth": 64,
+          "late_response_grace_ms": 1000,
+          "loop_iterations": 1024,
+          "max_retry_attempts": 5,
+          "nodes": 256,
+          "pending_runs": 2,
+          "plan_bytes": 16777216,
+          "receipt_count": 10000,
+          "receipt_ttl_ms": 3600000,
+          "retention_ms": 3600000,
+          "run_bytes": 16777216,
+          "run_timeout_ms": 300000,
+          "schema_resources": 64,
+          "signal_bytes": 65536,
+          "terminal_runs": 128,
+          "value_bytes": 1048576,
+          "wait_timeout_ms": 86400000,
+          "waits_per_run": 256
+        },
+        "measurements": {
+          "accept": {
+            "p50_us": 10850.583,
+            "p95_us": 23442.917,
+            "p99_us": 29438.625
+          },
+          "admission_capacity": 3,
+          "complete": {
+            "p50_us": 178523.583,
+            "p95_us": 223559.834,
+            "p99_us": 240558.833
+          },
+          "cycles": 334,
+          "incorrect_runs": 0,
+          "max_operation_concurrency": 1,
+          "minimum_hold_ms_per_cycle": 100,
+          "reject": {
+            "p50_us": 477.875,
+            "p95_us": 1800.75,
+            "p99_us": 4507.916
+          },
+          "rejected_requests": 2004,
+          "runs_per_second_including_gate": 14.425005055314283,
+          "samples": 1002,
+          "seconds": 69.462713958,
+          "verified_full_seconds": 34.806368011,
+          "verified_unique_runs": 1102,
+          "warmup": 100
+        },
+        "mode": "saturation",
+        "profile": "sqlite-wal-full",
+        "provider_options": {
+          "artifact_grace_ms": 3600000,
+          "busy_timeout_ms": 5000,
+          "max_artifact_bytes": 67108864,
+          "max_artifacts": 1000,
+          "max_database_bytes": 536870912,
+          "max_record_bytes": 33554432,
+          "queue_capacity": 64
+        }
+      },
+      "maximum_resident_bytes": 16400384
+    }
+  ],
+  "investigation_status": "Memory release investigation completed for the measured local window: result unavailability under retention, RSS plateau, read-only allocation counters and metadata release recorded. Initial RSS growth remains in the evidence. SQLite saturation C1 completed; the other three SQLite combinations are deferred optional. The failed SQLite release warmup produced no samples; the corrected consumer has only focused functional validation.",
+  "scope_adjustment": {
+    "date": "2026-09-27",
+    "reason": "User requested essential functional tests and edge cases only; remaining performance matrices, repetitions and historical comparisons are optional.",
+    "technical_closure_gate": false,
+    "production_targets": "P-01/P-07 remain open; no production capacity claim."
+  },
+  "deferred_cases": [
+    {
+      "mode": "saturation",
+      "concurrency": 8,
+      "bytes": 1024,
+      "profile": "sqlite",
+      "status": "deferred_optional",
+      "reason": "Reduced scope authorized 2026-09-27; no valid full benchmark report."
+    },
+    {
+      "mode": "saturation",
+      "concurrency": 32,
+      "bytes": 1024,
+      "profile": "sqlite",
+      "status": "deferred_optional",
+      "reason": "Reduced scope authorized 2026-09-27; no valid full benchmark report."
+    },
+    {
+      "mode": "release",
+      "concurrency": 32,
+      "bytes": 1048576,
+      "profile": "sqlite",
+      "status": "deferred_optional",
+      "reason": "Reduced scope authorized 2026-09-27; no valid full benchmark report."
+    }
+  ],
+  "invalid_attempts": [
+    {
+      "command": "/usr/bin/time -l target/release/examples/v2_capacity release 32 1048576 --sqlite /tmp/workflow-forge-f5-capacity-6jxIF1/sqlite-release-c32.sqlite",
+      "revision": 3,
+      "exit_code": 1,
+      "status": "invalid_no_samples",
+      "error": "not_found: Run is unavailable during warmup",
+      "wall_seconds": 3.23,
+      "raw_log": "/tmp/workflow-forge-f5-capacity-6jxIF1/sqlite-release-c32-invalid-batch-wait.log",
+      "reason": "Warmup result became unavailable. No performance sample report published. Static review identified a barrier delaying waits until all batch starts completed; attribution requires the corrected consumer run."
+    }
+  ],
+  "functional_validation": {
+    "command": "cargo test -p workflow-forge --example v2_capacity --features sqlite --locked sqlite_release_batch_observes_results_before_expiry",
+    "tests_passed": 1,
+    "tests_failed": 0,
+    "duration_seconds": 2.42,
+    "verified_runs": 8,
+    "profile": "test",
+    "log": "/tmp/workflow-forge-f5-essential-sqlite.log",
+    "scope": "Real SQLite, per-task result observation, durable receipts, unique identities, output/budget, retention, readiness and clean shutdown. Does not deterministically reproduce admission skew and is not a performance sample."
+  }
+}
