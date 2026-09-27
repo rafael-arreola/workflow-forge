@@ -26,7 +26,8 @@ pub(super) async fn supervise(
             matches!(
                 r.state,
                 RunState::Accepted | RunState::Running | RunState::Cancelling
-            )
+            ) || (r.state == RunState::Waiting
+                && now_ms() >= r.next_wakeup_at_ms.unwrap_or(r.deadline_at_ms))
         }) {
             if active.len() >= c.limits.active_runs {
                 break;
@@ -37,23 +38,19 @@ pub(super) async fn supervise(
             let plan = shared.plans.lock().await.get(&run.id).cloned();
             let plan = match plan {
                 Some(plan) => plan,
-                None => match prepare_registered(
-                    &shared,
-                    state::read(&shared, &run.id).await?.definition,
-                    None,
-                )
-                .await
-                {
-                    Ok(plan) => plan,
-                    Err(error) => {
-                        transition(&shared, &run.id, |r| {
-                            r.state = RunState::Blocked;
-                            r.error = Some(error.clone());
-                        })
-                        .await?;
-                        continue;
+                None => {
+                    match prepare_recovered(&shared, state::read(&shared, &run.id).await?).await {
+                        Ok(plan) => plan,
+                        Err(error) => {
+                            transition(&shared, &run.id, |r| {
+                                r.state = RunState::Blocked;
+                                r.error = Some(error.clone());
+                            })
+                            .await?;
+                            continue;
+                        }
                     }
-                },
+                }
             };
             let id = run.id.clone();
             let worker = shared.clone();
@@ -134,6 +131,7 @@ async fn finish_error(
         };
         run.error = Some(error.clone());
         run.finished_at_ms = Some(now_ms());
+        run.close_waits();
         if let Some(record) = node.and_then(|n| run.invocations.get_mut(n)) {
             record.state = if cancelled {
                 InvocationState::Cancelled
@@ -170,6 +168,16 @@ async fn execute(
     let output = match control::execute_body(scope, plan.0.body.clone()).await {
         Ok(output) => output,
         Err(steps::StepError::Infrastructure(error)) => return Err(error),
+        Err(steps::StepError::Suspended) => {
+            transition(&shared, &id, |run| {
+                if !run.cancel_requested {
+                    run.state = RunState::Waiting;
+                }
+            })
+            .await?;
+            shared.wake.notify_one();
+            return Ok(());
+        }
         Err(steps::StepError::Execution(error)) => {
             let cancelled = error.code() == "operation.cancelled";
             return finish_error(&shared, &id, None, error, cancelled).await;
@@ -216,6 +224,7 @@ async fn execute(
                     r.state = RunState::Succeeded;
                 }
                 r.finished_at_ms = Some(now_ms());
+                r.close_waits();
                 Ok(true)
             })
             .await?;

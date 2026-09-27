@@ -12,7 +12,8 @@ categories.workspace = true
 
 [features]
 default = ["util", "data", "http"]
-full = ["util", "data", "http", "tabular", "sftp", "compress"]
+full = ["util", "data", "http", "tabular", "sftp", "compress", "sqlite"]
+sqlite = ["workflow-forge-modules/sqlite"]
 util = ["dep:workflow-forge-ext-util"]
 data = ["dep:workflow-forge-ext-data"]
 http = ["dep:workflow-forge-ext-http"]
@@ -24,6 +25,14 @@ testing = ["workflow-forge-core/testing"]
 
 [package.metadata.docs.rs]
 all-features = true
+
+[[example]]
+name = "v2_sqlite"
+required-features = ["sqlite"]
+
+[[example]]
+name = "v2_signal"
+required-features = ["sqlite"]
 
 [dependencies]
 workflow-forge-protocol = { workspace = true }

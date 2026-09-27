@@ -1,0 +1,31 @@
+{
+  "format": "forge.workflow/2",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "id": "reference.approval",
+  "revision": "r1",
+  "input_schema": {
+    "type": "object",
+    "required": ["order_id"],
+    "properties": { "order_id": { "type": "string" } },
+    "additionalProperties": false
+  },
+  "output_schema": { "type": "object" },
+  "entry": "approval",
+  "nodes": [
+    {
+      "id": "approval",
+      "kind": "await_signal",
+      "input": { "select": { "source": "input", "pointer": "" } },
+      "correlation": { "select": { "source": "input", "pointer": "/order_id" } },
+      "timeout_ms": 300000,
+      "payload_schema": {
+        "type": "object",
+        "required": ["approved"],
+        "properties": { "approved": { "type": "boolean" } },
+        "additionalProperties": false
+      }
+    }
+  ],
+  "edges": [],
+  "output": { "select": { "source": "node", "node": "approval", "pointer": "" } }
+}

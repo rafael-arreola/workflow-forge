@@ -1,14 +1,21 @@
 //! C-02 host and measurement: rows (1..10000), independent samples (1..10).
+//! Optional: --sqlite DIRECTORY; creates a new sample-N.sqlite per composition.
 use futures::{StreamExt, stream};
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Instant};
 use workflow_forge::v2::*;
 use workflow_forge_reference_module::inventory::{MemoryInventory, inventory_operations};
 
+#[path = "support/measurement_store.rs"]
+mod measurement_store;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<_> = std::env::args()
-        .skip(1)
+    let raw: Vec<_> = std::env::args().skip(1).collect();
+    let directory = measurement_store::sqlite_path(&raw, 2)?;
+    let args: Vec<_> = raw
+        .iter()
+        .take(2)
         .map(|s| s.parse::<usize>())
         .collect::<Result<_, _>>()?;
     let rows = args.first().copied().unwrap_or(100);
@@ -18,31 +25,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let mut observations = Vec::with_capacity(samples);
     for sample in 0..samples {
-        observations.push(measure(rows, sample).await?);
+        let path = directory.map(|dir| dir.join(format!("sample-{sample}.sqlite")));
+        observations.push(measure(rows, sample, path.as_deref()).await?);
     }
     println!(
         "{}",
-        json!({"rows":rows,"batch_size":100,"row_concurrency":4,"samples":observations,"warmup":0,"profile":{"store":"memory","artifacts":"memory","activations":12000,"run_timeout_ms":900000},"note":"Independent compositions; no percentile or production target inferred from a small sample"})
+        json!({"rows":rows,"batch_size":100,"row_concurrency":4,"samples":observations,"warmup":0,"profile":{"store":if directory.is_some(){"sqlite-wal-full"}else{"memory"},"artifacts":if directory.is_some(){"sqlite"}else{"memory"},"activations":12000,"run_timeout_ms":900000},"note":"Independent compositions; no percentile or production target inferred from a small sample"})
     );
     Ok(())
 }
 
-async fn measure(rows: usize, sample: usize) -> Result<Value, Box<dyn std::error::Error>> {
+async fn measure(
+    rows: usize,
+    sample: usize,
+    path: Option<&std::path::Path>,
+) -> Result<Value, Box<dyn std::error::Error>> {
     let mut csv = "sku,quantity\n".to_owned();
     for index in 0..rows {
         csv.push_str(&format!("SKU-{index},{}\n", index + 1));
     }
     let source_bytes = csv.len();
-    let artifacts = Arc::new(modules::MemoryArtifacts::default());
-    let source = artifacts
-        .write(
-            "default",
-            Box::pin(stream::once(async move { Ok(csv.into_bytes()) })),
-            "text/csv",
-        )
-        .await?;
+    let providers = measurement_store::MeasurementStore::new(path)?;
+    let artifacts = providers.artifacts;
     let destination = Arc::new(MemoryInventory::default());
     let mut builder = WorkflowBuilder::standard()
+        .execution_store(providers.execution)
         .artifact_store(artifacts.clone())
         .limits(Limits {
             activations: 12_000,
@@ -54,11 +61,15 @@ async fn measure(rows: usize, sample: usize) -> Result<Value, Box<dyn std::error
     let app = runtime.application();
     let access = AccessContext::trusted("default");
     let result = async {
+        let source = artifacts.write("default",Box::pin(stream::once(async move { Ok(csv.into_bytes()) })),"text/csv").await?;
         let preparation = Instant::now();
         let plan = app.prepare_json(access.clone(),include_bytes!("../../../examples/workflows/inventory_import.v2.json")).await?;
         let prepare_us = preparation.elapsed().as_secs_f64()*1_000_000.0;
         let execution = Instant::now();
-        let accepted = app.start(access.clone(),StartRunRequest::new(plan,json!({"source":source}))).await?;
+        let mut request = StartRunRequest::new(plan,json!({"source":source}));
+        request.options.artifacts = vec![source];
+        request.options.require_durable = path.is_some();
+        let accepted = app.start(access.clone(),request).await?;
         let run = app.wait(access,accepted.run_id).await?;
         let seconds = execution.elapsed().as_secs_f64();
         if run.state!=RunState::Succeeded {
@@ -88,7 +99,7 @@ async fn measure(rows: usize, sample: usize) -> Result<Value, Box<dyn std::error
         if !buffer.is_empty() || verified_rows!=rows || observed.effects.len()!=rows || observed.attempts!=rows {
             return Err(ForgeError::new("measurement.failed","Rows or destination effects do not match"));
         }
-        Ok::<_,ForgeError>(json!({"sample":sample,"source_bytes":source_bytes,"report_bytes":report_bytes,"prepare_us":prepare_us,"execute_seconds":seconds,"rows_per_second":rows as f64/seconds,"activations":run.invocations.len(),"transitions":run.revision,"verified_rows":verified_rows,"destination_effects":observed.effects.len()}))
+        Ok::<_,ForgeError>(json!({"sample":sample,"profile":providers.profile,"source_bytes":source_bytes,"report_bytes":report_bytes,"prepare_us":prepare_us,"execute_seconds":seconds,"rows_per_second":rows as f64/seconds,"activations":run.invocations.len(),"transitions":run.revision,"verified_rows":verified_rows,"destination_effects":observed.effects.len()}))
     }.await;
     let shutdown = runtime.shutdown(ShutdownOptions::default()).await;
     let result = result?;

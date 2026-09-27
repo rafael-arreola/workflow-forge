@@ -58,9 +58,7 @@ impl WorkflowApplication {
                 "Control instruction has no effect inspector",
             )
         })?;
-        let operation = c.operations.get(revision).ok_or_else(|| {
-            ForgeError::new("reference.missing", "Operation revision is unavailable")
-        })?;
+        let operation = compiler::recover_operation(c, &run.package, revision)?;
         require_resources(&access, &operation.descriptor)?;
         let inspector = c.inspectors.get(revision).ok_or_else(|| {
             ForgeError::new(
@@ -71,7 +69,10 @@ impl WorkflowApplication {
         let cancel = self.shared.cancel.child_token();
         let _cancel_on_drop = cancel.clone().drop_guard();
         let context = OperationContext::new(
-            id,
+            ArtifactAccess {
+                runtime_owner: c.id.clone(),
+                run_id: id,
+            },
             now_ms().saturating_add(c.limits.attempt_timeout_ms),
             cancel.clone(),
             run.scope,
@@ -160,12 +161,14 @@ impl WorkflowApplication {
             .map(|(key, _)| key.clone())
             .ok_or_else(|| conflict("Invocation or observed attempt is no longer unresolved"))?;
         let record = run.invocations.get_mut(&key).expect("resolved key");
-        let operation = record
-            .operation
-            .as_ref()
-            .and_then(|revision| c.operations.get(revision));
-        if let Some(operation) = operation {
-            require_resources(&access, &operation.descriptor)?;
+        let descriptor = record.operation.as_ref().and_then(|revision| {
+            run.package
+                .operations
+                .iter()
+                .find(|d| &d.revision == revision)
+        });
+        if let Some(descriptor) = descriptor {
+            require_resources(&access, descriptor)?;
         }
         let mut diagnostic = None;
         let status = match &command.resolution {
@@ -176,9 +179,10 @@ impl WorkflowApplication {
                         "Authoritative evidence reference is required",
                     ));
                 }
-                let operation = operation.ok_or_else(|| {
+                let revision = record.operation.as_ref().ok_or_else(|| {
                     ForgeError::new("reference.missing", "Operation revision is unavailable")
                 })?;
+                let operation = compiler::recover_operation(c, &run.package, revision)?;
                 match operation.output.validate(output, &c.limits) {
                     Ok(()) => {
                         record.output = Some(output.clone());
@@ -269,6 +273,7 @@ impl WorkflowApplication {
                 } else {
                     RunState::Failed
                 };
+                run.close_waits();
                 run.error = Some(ForgeError::new(
                     "effect.unresolved",
                     "Tracking stopped with unresolved external effects",

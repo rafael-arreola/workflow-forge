@@ -121,6 +121,7 @@ pub(super) async fn execute(
     let mut next = 0;
     let mut halted = false;
     let mut failed = original_error.map(expected);
+    let mut suspended = false;
     let mut bytes = 2usize;
     loop {
         for index in planner::ready_range(next, total, active.len(), spec.concurrency, halted) {
@@ -155,6 +156,10 @@ pub(super) async fn execute(
             break;
         };
         let value = match result {
+            Err(StepError::Suspended) => {
+                suspended = true;
+                continue;
+            }
             Ok(output) => json!({"status":"succeeded","output":output}),
             Err(StepError::Infrastructure(error)) => return Err(error.into()),
             Err(StepError::Execution(error)) => {
@@ -215,6 +220,9 @@ pub(super) async fn execute(
             "Group was cancelled",
         )));
     }
+    if suspended {
+        return Err(StepError::Suspended);
+    }
     results
         .into_iter()
         .enumerate()
@@ -239,9 +247,41 @@ async fn save_progress(
     key: &str,
     frame: &ControlFrame,
 ) -> Result<(), StepError> {
+    if saved(frame).1 {
+        // Suspended children no longer have a live future to observe cancellation.
+        // Persist their closure with the stop marker so even recovery or another
+        // unresolved branch cannot leave this group's callback reservations open.
+        let prefix = format!("{key}/");
+        state::update(&scope.shared, &scope.run_id, false, |run| {
+            let record = run.invocations.get_mut(key).ok_or_else(|| {
+                ForgeError::new("state.conflict", "Control activation is unavailable")
+            })?;
+            record.control = Some(frame.clone());
+            for wait in run
+                .waits
+                .values_mut()
+                .filter(|w| w.state == WaitState::Open && w.node.starts_with(&prefix))
+            {
+                wait.state = WaitState::Closed;
+            }
+            if run.retained_data_bytes() > scope.shared.composition.limits.run_bytes {
+                return Err(ForgeError::new(
+                    "resource.limit",
+                    "Group stop exceeds the run retention budget",
+                ));
+            }
+            Ok(true)
+        })
+        .await?;
+        return Ok(());
+    }
     control::update_frame(scope, key, frame)
         .await
         .map_err(|error| match error {
+            StepError::Suspended => StepError::Infrastructure(ForgeError::new(
+                "state.conflict",
+                "Persisting a group cannot suspend",
+            )),
             StepError::Execution(error) | StepError::Infrastructure(error) => {
                 StepError::Infrastructure(error)
             }

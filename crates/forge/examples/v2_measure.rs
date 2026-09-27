@@ -1,7 +1,11 @@
 //! Reproducible local baseline; arguments: nodes, JSON bytes, samples, concurrency.
+//! Optional: --sqlite NEW_DATABASE_PATH (requires feature sqlite).
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, time::Instant};
 use workflow_forge::v2::*;
+
+#[path = "support/measurement_store.rs"]
+mod measurement_store;
 
 fn percentile(values: &mut [u128]) -> Value {
     values.sort_unstable();
@@ -62,8 +66,11 @@ fn definition(count: usize) -> WorkflowDefinition {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<_> = std::env::args()
-        .skip(1)
+    let raw: Vec<_> = std::env::args().skip(1).collect();
+    let path = measurement_store::sqlite_path(&raw, 4)?;
+    let args: Vec<_> = raw
+        .iter()
+        .take(4)
         .map(|s| s.parse::<usize>())
         .collect::<Result<_, _>>()?;
     let count = args.first().copied().unwrap_or(1);
@@ -77,8 +84,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err("Expected 1..256 nodes, 2..1048576 bytes, at least 1000 samples and 1..32 concurrent runs".into());
     }
-    let runtime =
-        EngineRuntime::boot(WorkflowBuilder::standard().build()?, BootOptions::default()).await?;
+    let providers = measurement_store::MeasurementStore::new(path)?;
+    let runtime = EngineRuntime::boot(
+        WorkflowBuilder::standard()
+            .execution_store(providers.execution)
+            .artifact_store(providers.artifacts)
+            .build()?,
+        BootOptions::default(),
+    )
+    .await?;
     let app = runtime.application();
     let access = AccessContext::trusted("default");
     let definition = definition(count);
@@ -104,6 +118,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             &plan,
             &payload,
             (100 - batch).min(concurrency),
+            path.is_some(),
         )
         .await?;
     }
@@ -115,6 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             &plan,
             &payload,
             (samples - batch).min(concurrency),
+            path.is_some(),
         )
         .await?
         {
@@ -125,7 +141,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let seconds = total_start.elapsed().as_secs_f64();
     println!(
         "{}",
-        json!({"nodes":count,"json_bytes":bytes,"warmup":100,"samples":samples,"concurrency":concurrency,"prepare":percentile(&mut preparation),"execute":percentile(&mut execution),"runs_per_second":samples as f64/seconds,"failed_runs":failed,"profile":"default-memory"})
+        json!({"nodes":count,"json_bytes":bytes,"warmup":100,"samples":samples,"concurrency":concurrency,"prepare":percentile(&mut preparation),"execute":percentile(&mut execution),"runs_per_second":samples as f64/seconds,"failed_runs":failed,"profile":providers.profile})
     );
     runtime.shutdown(ShutdownOptions::default()).await?;
     if failed != 0 {
@@ -140,6 +156,7 @@ async fn run_batch(
     plan: &PreparedWorkflow,
     payload: &Value,
     count: usize,
+    require_durable: bool,
 ) -> Result<Vec<(u128, bool)>, Box<dyn std::error::Error>> {
     let mut jobs = tokio::task::JoinSet::new();
     for _ in 0..count {
@@ -150,13 +167,16 @@ async fn run_batch(
         jobs.spawn(async move {
             let start = Instant::now();
             let expected = input.clone();
-            let accepted = app
-                .start(access.clone(), StartRunRequest::new(plan, input))
-                .await?;
+            let mut request = StartRunRequest::new(plan, input);
+            request.options.require_durable = require_durable;
+            let accepted = app.start(access.clone(), request).await?;
+            let durable = accepted.durable;
             let result = app.wait(access, accepted.run_id).await?;
             Ok::<_, ForgeError>((
                 start.elapsed().as_nanos(),
-                result.state == RunState::Succeeded && result.output.as_ref() == Some(&expected),
+                result.state == RunState::Succeeded
+                    && result.output.as_ref() == Some(&expected)
+                    && durable == require_durable,
             ))
         });
     }

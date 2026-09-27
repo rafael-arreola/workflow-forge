@@ -79,6 +79,26 @@ async fn check_claimed(
         store.commit(owner, 0, changed).await.is_err(),
         "A commit changed immutable input",
     )?;
+    let mut changed_package = running.clone();
+    changed_package
+        .package
+        .definitions
+        .push(initial.definition.clone());
+    require(
+        store.commit(owner, 0, changed_package).await.is_err(),
+        "A commit changed the accepted dependency package",
+    )?;
+    let mut changed_artifacts = running.clone();
+    changed_artifacts.artifacts.push(ArtifactRef {
+        id: "undeclared".into(),
+        scope: initial.scope.clone(),
+        bytes: 0,
+        media_type: "test/data".into(),
+    });
+    require(
+        store.commit(owner, 0, changed_artifacts).await.is_err(),
+        "A commit changed the accepted artifact declarations",
+    )?;
     store.commit(owner, 0, running.clone()).await?;
     require(
         store.commit(owner, 0, running.clone()).await.is_err(),
@@ -92,6 +112,7 @@ async fn check_claimed(
         "Committed revision or input was lost",
     )?;
     let running = check_projections(store, owner, running).await?;
+    let running = check_wait_commit(store, owner, running).await?;
     let expected = running.revision;
     let mut finished = running;
     finished.revision = expected + 1;
@@ -158,6 +179,91 @@ async fn check_claimed(
         "Expiring a result erased its receipt guarantee",
     )?;
     Ok(())
+}
+
+async fn check_wait_commit(
+    store: &dyn ExecutionStore,
+    owner: &str,
+    mut run: RunSnapshot,
+) -> Result<RunSnapshot, ForgeError> {
+    let key = "/nodes/timer";
+    let id = "conformance.wait";
+    let expected = run.revision;
+    run.revision += 1;
+    run.state = RunState::Waiting;
+    run.waits.insert(
+        id.into(),
+        WaitRecord {
+            id: id.into(),
+            node: key.into(),
+            kind: WaitKind::Timer,
+            created_at_ms: run.created_at_ms,
+            deadline_at_ms: run.created_at_ms,
+            start_confirmed: true,
+            state: WaitState::Open,
+            delivery: None,
+        },
+    );
+    run.invocations.insert(
+        key.into(),
+        InvocationRecord {
+            id: "conformance.timer".into(),
+            attempt_id: String::new(),
+            attempts: 0,
+            state: InvocationState::Pending,
+            input: json!(9),
+            output: None,
+            error: None,
+            operation: None,
+            config: serde_json::Value::Null,
+            effect_key: None,
+            retry: RetryPolicy::default(),
+            next_attempt_at_ms: None,
+            certainty: EffectCertainty::NotApplied,
+            control: Some(ControlFrame::Wait { id: id.into() }),
+        },
+    );
+    store.commit(owner, expected, run.clone()).await?;
+    require(
+        store.view(&run.id, None).await? == Some(run.view(None)),
+        "Wait projection differs from its committed deadline or counters",
+    )?;
+    let expected = run.revision;
+    let mut record = run.invocations[key].clone();
+    record.state = InvocationState::Succeeded;
+    record.output = Some(json!(9));
+    record.input = serde_json::Value::Null;
+    require(
+        store
+            .commit_invocation(owner, &run.id, expected, key, record.clone())
+            .await
+            .is_err(),
+        "A node-only commit confirmed a wait without consuming its reservation",
+    )?;
+    let mut separate = run.clone();
+    separate.revision += 1;
+    separate.invocations.insert(key.into(), record.clone());
+    require(
+        store.commit(owner, expected, separate).await.is_err(),
+        "Wait result was confirmed before consumption",
+    )?;
+    let mut separate = run.clone();
+    separate.revision += 1;
+    separate.waits.get_mut(id).unwrap().state = WaitState::Consumed;
+    require(
+        store.commit(owner, expected, separate).await.is_err(),
+        "Wait was consumed without confirming its result",
+    )?;
+    run.revision += 1;
+    run.state = RunState::Running;
+    run.invocations.insert(key.into(), record);
+    run.waits.get_mut(id).unwrap().state = WaitState::Consumed;
+    store.commit(owner, expected, run.clone()).await?;
+    require(
+        store.view(&run.id, None).await? == Some(run.view(None)),
+        "Consumed wait retained a stale scheduling projection",
+    )?;
+    Ok(run)
 }
 
 async fn check_projections(

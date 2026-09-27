@@ -378,7 +378,7 @@ El transporte autentica/traduce su request y convierte `StartReceipt` al protoco
 
 Las asignaciones siguientes son decisiones de diseño propuestas para resolver problemas del proyecto. El [catálogo de Refactoring.Guru](https://refactoring.guru/design-patterns/catalog) es referencia solicitada por el usuario, no una obligación de implementar todos los patrones.
 
-La [guía de patrones y evolución de extensiones](PATTERNS.md) desarrolla PAT-01 a PAT-10: definición, participantes, aplicación, límites y conformidad. «Plugin» significa extensión sobre los contratos del motor; P-03 adopta composición de crates compilados. Las reglas del TDD gobiernan las garantías y la guía explica cómo preservarlas al extender el sistema.
+La [guía de patrones y evolución de extensiones](PATTERNS.md) desarrolla PAT-01 a PAT-11: definición, participantes, aplicación, límites y conformidad. «Plugin» significa extensión sobre los contratos del motor; P-03 adopta composición de crates compilados. Las reglas del TDD gobiernan las garantías y la guía explica cómo preservarlas al extender el sistema. Flyweight se limita al paquete inmutable compartido del proveedor en memoria; no comparte progreso entre runs ni cambia el protocolo de una extensión.
 
 | Patrón | Uso | Prueba de que aporta valor |
 |---|---|---|
@@ -490,7 +490,7 @@ La clasificación del error, presupuesto/deadline y seguridad de repetición se 
 
 **Embedding:** el host configura el builder, registra capacidades y llama al motor. **Servicio:** un host oficial expone la misma superficie lógica y administra su ciclo de vida. La primera topología propuesta es un proceso coordinador; distribuir workers es una ampliación separada.
 
-El perfil efímero usa estado en memoria y declara pérdida ante reinicio. El perfil durable requiere persistencia compatible, artefactos recuperables e implementaciones disponibles por revisión. El motor rechaza combinaciones incapaces de cumplir las garantías solicitadas. P-04 adopta memoria en embedding y SQLite local en el servicio durable; otros proveedores respetan los mismos puertos. Artefactos durables requieren un proveedor persistente separado, cuya confirmación se coordina con el store según TDD-09.
+El perfil efímero usa estado en memoria y declara pérdida ante reinicio. El perfil durable requiere persistencia compatible, artefactos recuperables e implementaciones disponibles por revisión. El motor rechaza combinaciones incapaces de cumplir las garantías solicitadas. P-04 adopta memoria en embedding y SQLite local en el servicio durable; otros proveedores respetan los mismos puertos. El puerto de artefactos conserva contenido persistente y coordina su propiedad con el store según TDD-09. Un mismo backend puede implementar ambos puertos: SQLite usa clones del mismo proveedor/actor, como concreta CONTRACTS §10.3.
 
 Blobs y secretos se obtienen mediante puertos. El acceso a esos recursos depende del contexto del host. El diseño de acceso del servicio se cierra antes de exponerlo, conforme a P-05/P-08. Un módulo compilado dentro del proceso no está aislado frente a comportamiento arbitrario.
 
@@ -633,7 +633,7 @@ La caída de `EngineRuntime` por `Drop` no puede prometer una operación async d
 | Scheduler o tarea esencial deja de funcionar | Retirar readiness, cerrar admisión y notificar al supervisor. |
 | Vence el plazo de apagado | Reportar drenado incompleto y evidencia disponible; no fingir cancelación de efectos remotos. |
 
-F-1 implementa `EngineRuntime::boot(assembly, BootOptions)`, `application()` y `shutdown(ShutdownOptions)`. `BootOptions.definitions` prepara definiciones obligatorias antes de readiness; `ShutdownOptions.timeout` limita el drenado. El host debe esperar el apagado asíncrono: descartar el runtime aborta tareas, pero no sustituye la liberación ordenada del store. El [host ejecutable](../crates/forge/examples/v2_customer.rs) muestra el recorrido completo. La recuperación durable se implementa en F-3; el bootstrap del servicio en F-4. El mecanismo de construcción y propiedad también aplica a embedding, aunque no exista transporte.
+F-1 implementa `EngineRuntime::boot(assembly, BootOptions)`, `application()` y `shutdown(ShutdownOptions)`. `BootOptions.definitions` prepara definiciones obligatorias antes de readiness; `ShutdownOptions.timeout` limita el drenado. El host debe esperar el apagado asíncrono: descartar el runtime aborta tareas, pero no sustituye la liberación ordenada del store. El [host ejecutable](../crates/forge/examples/v2_customer.rs) muestra el recorrido completo. F-3 verifica recuperación durable y el [host SQLite](../crates/forge/examples/v2_sqlite.rs) muestra su composición; el bootstrap del servicio corresponde a F-4. El mecanismo de construcción y propiedad también aplica a embedding, aunque no exista transporte.
 
 ### 6.2 Observación y lectura de estado
 

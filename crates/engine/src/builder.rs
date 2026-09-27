@@ -5,12 +5,14 @@ use std::{
 };
 use workflow_forge_protocol::*;
 
+#[derive(Clone)]
 pub(crate) struct Composition {
     pub id: String,
     pub scope: String,
     pub limits: Limits,
     pub operations: BTreeMap<OperationRevision, Arc<CompiledOperation>>,
     pub schemas: OfflineSchemas,
+    pub schema_resources: BTreeMap<String, SchemaResource>,
     pub store: Arc<dyn ExecutionStore>,
     pub secrets: Arc<dyn SecretProvider>,
     pub artifacts: Arc<dyn ArtifactStore>,
@@ -21,6 +23,15 @@ pub(crate) struct Composition {
 }
 
 pub struct EngineAssembly(pub(crate) Arc<Composition>);
+
+impl Composition {
+    pub(crate) fn coordinated_artifacts(&self) -> bool {
+        self.artifacts.durable()
+            && self.store.artifact_domain().is_some_and(|domain| {
+                !domain.is_empty() && Some(domain) == self.artifacts.artifact_domain()
+            })
+    }
+}
 
 /// Explicit composition. The facade supplies official defaults on top of this builder.
 pub struct EngineBuilder {
@@ -258,6 +269,8 @@ impl EngineBuilder {
                 l.activations,
                 l.audit_entries,
                 l.evidence_bytes,
+                l.waits_per_run,
+                l.signal_bytes,
             ]
             .contains(&0)
             || l.attempt_timeout_ms == 0
@@ -266,6 +279,7 @@ impl EngineBuilder {
             || l.receipt_ttl_ms == 0
             || l.max_retry_attempts == 0
             || l.late_response_grace_ms == 0
+            || l.wait_timeout_ms == 0
             || l.active_runs.checked_add(l.pending_runs).is_none()
         {
             return Err(ForgeError::new(
@@ -281,10 +295,10 @@ impl EngineBuilder {
         };
         let schemas = self.offline_schemas();
         let store = self.store.ok_or_else(missing)?;
-        if store.capabilities().checkpoint_format != 1 || store.capabilities().durable {
+        if store.capabilities().checkpoint_format != CHECKPOINT_FORMAT {
             return Err(ForgeError::new(
                 "capability.unsupported",
-                "This engine profile requires an ephemeral format-1 store",
+                "The store does not support the current checkpoint format",
             ));
         }
         let secrets = self.secrets.ok_or_else(missing)?;
@@ -322,6 +336,7 @@ impl EngineBuilder {
             limits: self.limits,
             operations,
             schemas,
+            schema_resources: self.resources,
             store,
             secrets,
             artifacts: self.artifacts.ok_or_else(missing)?,

@@ -1,7 +1,7 @@
 use futures::{StreamExt, stream};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Mutex, MutexGuard, Weak},
 };
 use workflow_forge_protocol::*;
 
@@ -17,7 +17,9 @@ struct Receipt {
 }
 // Counters and the uncertainty index change under the same lock as the snapshot.
 struct StoredRun {
+    // Private header: package is materialized only at the public snapshot boundary.
     snapshot: RunSnapshot,
+    package: Arc<ResolvedPackage>,
     bytes: usize,
     unresolved: BTreeSet<String>,
 }
@@ -28,7 +30,7 @@ impl std::ops::Deref for StoredRun {
     }
 }
 impl StoredRun {
-    fn new(snapshot: RunSnapshot) -> Self {
+    fn new(snapshot: RunSnapshot, package: Arc<ResolvedPackage>) -> Self {
         let bytes = snapshot.retained_data_bytes();
         let unresolved = snapshot
             .invocations
@@ -38,12 +40,19 @@ impl StoredRun {
             .collect();
         Self {
             snapshot,
+            package,
             bytes,
             unresolved,
         }
     }
+    fn materialize(&self) -> RunSnapshot {
+        let mut snapshot = self.snapshot.clone();
+        snapshot.package = self.package.as_ref().clone();
+        snapshot
+    }
     fn head(&self) -> RunHead {
         RunHead {
+            next_wakeup_at_ms: self.snapshot.next_wakeup_at_ms(),
             id: self.id.clone(),
             scope: self.scope.clone(),
             revision: self.revision,
@@ -66,9 +75,10 @@ impl StoredRun {
                     .saturating_add(snapshot.retained_result_bytes()),
                 unresolved: current.unresolved.clone(),
                 snapshot,
+                package: current.package.clone(),
             }
         } else {
-            Self::new(snapshot)
+            Self::new(snapshot, current.package.clone())
         }
     }
     fn view(&self, node: Option<&str>) -> ExecutionView {
@@ -95,8 +105,22 @@ struct State {
     owner: Option<String>,
     runs: BTreeMap<RunId, StoredRun>,
     receipts: BTreeMap<(String, String), Receipt>,
+    // Exact serialized content is the key; no hash collision can merge revisions.
+    // Weak entries are pruned with run GC, so the pool cannot retain dead packages.
+    packages: BTreeMap<Vec<u8>, Weak<ResolvedPackage>>,
 }
 impl State {
+    fn intern(&mut self, package: ResolvedPackage) -> Result<Arc<ResolvedPackage>, ForgeError> {
+        let key = serde_json::to_vec(&package).map_err(|_| {
+            ForgeError::new("store.failed", "Recovery package cannot be serialized")
+        })?;
+        if let Some(shared) = self.packages.get(&key).and_then(Weak::upgrade) {
+            return Ok(shared);
+        }
+        let shared = Arc::new(package);
+        self.packages.insert(key, Arc::downgrade(&shared));
+        Ok(shared)
+    }
     fn authorize(&self, owner: &str) -> Result<(), ForgeError> {
         if self.owner.as_deref() == Some(owner) {
             Ok(())
@@ -118,7 +142,7 @@ impl ExecutionStore for MemoryExecutionStore {
     fn capabilities(&self) -> StoreCapabilities {
         StoreCapabilities {
             durable: false,
-            checkpoint_format: 1,
+            checkpoint_format: CHECKPOINT_FORMAT,
         }
     }
     fn claim<'a>(&'a self, owner: &'a str) -> PortFuture<'a, ()> {
@@ -145,7 +169,7 @@ impl ExecutionStore for MemoryExecutionStore {
     fn create<'a>(
         &'a self,
         owner: &'a str,
-        run: RunSnapshot,
+        mut run: RunSnapshot,
         receipt: Option<ReceiptReservation>,
         limits: &'a Limits,
     ) -> PortFuture<'a, CreateOutcome> {
@@ -182,24 +206,14 @@ impl ExecutionStore for MemoryExecutionStore {
             {
                 return Err(ForgeError::new("admission.full", "Run capacity is full"));
             }
-            if run.revision != 0
-                || s.runs.contains_key(&run.id)
-                || run.checkpoint_format != 1
-                || run.state != RunState::Accepted
-                || !run.invocations.is_empty()
-                || run.output.is_some()
-                || run.error.is_some()
-                || run.finished_at_ms.is_some()
-                || run.cancel_requested
-                || !run.audit.is_empty()
-                || !run.unresolved_effects.is_empty()
-                || run.deadline_at_ms < run.created_at_ms
-            {
+            run.validate_initial()?;
+            if s.runs.contains_key(&run.id) {
                 return Err(ForgeError::new(
                     "state.conflict",
                     "Run identity already exists or has an invalid initial revision",
                 ));
             }
+            let package = s.intern(std::mem::take(&mut run.package))?;
             if let Some(reservation) = receipt {
                 s.receipts.insert(
                     (run.scope.clone(), reservation.key.clone()),
@@ -209,7 +223,7 @@ impl ExecutionStore for MemoryExecutionStore {
                     },
                 );
             }
-            s.runs.insert(run.id.clone(), StoredRun::new(run));
+            s.runs.insert(run.id.clone(), StoredRun::new(run, package));
             Ok(CreateOutcome::Created)
         })
     }
@@ -218,7 +232,7 @@ impl ExecutionStore for MemoryExecutionStore {
             Ok(locked(&self.state)?
                 .runs
                 .get(id)
-                .map(|r| r.snapshot.clone()))
+                .map(StoredRun::materialize))
         })
     }
     fn unfinished(&self) -> PortFuture<'_, Vec<RunSnapshot>> {
@@ -227,7 +241,7 @@ impl ExecutionStore for MemoryExecutionStore {
                 .runs
                 .values()
                 .filter(|r| !r.state.is_terminal())
-                .map(|r| r.snapshot.clone())
+                .map(StoredRun::materialize)
                 .collect())
         })
     }
@@ -235,7 +249,7 @@ impl ExecutionStore for MemoryExecutionStore {
         &'a self,
         owner: &'a str,
         expected: u64,
-        next: RunSnapshot,
+        mut next: RunSnapshot,
     ) -> PortFuture<'a, ()> {
         Box::pin(async move {
             let mut s = locked(&self.state)?;
@@ -244,40 +258,16 @@ impl ExecutionStore for MemoryExecutionStore {
                 .runs
                 .get(&next.id)
                 .ok_or_else(|| ForgeError::new("not_found", "Run is unavailable"))?;
-            let terminal_changed = if current.state.is_terminal() {
-                let mut stable = next.clone();
-                stable.revision = current.revision;
-                stable.audit = current.audit.clone();
-                stable != current.snapshot
-            } else {
-                false
-            };
-            if current.revision != expected
-                || next.revision
-                    != expected
-                        .checked_add(1)
-                        .ok_or_else(|| ForgeError::new("state.conflict", "Revision exhausted"))?
-                || current.scope != next.scope
-                || current.actor != next.actor
-                || current.resources != next.resources
-                || current.definition != next.definition
-                || current.input != next.input
-                || current.created_at_ms != next.created_at_ms
-                || current.deadline_at_ms != next.deadline_at_ms
-                || current.checkpoint_format != next.checkpoint_format
-                || (current.cancel_requested && !next.cancel_requested)
-                || current.invocations.iter().any(|(id, invocation)| {
-                    invocation.state == InvocationState::Succeeded
-                        && next.invocations.get(id) != Some(invocation)
-                })
-                || !next.audit.starts_with(&current.audit)
-                || terminal_changed
-            {
+            // Validate the shared immutable value before checking the remaining
+            // header with the same public invariant function as durable stores.
+            if current.package.as_ref() != &next.package {
                 return Err(ForgeError::new(
                     "state.conflict",
-                    "Transition does not match the current run revision",
+                    "Recovery package differs from the accepted snapshot",
                 ));
             }
+            next.package = ResolvedPackage::default();
+            current.validate_successor(expected, &next)?;
             let next = StoredRun::after(current, next);
             s.runs.insert(next.id.clone(), next);
             Ok(())
@@ -316,6 +306,11 @@ impl ExecutionStore for MemoryExecutionStore {
                 .get_mut(id)
                 .ok_or_else(|| ForgeError::new("not_found", "Run is unavailable"))?;
             if current.revision != expected
+                || record.is_wait()
+                || current
+                    .invocations
+                    .get(node)
+                    .is_some_and(InvocationRecord::is_wait)
                 || current.snapshot.state.is_terminal()
                 || current
                     .invocations
@@ -370,6 +365,7 @@ impl ExecutionStore for MemoryExecutionStore {
                     s.runs.remove(&id);
                 }
             }
+            s.packages.retain(|_, package| package.strong_count() != 0);
             Ok(())
         })
     }

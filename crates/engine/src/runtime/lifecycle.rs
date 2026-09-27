@@ -1,9 +1,36 @@
 use super::*;
 
+struct BootClaim {
+    store: Option<Arc<dyn ExecutionStore>>,
+    owner: String,
+}
+impl Drop for BootClaim {
+    fn drop(&mut self) {
+        if let Some(store) = self.store.take() {
+            let owner = self.owner.clone();
+            release_detached(store, owner);
+        }
+    }
+}
+
+fn release_detached(store: Arc<dyn ExecutionStore>, owner: String) {
+    // Explicit async shutdown remains the only way to await cleanup. Within a
+    // live host runtime, dropping a boot/result must not strand a retained store.
+    if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+        runtime.spawn(async move {
+            let _ = store.release(&owner).await;
+        });
+    }
+}
+
 impl EngineRuntime {
     pub async fn boot(assembly: EngineAssembly, options: BootOptions) -> Result<Self, ForgeError> {
         let composition = assembly.0;
         composition.store.claim(&composition.id).await?;
+        let mut claim = BootClaim {
+            store: Some(composition.store.clone()),
+            owner: composition.id.clone(),
+        };
         let (events, mut receiver) = mpsc::channel::<ExecutionEvent>(128);
         let (late, late_receiver) = mpsc::channel(composition.limits.concurrent_attempts);
         let shared = Arc::new(Shared {
@@ -33,8 +60,24 @@ impl EngineRuntime {
                     ));
                 }
                 // Resolve exact revisions before classifying unfinished attempts.
-                match prepare_registered(&shared, run.definition.clone(), None).await {
+                match prepare_recovered(&shared, run.clone()).await {
                     Ok(plan) => {
+                        if run.state == RunState::Blocked
+                            && run
+                                .error
+                                .as_ref()
+                                .is_some_and(|e| e.code() == "recovery.unavailable")
+                        {
+                            transition(&shared, &run.id, |r| {
+                                r.state = if r.cancel_requested {
+                                    RunState::Cancelling
+                                } else {
+                                    RunState::Running
+                                };
+                                r.error = None;
+                            })
+                            .await?;
+                        }
                         recovery::classify_unfinished(&shared, &run).await?;
                         shared.plans.lock().await.insert(run.id.clone(), plan);
                     }
@@ -42,7 +85,9 @@ impl EngineRuntime {
                         let revision = run.revision;
                         run.state = RunState::Blocked;
                         run.error = Some(error);
-                        run.revision += 1;
+                        run.revision = revision.checked_add(1).ok_or_else(|| {
+                            ForgeError::new("state.conflict", "Revision exhausted")
+                        })?;
                         composition
                             .store
                             .commit(&composition.id, revision, run)
@@ -57,6 +102,7 @@ impl EngineRuntime {
             if let Err(cleanup) = composition.store.release(&composition.id).await {
                 error.diagnostics.extend(cleanup.diagnostics);
             }
+            claim.store = None;
             return Err(error);
         }
         let observer = composition.observer.clone();
@@ -87,10 +133,13 @@ impl EngineRuntime {
             }
             outcome
         });
+        claim.store = None;
         Ok(Self {
             app: WorkflowApplication { shared },
+            supervisor_abort: supervisor.abort_handle(),
             supervisor: Some(supervisor),
             observer: Some(observer_task),
+            owns_store: true,
         })
     }
 
@@ -141,6 +190,8 @@ impl EngineRuntime {
         };
         if let Err(error) = composition.store.release(&composition.id).await {
             failures.extend(error.diagnostics);
+        } else {
+            self.owns_store = false;
         }
         self.app.shared.phase.store(STOPPED, Ordering::Release);
         if let Some(observer) = self.observer.take() {
@@ -161,11 +212,16 @@ impl Drop for EngineRuntime {
     fn drop(&mut self) {
         self.app.shared.phase.store(STOPPED, Ordering::Release);
         self.app.shared.cancel.cancel();
+        self.supervisor_abort.abort();
         if let Some(supervisor) = self.supervisor.take() {
             supervisor.abort();
         }
         if let Some(observer) = self.observer.take() {
             observer.abort();
+        }
+        if self.owns_store {
+            let composition = &self.app.shared.composition;
+            release_detached(composition.store.clone(), composition.id.clone());
         }
     }
 }

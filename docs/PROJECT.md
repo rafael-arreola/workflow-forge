@@ -4,13 +4,13 @@ Actualizado: 2026-09-26. Esta página registra evidencia; el producto objetivo e
 
 ## Punto actual
 
-**Implementación autorizada el 2026-09-26:** avanzar F-0 a F-5 en orden y crear un commit por fase. La planificación quedó conservada en `66d39a5`; F-0 en `d5901a1` y F-1 en `00bcad9`. F-2 completa los controles, efectos y C-02 en memoria: fmt, ambas variantes de Clippy, 282 pruebas del workspace y mediciones verificadas. Su cierre se conserva en el commit de esta fase. La API nueva se encuentra en `workflow_forge::v2`; la CLI y los módulos spec 1.0 permanecen temporalmente durante su migración.
+**Implementación autorizada el 2026-09-26:** avanzar F-0 a F-5 en orden y crear un commit por fase. La planificación quedó conservada en `66d39a5`; F-0 en `d5901a1`, F-1 en `00bcad9` y F-2 en `dcb1d34`. F-2 completa los controles, efectos y C-02 en memoria: fmt, ambas variantes de Clippy, 282 pruebas del workspace y mediciones verificadas. La API nueva se encuentra en `workflow_forge::v2`; la CLI y los módulos spec 1.0 permanecen temporalmente durante su migración.
 
 F-1 incorpora protocolo público, engine, módulos oficiales, fachada, kit de conformidad y extensión externa. El recorrido C-01A recibe JSON, normaliza un identificador, consulta un cliente inyectado y devuelve un resultado validado. `build` permanece inactivo, `boot` reclama el store y supervisa ejecución, los handles comparten la instancia y `shutdown` cierra admisión y drena.
 
 Los patrones se concretan en código: Builder en la composición, Adapter en la extensión, Factory Function en las contribuciones, Facade en el handle, Command en la invocación y Decorator en la prueba de observación. F-2 añade State para control/efectos, Composite para cuerpos/subworkflows y Strategy de backoff después de clasificar la seguridad de repetición. No se requiere importar internos del engine para extender operaciones o sustituir proveedores. El compilador fija revisiones y rechaza capacidades fuera del perfil implementado.
 
-El alcance completo sigue en ROADMAP. La siguiente fase es F-3, durabilidad/esperas; F-4 entrega servicio y módulos de integración; F-5 adopción. P-01 aún requiere contrastar las referencias con dos sistemas reales del usuario y P-07 cerrar sus metas de despliegue. El éxito de los fixtures no acredita esas integraciones.
+F-3 también está completa: paquete de recuperación fijado, estado/artefactos SQLite, migraciones, señales/timers y reconciliación durable, con 331 pruebas del workspace y mediciones comparables registradas abajo. La siguiente fase es F-4, servicio y módulos de integración; F-5 cubre adopción. P-01 aún requiere contrastar las referencias con dos sistemas reales del usuario y P-07 cerrar sus metas de despliegue. El éxito de los fixtures no acredita esas integraciones.
 
 ## Evidencia F-1
 
@@ -97,7 +97,145 @@ Logs locales de medición: `/tmp/workflow-forge-f2-final-sequence-*.log`, `/tmp/
 
 La recuperación de una intención tras fallo del supervisor usa un proveedor en memoria conservado por el host. Las pruebas de reanudación de controles conservan la misma composición. No acreditan caída de proceso, SQLite ni recuperación de dependencias entre composiciones: F-3 debe persistir el paquete de revisiones resueltas y probar cambios/ausencias de dependencias antes de prometer esa garantía.
 
-Siguiente implementación: diseño durable F-3 según ROADMAP. Los dos casos reales P-01 y objetivos del despliegue P-07 siguen pendientes de datos del implementador, sin bloquear este trabajo del motor.
+Al cerrar F-2, el siguiente trabajo fue durabilidad F-3 según ROADMAP. Los dos casos reales P-01 y objetivos del despliegue P-07 siguen pendientes de datos del implementador.
+
+## Evidencia F-3
+
+Después de `dcb1d34`, el checkpoint formato 2 incorpora el paquete inmutable de definiciones, descriptores y schemas aceptados. La aceptación y la identidad de recepción lo incluyen. Boot y recuperación de una aceptación sin acuse compilan desde ese paquete, sin sustituir subworkflows desde el catálogo del nuevo host. Reconciliación valida resultados con los schemas originales. Una implementación ausente/incompatible deja `recovery.unavailable`; reinstalarla permite recuperar ese bloqueo sin borrar un efecto incierto.
+
+[Pruebas del paquete](../crates/forge/tests/v2_recovery_package.rs): cuatro casos pasan, usando un store en memoria conservado entre composiciones. Cubren round-trip JSON, catálogo cambiado/schema de autoría ausente, preservación de un paso confirmado, revisión de operación ausente y reinstalada, descriptor incompatible y confirmación de efecto bajo el schema externo original. El kit público también rechaza mutar el paquete bajo CAS. Son pruebas de reconstrucción de dependencias, **no caída de proceso ni durabilidad**.
+
+Verificación inicial del paquete: 59 casos únicos de aceptación, control, efectos, inventario, fronteras de fallo y paquete pasan. Logs `/tmp/workflow-forge-f3-package-regression.log` y `/tmp/workflow-forge-f3-package-tests.log`; el segundo vuelve a ejecutar las ocho fronteras de fallo al ampliar conformidad. La suite completa de 282 casos y las mediciones anteriores corresponden al commit F-2; no se atribuyen al nuevo formato de checkpoint.
+
+El [adaptador SQLite](../crates/modules/src/sqlite/mod.rs) ya implementa estado/aceptación durable, detrás de la feature `sqlite`. La configuración permanece inactiva; el primer reclamo inicia su actor y abre/migra el archivo bajo lock exclusivo del SO. Cola acotada, conexión en hilo propio, propietario contrastado dentro de transacciones, WAL/FULL y límites de páginas/registro. El codec valida versión antes de interpretar payload; los paquetes se conservan por hash, los nodos por fila y las proyecciones mantienen contadores en el mismo commit. Memoria y SQLite comparten validaciones puras del protocolo para creación/sucesión; el backend conserva la responsabilidad de su atomicidad.
+
+Las [pruebas del store](../crates/modules/tests/sqlite_store.rs) pasan seis casos: kit público y reapertura, propietario/revisión concurrentes, rollback de recibo/run por cuota de disco, schema/codec desconocidos y corrupción, base ajena sin sobrescritura y reclamo cancelado sin lock retenido. La cancelación observa que el reclamo está activo mediante el lock del SO antes de abandonar su future; no depende de suponer progreso por un sleep.
+
+Las [pruebas del engine SQLite](../crates/forge/tests/v2_sqlite.rs) pasan seis casos, uno de ellos el punto de entrada de los procesos hijos. La matriz termina cuatro procesos reales mediante `exit(73)`, sin destructores Rust, después de aceptación sin acuse, intención, efecto en un ledger externo y resultado confirmado. La aceptación/clave persiste; una intención o escritura sin resultado bloquea; inspección y resolución permiten continuar con exactamente un efecto final. Resultado confirmado no se repite. Un segundo arranque conserva snapshot, auditoría y recibo de resolución. También se prueban rechazo de artefactos efímeros y cancelación de boot después de reclamar el store, manteniendo vivo el proveedor para demostrar liberación de propiedad. También se verifican descarte del runtime con handles vivos y abandono de `shutdown` después de tomar su supervisor: se libera el store y el trabajo no confirmado permanece recuperable. Estas pruebas no simulan pérdida física de energía o fallos del hardware.
+
+Comandos: `cargo test -p workflow-forge-modules --features sqlite --test sqlite_store` y `cargo test -p workflow-forge --features sqlite --test v2_sqlite`; logs `/tmp/workflow-forge-f3-sqlite-store-tests.log` y `/tmp/workflow-forge-f3-sqlite-process-tests.log`. La regresión dirigida de siete suites v2 pasó 62 casos antes de añadir el test de cancelación de boot; ese test y dos casos de cierre pasan en la suite SQLite posterior. Son 71 casos únicos entre esas suites y el store, no una nueva ejecución de todo el workspace. La comprobación de ciclo de vida está en `/tmp/workflow-forge-f3-sqlite-lifecycle-tests.log`: 29 casos entre aceptación, fronteras de fallo y SQLite. Log de regresión `/tmp/workflow-forge-f3-sqlite-regression.log`. Clippy workspace/all-targets/all-features con `-D warnings` pasa, incluido el ejemplo durable (`/tmp/workflow-forge-f3-sqlite-workspace-clippy.log`).
+
+[Host ejecutable](../crates/forge/examples/v2_sqlite.rs): build con `cargo build -p workflow-forge --features sqlite --example v2_sqlite`; dos ejecuciones contra `/tmp/workflow-forge-sqlite-host-xL853dcD/state.sqlite` devolvieron `Succeeded`, `{"active":true,"customer":"C-9"}`, `durable:true` y el mismo RunId. La segunda informó `duplicate:true`. Los datos temporales no son un despliegue ni sustituyen mediciones release. Dependencias fijadas en Cargo.lock: rusqlite 0.39.0 y libsqlite3-sys 0.37.0 con SQLite incluido; sin dependencia SQL dentro del engine.
+
+### Incremento de artefactos durables
+
+El mismo proveedor SQLite implementa estado y artefactos mediante un actor compartido. `artifact_domain` comprueba coordinación sin imports SQL en el engine; dos instancias separadas sobre un mismo path no son intercambiables con clones de ese proveedor. `StartOptions.artifacts` declara referencias que se validan/fijan con run y recibo. La lista es inmutable y participa en cuotas e identidad de recepción. El contexto pasa propietario/RunId en cada acceso: un stream viejo no hereda la autoridad de un arranque posterior.
+
+La migración SQL 2 agrega metadatos, bloques de hasta 64 KiB y propietarios por run. `staging` nunca devuelve una referencia; `ready` exige todos sus bytes confirmados. Hay cuotas de cantidad/bytes, limpieza de escrituras interrumpidas, expiración de cargas sin propietario y retención compartida mientras exista algún run propietario. La publicación cuyo acuse se pierde permanece vinculada hasta la retención del run. Un checkpoint JSON de schema 1 conserva contenido, contadores y recibo después de migrar.
+
+[Pruebas del proveedor de artefactos](../crates/modules/tests/sqlite_artifacts.rs): seis casos pasan. Cubren streaming de 200 003 bytes, reapertura y propietarios compartidos, rollback de aceptación/vínculos/recibo, metadatos/scope, acceso no declarado, creación desde un run, propietario obsoleto, cancelación con evidencia de bloque persistido, cuotas, migración y referencia vencida antes del GC. El kit de ejecución también rechaza alterar las referencias aceptadas. Se ejecutan junto con los seis casos del store: `/tmp/workflow-forge-f3-artifact-provider-tests.log`.
+
+[Pruebas C-02 durables](../crates/forge/tests/v2_sqlite_inventory.rs): tres casos pasan, incluido el punto de entrada hijo. Tres procesos terminan mediante `exit(73)` después del primer lote, durante streaming del reporte final y después de publicarlo sin devolver el acuse. Al reiniciar se conserva la recepción, se recuperan las 201 filas y el reporte ordenado, con 201 llamadas/efectos en el ledger del destino. El caso `staging` recupera con cuota exacta de cinco artefactos; el publicado sin acuse ocupa su sexta plaza hasta la retención. Un segundo arranque conserva snapshot y contenido, y el GC posterior invalida el reporte. También se rechaza combinar dos coordinadores aunque ambos anuncien durabilidad. Log final `/tmp/workflow-forge-f3-artifact-process-tests.log`; el fixture cuenta los intentos interrumpidos y fija tres intentos para operaciones repetibles.
+
+Regresión dirigida del incremento: 26 casos de aceptación/fronteras/C-02 durable y 15 de inventario/paquete/SQLite pasan; logs `/tmp/workflow-forge-f3-artifact-integration-tests.log` y `/tmp/workflow-forge-f3-artifact-engine-regression.log`. Clippy workspace/all-targets con defaults y all-features, `-D warnings`, pasa: `/tmp/workflow-forge-f3-artifact-clippy-default.log` y `/tmp/workflow-forge-f3-artifact-clippy.log`. No se presenta como nueva suite completa del workspace ni como medición de rendimiento. El ejemplo JSON del host sigue publicado; CONTRACTS §10.3 añade el fragmento para componer ambos puertos y declarar la entrada CSV.
+
+### Incremento de esperas, señales y timers
+
+CONTRACTS §11 ya se conecta al protocolo, compilador, schema y runtime: `await_signal` reserva antes de su operación de inicio opcional; `timer` conserva el input y un vencimiento absoluto. Se mantienen las rutas de ámbito y la política existente de efectos. El Command de señal valida permiso/scope, correlación, schema offline, cuotas y adjuntos; conserva payload/acuse antes de responder. Un inicio incierto permanece bloqueado aunque reciba el callback. El consumo y resultado del control comparten un commit completo; los proveedores rechazan modificar el nodo de espera mediante el puerto de commits individuales.
+
+La suspensión es distinta de error y libera capacidad de run/ámbito; se propaga por controles anidados y deja asentarse a las ramas activas. `RunHead.next_wakeup_at_ms` permite reanudar por señal, timer o deadline incluso si se pierde una notificación en memoria. Un grupo detenido por fallo conocido cierra atómicamente sus reservas abiertas, incluidos hijos ya suspendidos; no afecta otras ramas. La cancelación del run cierra reservas junto con su marca de cancelación y conserva acuses/incertidumbre.
+
+[Pruebas de esperas](../crates/forge/tests/v2_waits.rs): diez casos pasan. Cubren liberación con `active_runs = 1`, validación/deduplicación/permisos, callback anterior a confirmar el inicio, incertidumbre y resolución, expiración, paralelo/foreach/loop/subworkflow, ámbitos detenidos y cuotas de reservas/activaciones/deadline/payload. Una entrega en plazo sobrevive al vencimiento de la espera mientras se confirma el inicio; vencer sin entrega durante una escritura incierta bloquea hasta resolverla. El caso de grupo detenido reprodujo una reserva indebidamente abierta y pasa después de cerrar reservas junto con la marca de detención. Logs `/tmp/workflow-forge-f3-wait-boundary-tests.log` y `/tmp/workflow-forge-f3-wait-budget-tests.log`; las 15 pruebas de efectos también pasan con ese cambio.
+
+[Pruebas de carreras](../crates/forge/tests/v2_wait_races.rs): cuatro casos pasan. Un Decorator retiene un candidato antes del CAS y deja confirmar al competidor para comprobar señal durante la suspensión, dos entregas idénticas/conflictivas y señal frente a cancelación/expiración, tanto en memoria como en SQLite. El caso de adjuntos SQLite verifica rollback de todos los vínculos/acuse tras una referencia inválida y una entrega válida posterior. La retención elimina run, acuse y artefacto cuando ya no tienen propietario. Logs `/tmp/workflow-forge-f3-wait-race-tests.log` y `/tmp/workflow-forge-f3-wait-retention-tests.log`.
+
+[Pruebas de reinicio de esperas](../crates/forge/tests/v2_sqlite_waits.rs): tres casos, incluido el punto de entrada hijo. La matriz termina tres procesos con `exit(73)` después de reservar, aceptar señal y consumirla antes de su sucesor. Al arrancar conserva identidad/deadline, acuse durable, adjuntos y un solo efecto de inicio/sucesor. Funciona sin el schema del catálogo de autoría original, usando el paquete aceptado. Un segundo arranque conserva resultado y acuse; un timer conserva su fecha original después de shutdown/boot. Log `/tmp/workflow-forge-f3-wait-process-tests.log`.
+
+El checkpoint y esquema SQL avanzan a 3. La migración transaccional del formato 2 actualiza sobres y hashes/referencias de paquetes, preservando los datos anteriores. Las [ocho pruebas del store](../crates/modules/tests/sqlite_store.rs) incluyen migrar intención/salida/artefacto/recibo y forzar un fallo posterior para comprobar rollback de contenido, DDL y versión; reparar el registro permite reclamar después. Las seis pruebas de artefactos siguen pasando, incluida migración desde schema SQL 1. El kit de conformidad comprueba proyección coherente y consumo/resultado inseparables sobre memoria, fallback y SQLite. Logs `/tmp/workflow-forge-f3-wait-migration-tests.log`, `/tmp/workflow-forge-f3-wait-conformance-tests.log` y `/tmp/workflow-forge-f3-wait-store-conformance.log`.
+
+El [ejemplo `v2_signal`](../crates/forge/examples/v2_signal.rs) se construyó con `cargo build -p workflow-forge --features sqlite --example v2_signal`. Tres procesos contra `/tmp/workflow-forge-signal-example-8a7aY7Kp/state.sqlite` ejecutaron `start`, `signal` y `signal`: primero `Waiting`, después `Succeeded` con `{"start":null,"signal":{"approved":true}}` y finalmente el mismo acuse con `duplicate:true`. Conservan RunId/WaitId. Es un host local con acceso confiable, sin servicio HTTP ni medición release.
+
+Verificación del incremento: `cargo test --workspace --all-features` pasa **326 pruebas, 0 fallos y 1 SFTP ignorada**; log `/tmp/workflow-forge-f3-waits-workspace.log`. Incluye los cambios de protocolo/codec, controles y cancelación. La posterior ampliación del caso de GC de señales pasa en su suite dirigida de cuatro casos; no cambia código de producción ni el conteo. La suite completa usa permisos para sockets HTTP locales del prototipo. No se ejecutó el servidor SFTP externo.
+
+`cargo fmt --all --check`, `git diff --check` y Clippy workspace/all-targets con defaults y all-features, `-D warnings`, pasan. Logs `/tmp/workflow-forge-f3-waits-clippy-default.log` y `/tmp/workflow-forge-f3-waits-clippy-all.log`. Revisión documental: diez documentos, 158 enlaces locales/anchors, cuatro bloques JSON y fixtures/schema formato 2 parseables; fences balanceados, sin errores. No se renderizó Mermaid. Estas comprobaciones no sustituyen las mediciones release de F-3 ni prueban otro toolchain.
+
+### Reconciliación durable V-18
+
+La suite SQLite amplía su matriz a nueve casos; los tres nuevos están en [sqlite_resolution](../crates/forge/tests/support/sqlite_resolution.rs), usando exclusivamente la fachada y puertos públicos. Pasan con `cargo test -p workflow-forge --features sqlite --test v2_sqlite`; log `/tmp/workflow-forge-f3-resolution-tests.log`. El fixture declara una salida entera para comprobar la resolución de efectos con outputs incompatibles.
+
+Una inspección de ausencia sin quiescencia conserva bloqueo; evidencia vacía, ámbito ajeno y permisos ausentes no modifican el snapshot. Dos investigaciones sobre la misma revisión aceptan una sola decisión; después de reiniciar se conservan ambas entradas previas de auditoría, el acuse del ganador y el rechazo de cambios de contenido/actor. La no aplicación definitiva sin retry termina el run sin nuevos intentos ni efectos. La prueba de output inválido conserva `Applied` y `Unknown` después de reiniciar, rechaza una posterior negación del efecto y solo habilita el sucesor al confirmar un output válido.
+
+La matriz de pérdida de acuse ejecuta seis pares de procesos: el primero cae en intención/efecto y el segundo antes o después del commit de resolución. Antes del commit no aparecen decisión, auditoría ni acuse; después aparecen juntos y repetir el Command devuelve el recibo persistido. Cubre aplicación, retry seguro, investigación inconclusa y `StopTracking` tanto fallido como cancelado. El cierre mantiene identidad/intento/clave en `unresolved_effects`, no despacha el sucesor ni permite reabrir el run. Un segundo reinicio mantiene cada snapshot/acuse y exactamente un efecto en el ledger. Se conservan las cuatro fronteras de caída de la matriz original.
+
+### Memoria compartida y comprobaciones de cierre
+
+La comparación de RSS detectó duplicación del paquete de recuperación en cada run retenido. El proveedor en memoria ahora comparte contenido idéntico mediante `Arc<ResolvedPackage>`; mantiene progreso por run y materializa copias completas al cruzar el puerto público. La igualdad del paquete y la transición siguen comprobándose bajo el lock/CAS. Un índice débil se limpia con la retención. [PAT-11](PATTERNS.md#pat-11--flyweight-compartir-datos-inmutables) explica la aplicación de Flyweight y sus límites.
+
+La prueba añadida de retención usa memoria y SQLite: completar/eliminar un run no pierde el paquete de otro, modificar una copia pública no permite reemplazarlo y una aceptación posterior funciona después de liberar todos los runs anteriores. La suite de carreras pasa cinco casos. Logs `/tmp/workflow-forge-f3-shared-package-tests.log` y `/tmp/workflow-forge-f3-shared-package-retention-tests.log`.
+
+La ampliación final V-15 en [v2_sqlite](../crates/forge/tests/v2_sqlite.rs) lleva esa suite a diez casos. Un proceso cae después de confirmar el resultado de una escritura; arrancar sin su plugin bloquea con `recovery.unavailable` y conserva el registro confirmado. Reutilizar su revisión con otro schema también bloquea, sin avanzar al sucesor. Reinstalar el contrato original permite terminar con el mismo recibo/run y un solo efecto externo. Otra reapertura conserva exactamente el snapshot final.
+
+Checks de cierre, posteriores a esa ampliación: `cargo test --workspace --all-features` pasa **331 pruebas, 0 fallos y 1 SFTP ignorada**. Formato, `git diff --check` y Clippy workspace/all-targets con defaults y all-features, `-D warnings`, pasan. Logs `/tmp/workflow-forge-f3-close-{workspace,fmt,diff,clippy-default,clippy-all}.log`. La suite requiere sockets HTTP locales del prototipo; no acredita el servidor SFTP externo ni el MSRV declarado, porque se ejecutó con Rust 1.98.1.
+
+La revisión documental final verifica diez documentos, 163 enlaces locales/anchors, cuatro bloques JSON y cuatro archivos de fixtures/schema; sin errores y con fences balanceados. `cargo fmt --all --check` también pasa después del último ajuste del test. No se renderizó Mermaid ni se presentan los fragmentos Rust de diseño como programas compilados.
+
+### Mediciones F-3
+
+Entorno local del 2026-09-26: Apple M1 Max, 10 CPU, 64 GiB, macOS 27.0 (26A428), Rust 1.98.1, release. Sin red ni latencia externa simulada. Las mediciones se ejecutan en serie, sin builds/tests simultáneos. `/usr/bin/time -l` mide RSS del ejecutable, excluyendo Cargo. Las secuencias conservan los presupuestos predeterminados, incluidos 1 000 resultados/1 h, 16 MiB por run y 5 minutos activos; preparación y ejecución se miden separadas, con 100 calentamientos y 1 000 observaciones cada una.
+
+Árbol de fuentes usado para medir F-3 después de compartir paquetes: SHA-256 `be7e7f6f5f461e89ec8d99f9cc7a6b03c0d157e88a6d7342dd24e6c9c6b64135`. Se calculó sobre 193 rutas únicas ordenadas de `git ls-files -co --exclude-standard`, seleccionando `.rs`, `.sql`, `.json`, `Cargo.toml` y `Cargo.lock`; cada entrada aporta ruta UTF-8, NUL, contenido y NUL. Las mediciones SQLite pequeñas preceden al cambio exclusivo de memoria y corresponden a `904f70f1e0ee4fa95831c1064be254bcacc28c7fe18024548c1ed6d9288ffbb4`. La posterior ampliación de la prueba de reinstalación de plugins no cambia los binarios medidos.
+
+Comandos para secuencias: `cargo build --release -p workflow-forge --example v2_measure --example v2_inventory` y `/usr/bin/time -l target/release/examples/v2_measure N BYTES 1000 CONCURRENCY`. Para SQLite se agrega `--features sqlite` al build y `--sqlite NUEVA_RUTA.sqlite` al ejecutable; se instala el mismo proveedor en estado/artefactos y se exige un acuse durable. Las rutas de bases son nuevas, dentro de un directorio existente. WAL/FULL y fullfsync permanecen activos; no se comparan sus garantías con memoria como si fueran equivalentes.
+
+Primera pasada F-3 con paquetes compartidos, **cero runs fallidos o incorrectos**:
+
+| Nodos / JSON / concurrencia | Preparación p50 / p95 / p99 (µs) | Ejecución p50 / p95 / p99 (µs) | Runs/s | RSS máximo (bytes) |
+|---|---|---|---|---|
+| 1 / 1 KiB / 1 | 20.958 / 28.000 / 39.375 | 91.917 / 130.500 / 158.917 | 9 576.87 | 24 592 384 |
+| 10 / 1 KiB / 8 | 61.500 / 73.708 / 94.000 | 3 402.916 / 4 157.125 / 4 416.875 | 2 054.46 | 42 270 720 |
+| 100 / 1 KiB / 32 | 518.917 / 572.458 / 645.083 | 85 028.708 / 110 336.917 / 112 791.334 | 292.78 | 312 459 264 |
+| 1 / 64 KiB / 1 | 21.292 / 38.375 / 53.958 | 690.375 / 789.041 / 885.625 | 1 396.07 | 223 461 376 |
+
+La investigación del umbral de 15% repitió F-2 (`dcb1d34`, exportado a otro directorio) en esta máquina y F-3 dos veces más. No se elige solo la mejor pasada:
+
+| Carga | F-2 repetida: ejecución p95 (µs) / RSS (bytes) | F-3: rango p95 de tres pasadas (µs) | F-3: rango RSS (bytes) |
+|---|---|---|---|
+| 1 / 1 KiB / 1 | 110.500 / 23 822 336 | 128.250–134.000 | 24 576 000–24 592 384 |
+| 10 / 1 KiB / 8 | 3 795.042 / 40 747 008 | 3 852.000–4 157.125 | 42 237 952–42 287 104 |
+| 100 / 1 KiB / 32 | 94 169.292 / 287 342 592 | 98 533.583–110 336.917 | 308 592 640–312 459 264 |
+| 1 / 64 KiB / 1 | 720.709 / 220 168 192 | 713.959–789.041 | 219 873 280–223 461 376 |
+
+Antes de compartir el paquete, la carga de 100 nodos usó 380 944 384 bytes; después, 308 592 640–312 459 264: reducción aproximada del 18–19%, todavía 7.4–8.7% sobre F-2 repetida. La latencia p95 de esa carga varía entre +4.6% y +17.2%. Un nodo de 1 KiB conserva una regresión de +16.1–21.3%, unos 18–24 µs. Preparación de 100 nodos pasa de 443.416 µs p95 en F-2 a 572.458–604.625 µs; 64 KiB, de 23.459 a 27.750–38.375 µs. La revisión local identifica trabajo nuevo de copia/serialización del paquete durante preparación, validación de su inmutabilidad y materialización de snapshots completos; es una explicación por inspección, no un perfil de CPU que atribuya cada microsegundo. Se conserva ese coste para mantener recuperación y contratos públicos. No se declara paridad total ni cumplimiento de metas de producción aún pendientes P-07.
+
+SQLite, **cero runs fallidos o incorrectos** en las cuatro cargas:
+
+| Nodos / JSON / concurrencia | Preparación p50 / p95 / p99 (µs) | Ejecución p50 / p95 / p99 (µs) | Runs/s | RSS máximo (bytes) |
+|---|---|---|---|---|
+| 1 / 1 KiB / 1 | 20.375 / 24.875 / 27.708 | 38 842.500 / 52 790.500 / 63 885.125 | 25.19 | 17 809 408 |
+| 10 / 1 KiB / 8 | 61.208 / 73.709 / 82.292 | 1 159 958.417 / 1 337 221.542 / 1 461 621.792 | 6.57 | 18 890 752 |
+| 100 / 1 KiB / 32 | 486.208 / 505.584 / 538.667 | 41 913 124.125 / 45 882 614.542 / 46 990 404.875 | 0.76 | 33 816 576 |
+| 1 / 64 KiB / 1 | 21.250 / 27.833 / 39.292 | 45 412.542 / 74 753.958 / 88 924.875 | 20.68 | 21 364 736 |
+
+La carga durable de 100 nodos completó 100 calentamientos y 1 000 muestras en 1 456.68 s totales. Su p95 de 45.883 s corresponde al run completo con 32 ejecuciones concurrentes; no es latencia por nodo. Hubo una consulta SQLite de solo lectura de progreso durante la carga de 10 nodos y dos durante la de 100 nodos; estas son mediciones locales, no una campaña aislada de producción.
+
+C-02 usa `/usr/bin/time -l target/release/examples/v2_inventory FILAS 3`, agregando `--sqlite DIRECTORIO` para crear `sample-0.sqlite` a `sample-2.sqlite`. Son tres composiciones independientes sin calentamiento; no se infieren percentiles. Lotes de 100, concurrencia de filas 4, 12 000 activaciones y 900 000 ms por run. El cronómetro de ejecución va de `start` a `wait`; la carga inicial del CSV y la lectura de comprobación quedan fuera, pero el RSS incluye el proceso completo. Se comprueban todas las filas del reporte y los efectos del destino de referencia en memoria.
+
+| Perfil / filas | Ejecución de cada muestra (s) | RSS máximo (bytes) | Filas y efectos por muestra |
+|---|---|---|---|
+| F-2 repetida, memoria / 100 | 0.021929 / 0.016625 / 0.013883 | 16 384 000 | 100 |
+| F-3, memoria / 100 | 0.016089 / 0.013845 / 0.012032 | 17 465 344 | 100 |
+| F-2 repetida, memoria / 10 000 | 1.222469 / 1.281648 / 1.318629 | 150 700 032 | 10 000 |
+| F-3, memoria / 10 000 | 1.333590 / 1.329217 / 1.341853 | 163 151 872 | 10 000 |
+| F-3, SQLite / 100 | 2.026744 / 2.045761 / 2.039876 | 19 496 960 | 100 |
+| F-3, SQLite / 10 000 | 227.738979 / 227.039823 / 225.216731 | 195 477 504 | 10 000 |
+
+Las tres muestras durables de 10 000 filas terminaron con 10 000 filas y efectos correctos cada una; entre 43.91 y 44.40 filas/s. Los runs de 100/10 000 filas conservan 105/10 302 activaciones y 313/30 706 transiciones. CSV de 995/137 797 bytes; reporte de 13 332/1 491 144 bytes. Las mediciones en memoria de 10 000 filas suben 8.3% en RSS frente a F-2 repetida; la evidencia de recuperación C-02 sigue siendo la matriz con ledger externo de 201 filas, no el destino volátil de este benchmark.
+
+Logs locales bajo `/tmp/workflow-forge-f3-measure-uiYwceCq`: `shared-memory-*.log`, `shared-memory-repeat{2,3}-*.log`, `f2-repeat-*.log`, `shared-inventory-memory-*.log`, `sqlite-*.log` e `inventory-sqlite-*.log`. Los comandos/tablas se conservan aunque caduquen los temporales. La matriz completa de 1 MiB, latencia externa, saturación sostenida y RSS tras liberación sigue en V-14/F-5. Los casos funcionales de admisión y GC ya pasan; no sustituyen esa campaña de capacidad.
+
+### Criterios de salida F-3
+
+| Criterio de ROADMAP | Evidencia de cierre |
+|---|---|
+| C-04; V-09 | Reservas antes del inicio, señales tempranas/duplicadas, carreras, cancelación y timers; caída en reserva, recepción y consumo. |
+| Fronteras de C-01B/C-02; V-08 | Procesos terminados antes/después de intención, efecto y resultado; lotes/reporte recuperados sin repetir efectos confirmados. |
+| V-12 | Artefactos durables, streaming, referencias retenidas, fencing del propietario y GC; migración/rollback probados. |
+| V-15 | Paquete y schemas aceptados conservados; plugin ausente o incompatible bloquea y reinstalarlo recupera sin repetir el paso confirmado. |
+| V-18 durable | Decisión/auditoría/acuse atómicos, resoluciones concurrentes/duplicadas y cierre con incertidumbre persistente. |
+| Proveedor conforme | Kit público, CAS, cuotas y exclusión de propietario en SQLite; sin fallback a memoria. |
+| Medición P-07 aplicable | Cuatro cargas de secuencias en ambos perfiles y C-02 de 100/10 000 filas; investigación de regresiones y límites publicados. |
+
+F-3 queda cerrada con los checks anteriores y un commit de fase. F-4 mantiene pendientes sus rutas, DTOs, autenticación y módulos de integración; los casos reales y metas de producción permanecen en F-5.
 
 ## Evidencia del prototipo
 
@@ -122,7 +260,8 @@ Revisión estática inicial del 2026-09-26; no equivale a una suite ejecutada ni
 | F-0 | Completada: diseño/casos registrados, formato y benchmark corregidos; fmt, ambas variantes de Clippy y 220 pruebas all-features pasan. |
 | F-1 | Completada: C-01A/C-03, garantías aplicables en memoria, 21 pruebas nuevas y primera medición V-14. |
 | F-2 | Completada en memoria: C-01B/C-02, V-06/V-07/V-18, controles/efectos y comparación de rendimiento. 282 pruebas pasan; fmt y ambas variantes de Clippy limpios. |
-| F-3 a F-5 | Pendientes según dependencias y criterios de ROADMAP. |
+| F-3 | Completada: paquete fijado, estado/artefactos SQLite, migración 3, señales/timers y caídas C-01B/C-02/C-04/V-15/V-18 probadas. 331 pruebas pasan; fmt y ambas variantes de Clippy limpios. Mediciones en memoria/SQLite y regresiones documentadas. |
+| F-4 y F-5 | Pendientes según dependencias y criterios de ROADMAP. |
 
 ## Cobertura de los puntos revisados
 
@@ -158,7 +297,7 @@ Las diferencias de fmt/Clippy de esta tabla se corrigieron en F-0; no describen 
 
 ## Siguiente punto de reanudación
 
-Comenzar F-3 concretando codec/DDL/migraciones SQLite, propiedad del store, paquete de revisiones fijadas y retención de artefactos antes de implementar el backend. Después, probar caídas en C-01B/C-02 y conectar reserva de callback, señales y timers según TDD-08. Los subworkflows recuperados deben usar las dependencias aceptadas, sin resolver silenciosamente versiones nuevas. Contrastar referencias con integraciones reales cuando haya datos. La implementación y los checkpoints por fase ya están autorizados.
+Comenzar F-4 concretando P-05: rutas/DTOs, autenticación del host, paginación, límites de transporte y bootstrap sobre una instancia compartida. Después implementar servicio y módulos oficiales de HTTP/JSON y archivos/CSV, con paridad Rust/HTTP, supervisión y observación. F-3 ya conserva el paquete, artefactos, migraciones, esperas y reconciliación, con checks y mediciones arriba. Contrastar referencias con integraciones reales cuando haya datos. La implementación y los checkpoints por fase ya están autorizados.
 
 Baseline reproducido sobre HEAD `392303b`, con los cambios documentales del worktree, macOS y `rustc 1.98.1` / `cargo 1.98.1`. La ejecución inicial aislada no podía preparar dependencias; las pruebas se completaron después con acceso autorizado. La CI existente usa all-features y un job SFTP separado. F-0 corrigió las features del target de Criterion, su soporte async y el formato preexistente, antes de medir el motor nuevo.
 

@@ -109,6 +109,12 @@
         },
         {
           "$ref": "#/$defs/subworkflow_node"
+        },
+        {
+          "$ref": "#/$defs/timer_node"
+        },
+        {
+          "$ref": "#/$defs/await_signal_node"
         }
       ]
     },
@@ -543,6 +549,88 @@
         },
         "workflow": {
           "$ref": "#/$defs/workflow"
+        }
+      }
+    },
+    "timer_node": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "input",
+        "duration_ms"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "input": {
+          "$ref": "#/$defs/binding"
+        },
+        "kind": {
+          "const": "timer"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "await_signal_node": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "input",
+        "correlation",
+        "timeout_ms",
+        "payload_schema"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "input": {
+          "$ref": "#/$defs/binding"
+        },
+        "kind": {
+          "const": "await_signal"
+        },
+        "correlation": {
+          "$ref": "#/$defs/binding"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "payload_schema": {
+          "$ref": "#/$defs/schema"
+        },
+        "start": {
+          "$ref": "#/$defs/signal_start"
+        }
+      }
+    },
+    "signal_start": {
+      "type": "object",
+      "required": [
+        "operation",
+        "config",
+        "input"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "operation": {
+          "$ref": "#/$defs/operation"
+        },
+        "config": true,
+        "input": {
+          "$ref": "#/$defs/binding"
+        },
+        "retry": {
+          "$ref": "#/$defs/retry"
         }
       }
     }

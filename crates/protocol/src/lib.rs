@@ -1,5 +1,6 @@
 //! Contracts shared by the engine, official modules and external extensions.
 //! This crate does not contain a scheduler, network client or database adapter.
+mod checkpoint;
 mod definition;
 mod error;
 mod execution;
@@ -7,6 +8,7 @@ mod operation;
 mod ports;
 mod reconcile;
 mod retry;
+mod wait;
 
 pub use definition::*;
 pub use error::*;
@@ -15,8 +17,10 @@ pub use operation::*;
 pub use ports::*;
 pub use reconcile::*;
 pub use retry::*;
+pub use wait::*;
 
 pub const PROTOCOL_VERSION: u32 = 1;
+pub const CHECKPOINT_FORMAT: u32 = 3;
 pub const WORKFLOW_FORMAT: &str = "forge.workflow/2";
 pub const SCHEMA_DIALECT: &str = "https://json-schema.org/draft/2020-12/schema";
 

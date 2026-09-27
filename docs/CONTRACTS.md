@@ -173,7 +173,7 @@ F-2 concreta los límites de ramas/iteraciones/profundidad; F-3 agrega cuotas pe
 
 ## 8. Qué se decide después sin invalidar F-1
 
-El checkpoint y SQL se concretan antes de F-3; rutas y DTOs HTTP antes de F-4; cifras objetivo de producción con las cargas reales antes de F-5. La referencia durable será SQLite local para un coordinador, reemplazable por un proveedor conforme; embedding simple seguirá usando memoria por defecto. La elección aprovecha las [transacciones de SQLite](https://www.sqlite.org/transactional.html), pero su conformidad requiere las pruebas de caída del TDD: el nombre de una base de datos no demuestra por sí solo las garantías del adaptador.
+El checkpoint, SQL y esperas de F-3 se concretan en §10–11; rutas y DTOs HTTP se fijan antes de F-4; cifras objetivo de producción, con las cargas reales antes de F-5. La referencia durable es SQLite local para un coordinador, reemplazable por un proveedor conforme; embedding simple usa memoria por defecto. La elección aprovecha las [transacciones de SQLite](https://www.sqlite.org/transactional.html), y PROJECT registra su conformidad y pruebas de caída del TDD.
 
 El servicio inicial usará HTTP/JSON, acceso autenticado provisto por el host y aceptación consultable por `RunId`; desconectarse no cancela el run. El editor completo permanece como entrega separada. Estas decisiones se registran con sus límites y pendientes en P-01 a P-09; no existen defaults ocultos adicionales en los ejemplos.
 
@@ -266,3 +266,155 @@ La lectura de un snapshot completo sirve para diagnóstico, recuperación y resu
 `ExecutionStore::view` consulta esa proyección; `unfinished_heads` enumera cabeceras pendientes; `commit_invocation` reemplaza un registro bajo propietario y revisión CAS. El reemplazo incrementa la revisión del run, conserva resultados confirmados y rechaza estados terminales. La creación de intención, resultado, cursor o fallo sigue siendo una transición observable; la proyección no omite confirmaciones ni autoriza despachar antes del commit. La transición de cabecera/auditoría y la recuperación completa conservan el puerto de snapshot existente.
 
 Los nuevos métodos tienen una implementación predeterminada mediante `get`/`commit`/`unfinished`, para que un proveedor correcto pueda adoptarlos por etapas. Un backend puede optimizarlos manteniendo sus contadores e índices en la misma sección crítica/transacción que el registro. Conformidad compara proyección, snapshot y reemplazo, incluyendo CAS obsoleto y resultado confirmado inmutable. Las pruebas concurrentes enfrentan confirmación de nodo, cancelación y confirmación final; las cuotas se comprueban contra la misma revisión que el commit. [PROJECT](PROJECT.md) registra la mejora medida en memoria y los costes restantes; otros proveedores deben medir su implementación.
+
+## 10. Contrato F-3 — paquete de recuperación
+
+El checkpoint incorpora `ResolvedPackage` desde el formato 2: las definiciones raíz y transitivas completas, los descriptores de operaciones utilizadas y el paquete registrado de `SchemaResource` con URI, revisión y contenido. El formato actual es 3, que añade las esperas de §11. El paquete se guarda con la aceptación; el plan compilado sigue siendo local. Es inmutable bajo CAS y comparte el presupuesto `plan_bytes`. Se conserva el conjunto acotado de schemas registrado, evitando que una referencia transitiva termine dependiendo de red o del catálogo de otro arranque. Las claves compuestas se serializan como arrays de registros, no como claves de objeto JSON.
+
+La recuperación reconstruye el catálogo de definiciones y validadores desde ese paquete. Exige que el host proporcione cada implementación exacta y un descriptor semántico compatible: revisión, schemas, efecto, repetición, reconciliación y recursos. Descripción/ejemplos pueden variar sin alterar la ejecución. Cambiar el código conservando falsamente la misma revisión no puede detectarse por introspección; versionar la implementación es obligación del módulo confiable. Ninguna operación se descarga ni se ejecuta desde el checkpoint.
+
+Un subworkflow retirado del catálogo de autoría puede recuperarse desde su definición aceptada. Una operación retirada o un descriptor incompatible bloquea el run antes de despachar. Volver a instalar la revisión y arrancar permite recuperar ese bloqueo de catálogo; un bloqueo por efecto incierto conserva su resolución obligatoria. El registro de versiones de autoría del nuevo runtime no sustituye el paquete de un run histórico ni lo modifica. Los recursos disponibles y las cuotas actuales del host siguen aplicándose; reducirlos puede bloquear recuperación explícitamente.
+
+No se migra automáticamente un checkpoint formato 1: carece de dependencias que no se pueden reconstruir con certeza. El perfil lo rechaza con diagnóstico de versión, sin inventar contenido histórico. El proyecto aún no tiene versión pública. El codec debe comprobar su versión antes de interpretar el resto; F-3 debe probar formato desconocido/corrupto y ausencia de revisiones.
+
+### 10.1 Persistencia local seleccionada
+
+SQLite usa un único coordinador local, `journal_mode=WAL`, `synchronous=FULL`, claves foráneas y transacciones de escritura `IMMEDIATE`. Cada conexión comprueba WAL, nivel de sincronización y claves foráneas efectivos. Activa también `fullfsync` y `checkpoint_fullfsync`: en macOS solicita `F_FULLFSYNC`, según [SQLite fullfsync](https://www.sqlite.org/pragma.html#pragma_fullfsync). Este coste forma parte de la medición del perfil durable. La aceptación y su recibo se confirman juntos; las actualizaciones de invocación, revisión y contadores también. El acuse se emite después del commit. WAL admite un escritor a la vez y requiere el mismo host; `FULL` sincroniza el WAL por commit. Son las garantías documentadas por [SQLite WAL](https://www.sqlite.org/wal.html), [synchronous](https://www.sqlite.org/pragma.html#pragma_synchronous) y [transacciones](https://www.sqlite.org/lang_transaction.html), sujetas al almacenamiento/VFS. Las pruebas de caída no equivalen a simular un fallo físico de disco.
+
+El adaptador mantendrá un bloqueo exclusivo del sistema operativo durante la propiedad del runtime y verificará la identidad del propietario en cada mutación. Al caer el proceso, el sistema libera el bloqueo; el nuevo arranque reclama propiedad antes de clasificar intenciones. No se toman locks mediante la mera existencia de un archivo ni se elimina un lock de un proceso vivo por timeout. No se admite filesystem compartido entre hosts. Error de apertura, migración o commit no cambia a memoria silenciosamente.
+
+El esquema SQL separa paquetes inmutables, cabeceras, invocaciones y recibos para conservar las proyecciones F-2 sin serializar todo el historial por fila. Una versión de schema y migraciones transaccionales preceden a readiness; una versión mayor se rechaza. §10.2 concreta estado/aceptación y §10.3 artefactos. La evidencia de ejecución y sus límites se registran en PROJECT; describir una garantía aquí no sustituye sus pruebas.
+
+### 10.2 Primer adaptador SQLite: estado y aceptación
+
+`SqliteExecutionStore::open(path, options)` prepara un actor local con cola de 64 solicitudes; `claim` abre la conexión, adquiere propiedad y migra antes de aceptar trabajo. Todas las consultas/transacciones de esa instancia corren en un hilo propio. El cierre de un future de consulta no cancela un commit ya encolado; los recibos y CAS resuelven un acuse perdido. Un reclamo cuyo acuse desaparece libera su propiedad. Las consultas públicas del motor se realizan mientras el runtime conserva el store reclamado.
+
+El [DDL versión 1](../crates/modules/src/sqlite/v1.sql) usa `application_id` propio y `user_version` transaccional:
+
+| Tabla | Clave / contenido / garantía |
+|---|---|
+| `wf_meta` | Fila única con propietario actual; se contrasta con el lock local antes de mutar. |
+| `wf_packages` | SHA-256 del sobre JSON → bytes del paquete; se verifica contenido al reutilizar/leer. |
+| `wf_runs` | RunId → scope, revisión, estado, cancelación, fechas, contadores, paquete y cabecera JSON sin invocaciones. |
+| `wf_invocations` | `(run_id, path)` único → registro JSON, bytes retenidos e indicador de incertidumbre; FK con borrado en cascada. |
+| `wf_receipts` | `(scope, key)` único → request normalizado, RunId y vencimiento; sobrevive al borrado del resultado durante su propia ventana. |
+
+Los índices cubren runs pendientes/retención e incertidumbre por prefijo de ruta. La vista de cabecera y nodo se lee dentro de una transacción; ningún contador se actualiza fuera del commit de su registro. El commit completo valida las mismas invariantes que memoria y escribe solo nodos cambiados. La limpieza elimina terminales vencidos/excedentes, recibos vencidos y paquetes sin runs, conservando trabajo no terminal.
+
+El codec usa un sobre `{format, payload}` con versión de checkpoint 3 y comprueba versión y tamaño antes de deserializar el contrato. Default: 32 MiB por registro codificado, 512 MiB para páginas del archivo principal mediante `max_page_count`, timeout de bloqueo SQLite de 5 s y autocheckpoint WAL de 1 000 páginas. El límite de páginas no incluye WAL/SHM ni equivale a una reserva de disco; llenado de disco o una cuota insuficiente provoca error transaccional y no acredita aceptación. Los presupuestos lógicos del engine siguen vigentes. §10.3 concreta cuotas/GC de artefactos; §11 las reservas de callback y migración del formato 2.
+
+La ruta usa un directorio local existente y se normaliza para compartir lock entre alias de symlink. El host no renombra, elimina ni crea hardlinks del archivo/lock mientras esté activo. El lock lateral permanece al liberar propiedad y nunca se borra para simular desbloqueo. Se abre una conexión nueva por reclamo y se cierran conexión/lock al liberar. Un store con formato de schema o checkpoint desconocido falla explícitamente.
+
+La feature `sqlite` habilita el proveedor oficial. El engine depende del puerto, sin imports SQL; el backend usa rusqlite con SQLite incluido y sin carga de extensiones nativas. Preparar operaciones que requieren `artifacts` exige un proveedor durable dentro del mismo dominio de coordinación cuando el store lo es; un adaptador en memoria no se presenta como garantía de recuperación.
+
+<a id="artefactos-durables"></a>
+### 10.3 Propiedad y retención de artefactos
+
+El proveedor SQLite implementa `ExecutionStore` y `ArtifactStore` sobre el mismo actor/conexión. Ambos puertos anuncian `artifact_domain()`; el engine exige un dominio no vacío e idéntico para planes durables con artefactos. Clonar el proveedor conserva ese dominio; construir dos proveedores, incluso sobre el mismo path, no establece esa coordinación. El engine no depende del tipo SQLite. Un proveedor externo que anuncie el mismo dominio debe cumplir aceptación/retención atómicas y fencing del propietario; dos flags `durable: true` no bastan.
+
+El host declara las referencias preexistentes en `StartOptions.artifacts`. Al aceptar, se validan identidad completa, scope, disponibilidad y estado publicado, y se fija su propiedad junto con run/recibo en el mismo commit. La lista es parte inmutable del checkpoint y de la identidad de recepción. Se normaliza por ID, sin duplicados, hasta 1 000 referencias, bajo `value_bytes` para sus metadatos y `run_bytes` para el conjunto retenido. El engine no busca formas parecidas a un `ArtifactRef` dentro de JSON arbitrario para inferir permisos. Una operación solo puede leer entradas declaradas o artefactos creados por ese run; los de otra ejecución deben declararse explícitamente al iniciar. Reintentar una recepción ya aceptada conserva su recibo incluso si el resultado y sus artefactos expiraron; no vuelve a fijar referencias ni crea otro run.
+
+`OperationContext` entrega `ArtifactAccess` al puerto: propietario del runtime y RunId. Cada bloque vuelve a comprobar esa propiedad. Un stream o llamada tardía del runtime anterior no puede continuar con la propiedad del nuevo arranque. `read_for_run`/`write_for_run` tienen defaults efímeros para memoria; sus defaults rechazan proveedores durables que no implementen ese protocolo. Las extensiones usan `read_artifact`/`write_artifact`, sin escribir directamente en tablas de ejecución. Las escrituras requieren un run existente, no terminal ni cancelado, y un scope coincidente. La API directa del proveedor es para el host confiable; no se expone como autorización a peticiones externas.
+
+La [migración SQL 2](../crates/modules/src/sqlite/v2.sql) agrega metadatos de artefacto, bloques de hasta 64 KiB y relación de propietarios por run. Conserva checkpoints/recibos del perfil JSON de schema 1: las nuevas referencias tienen default vacío y no alteran sus contadores o huellas de recepción. La escritura pasa de `staging` a `ready` solo después de persistir todos sus bytes. Un fallo no publica una referencia parcial. Por defecto: hasta 1 000 artefactos, 64 MiB de bytes almacenados en total y una hora de gracia desde publicación para cargas del host aún sin propietario. Scope/media type admiten de 1 a 256 bytes. Todos comparten también la cuota de páginas del backend. Un artefacto vinculado permanece mientras exista algún run propietario, incluyendo bloqueo y retención del resultado. La limpieza del run libera esa relación, sin eliminar un artefacto todavía utilizado por otro run.
+
+En un nuevo reclamo exclusivo se eliminan escrituras `staging` anteriores, que nunca pudieron publicar una referencia. Cancelar una escritura programa limpieza de respaldo mientras haya runtime Tokio; el nuevo reclamo cubre una limpieza interrumpida. Nunca borra una referencia `ready` cuyo acuse pudo perderse. Las cargas sin propietario dejan de admitir lecturas/nuevos vínculos al vencer su gracia, incluso antes del GC; las escrituras nuevas y la recolección del store limpian esos huérfanos. Los artefactos de operaciones quedan vinculados al run incluso si se pierde el acuse de la transición que guardaba su referencia. Se retienen hasta expirar ese run. La lectura entrega bloques durables y vuelve a validar acceso; una referencia vencida o metadatos inconsistentes producen error explícito.
+
+El host instala una sola instancia mediante los dos puertos. Fragmento de composición; `destination`, `definition`, `csv_stream`, `access` y `path` los provee el implementador:
+
+```rust
+let sqlite = Arc::new(modules::SqliteExecutionStore::open(
+    path, modules::SqliteOptions::default(),
+)?);
+let mut builder = WorkflowBuilder::standard()
+    .execution_store(sqlite.clone())
+    .artifact_store(sqlite.clone());
+builder.register_bundle(inventory_operations(destination))?;
+let runtime = EngineRuntime::boot(builder.build()?, BootOptions::default()).await?;
+let app = runtime.application();
+
+let source = sqlite.write("default", csv_stream, "text/csv").await?;
+let plan = app.prepare(access.clone(), definition).await?;
+let mut request = StartRunRequest::new(plan, json!({"source": &source}));
+request.options.require_durable = true;
+request.options.artifacts = vec![source];
+let receipt = app.start(access, request).await?;
+// El servicio conserva runtime y comparte clones de app durante su vida.
+```
+
+Builder compone, Adapter implementa los puertos y `ArtifactAccess` conserva la autoridad del Command; no se incorpora un localizador global. `shutdown(...).await` sigue siendo la frontera de cierre del servicio. [Pruebas del proveedor](../crates/modules/tests/sqlite_artifacts.rs) y [caídas C-02](../crates/forge/tests/v2_sqlite_inventory.rs) cubren estas fronteras; PROJECT registra sus resultados. La política de intentos cuenta los interrumpidos: el fixture durable fija tres intentos para operaciones repetibles de lectura/reporte. Recuperarse no agrega intentos ilimitados ni repite efectos `unsafe` sin resolución.
+
+<a id="esperas-durables"></a>
+## 11. Contrato F-3 — esperas, callbacks y timers
+
+TDD-08 se concreta en dos instrucciones del coordinador: `timer` y `await_signal`, aceptadas por el schema de documento `forge.workflow/2`. Ambas pueden aparecer dentro de los cuerpos existentes, conservando las identidades de ámbito de §9.2. No son operaciones de una extensión ni delegan la escritura del estado a conectores. La implementación y sus pruebas están registradas en PROJECT; F-3 conserva pendientes de cierre.
+
+### 11.1 Instrucciones y comunicación
+
+`timer` recibe `duration_ms`, entero no negativo, y conserva el input como output al vencer. Guarda una fecha absoluta al activarse por primera vez; reiniciar o reintentar no reinicia el contador. Duración cero permite completar en la misma activación. El deadline global del run y la cancelación siguen prevaleciendo.
+
+`await_signal` recibe un binding `correlation`, `timeout_ms` entero positivo, `payload_schema` y un `start` opcional. La correlación se evalúa contra el input del control y debe producir un string de 1 a 256 bytes. El schema utiliza el mismo dialecto/paquete offline fijado al aceptar. `start`, si existe, contiene revisión de operación, config, binding de input y política de retry existentes. Se usa una operación de inicio porque esta frontera identifica el intento externo que necesita confirmación; transformaciones previas y pasos posteriores siguen siendo nodos ordinarios. No se crea otro trait de operación ni una segunda política de efectos.
+
+El coordinador confirma reserva y activación antes de despachar `start`. Su WaitId deriva del RunId y la ruta completa del control, se conserva entre intentos y es diferente del InvocationId del inicio. El binding de `start.input` recibe `{"input": <input del control>, "wait": {"id", "correlation", "deadline_at_ms"}}`. La URL/transporte de callback pertenece al host/adaptador; el engine entrega identidad y correlación, no construye una URL HTTP. El intento de inicio utiliza una ruta interna estable bajo ese control y los mecanismos normales de intención, retry e inspección de efectos.
+
+Fragmento del nodo; `integration.start_job` representa una extensión del implementador:
+
+```json
+{
+  "id": "completion",
+  "kind": "await_signal",
+  "input": {"select": {"source": "input", "pointer": ""}},
+  "correlation": {"select": {"source": "input", "pointer": "/order_id"}},
+  "timeout_ms": 60000,
+  "payload_schema": {
+    "type": "object",
+    "required": ["status"],
+    "properties": {"status": {"enum": ["completed", "rejected"]}},
+    "additionalProperties": false
+  },
+  "start": {
+    "operation": {"id": "integration.start_job", "contract": "1", "implementation": "r1"},
+    "config": {},
+    "input": {"object": {
+      "request": {"select": {"source": "input", "pointer": "/input"}},
+      "callback": {"select": {"source": "input", "pointer": "/wait"}}
+    }}
+  }
+}
+```
+
+Sin `start`, la reserva queda habilitada para esperar en su propia confirmación; sirve para una señal externa o aprobación gestionada por el host. Con `start`, se puede recibir una señal desde que la reserva existe, pero consumirla exige el resultado confirmado de ese inicio. El output del control será `{"start": <output o null>, "signal": <payload validado>}`. Un callback no confirma por sí mismo un efecto de inicio `Unknown`; se conservan reserva, señal y diagnóstico mientras se aplica TDD-06. Un inicio fallido con certeza cierra la reserva sin continuar.
+
+### 11.2 Comando, acuse y carreras
+
+`WorkflowApplication::signal(access, SignalCommand)` recibe RunId, WaitId, `message_id`, correlación, payload y referencias `artifacts` opcionales. Scope, permiso `Signal`, grants y actor provienen del contexto del host. WaitId identifica una reserva dentro de ese run; conocer solo la correlación no autoriza entrega. ID de mensaje y correlación admiten de 1 a 256 bytes. Reserva desconocida devuelve `wait.not_found`, sin confirmar ni crear un inbox anticipado.
+
+Cada reserva acepta un único mensaje. La identidad de entrega incluye ID, actor, correlación, payload y referencias normalizadas. Repetirla devuelve el mismo acuse con indicación de duplicado; cambiar su contenido/actor o intentar otro mensaje devuelve `state.conflict`. El acuse conserva fecha, run/espera/mensaje y garantía durable real. Persiste junto al payload antes de responder, incluso si el control todavía está iniciando el trabajo. Permanece consultable/deduplicable durante la retención del run; no promete la ventana independiente de los recibos de inicio de §10.2.
+
+Las referencias adjuntas siguen §10.3: se validan y vinculan al run en el mismo commit que la señal. No se deducen permisos de la forma del JSON. El payload usa el schema fijado en la reserva y los schemas de su paquete, aunque haya cambiado el catálogo de autoría. Una entrega inválida no ocupa el único resultado ni consume la reserva.
+
+Se reevalúan propietario, revisión, deadline y estado en cada intento CAS. Señal y expiración compiten por la misma transición: una señal ya aceptada dentro de plazo conserva su resultado; una reserva expirada sin señal devuelve `wait.expired`. A igualdad con el deadline no se admite una entrega nueva. Un duplicado válido conserva su acuse aunque el resultado ya se haya consumido o la reserva se haya cerrado. Una nueva señal nunca reabre un run terminal/cancelado. El consumo del payload y la confirmación del nodo `await_signal` ocurren en un único commit, de modo que una caída no permite consumirlo sin habilitar su continuación recuperable.
+
+El timeout cuenta desde reservar. Si vence mientras `start` sigue activo y todavía no hay señal aceptada, el coordinador cancela su token y espera su clasificación normal: un efecto incierto bloquea y exige resolución; un inicio sin efecto puede terminar con `wait.expired`. Si ya se aceptó la señal, su deadline no invalida esa entrega, pero siguen vigentes los límites del intento y del run. Cancelación/fallo conocido cierra reservas pendientes; cerrar no borra un acuse previo ni convierte incertidumbre en ausencia de efecto.
+
+### 11.3 Estado, suspensión y cuotas
+
+El checkpoint incorpora registros de espera con identidad/ruta/tipo inmutables, fecha de creación/vencimiento, schema/correlación cuando corresponde, confirmación del inicio, estado y entrega/acuse opcionales. Estados: `Open`, `Consumed`, `Expired`, `Closed`; un timer alcanza `Consumed` al vencer, una espera de señal puede expirar sin entrega. Ninguna transición cambia una entrega confirmada ni abre otra vez un estado cerrado. Los registros y acuses permanecen mientras se retiene el run, y cuentan en `run_bytes`.
+
+La suspensión se representa separadamente de fallo e infraestructura. Un control pendiente devuelve suspensión a su padre; no produce un error coleccionable ni éxito. En paralelo/foreach, los hijos ya activos pueden asentarse; al no quedar trabajo ejecutable, se guardan cursores y se libera el permiso del run y de sus ámbitos. Una rama suspendida no cancela a sus hermanas por `fail_fast`. Al reanudar se reconstruye el recorrido desde checkpoints y se omiten resultados confirmados. No se mantiene un task esperando un callback durante toda su duración.
+
+`RunHead.next_wakeup_at_ms` proyecta la próxima activación. El coordinador despierta runs `Waiting` por señal ya disponible, timer vencido o deadline global, sin leer cada historial en cada tick. Una señal que llega mientras el run termina de suspenderse lo deja ejecutable o visible como listo; perder una notificación en memoria no puede perder la reanudación. Un run bloqueado por efecto incierto conserva su bloqueo aunque tenga una señal disponible.
+
+Antes de readiness, la [migración SQL 3](../crates/modules/src/sqlite/v3.sql) agrega la proyección/índice de próxima activación. Reservas, acuses y resultado del control se conservan bajo el mismo CAS del run; el puerto rechaza commits individuales del nodo de espera. El checkpoint 3 permite a un lector anterior rechazar estas garantías antes de interpretar su payload. La [migración explícita del formato 2](../crates/modules/src/sqlite/migration.rs) conserva paquetes, inputs, outputs, intenciones, auditoría, acuses y artefactos; agrega esperas vacías y actualiza sobres/hashes/referencias de paquetes de manera transaccional. Un fallo revierte también DDL y versión SQL. Los contadores semánticos de runs sin esperas permanecen válidos. No se recuperan dependencias que falten en formato 1. El commit SQLite vincula nuevas referencias de entrega en su misma transacción; memoria conserva su perfil efímero explícito.
+
+Detener un grupo por fallo conocido cierra las reservas abiertas de ese ámbito en el mismo commit que su marca de detención. Incluye hijos suspendidos que ya no tienen un future activo para observar cancelación. Las esperas de otros ámbitos conservan su estado. Cancelar el run cierra todas sus reservas abiertas junto con `cancel_requested`, preservando acuses e incertidumbre de los efectos.
+
+Defaults del incremento: hasta 256 registros de espera por run, 64 KiB de payload por señal y 24 horas por espera, siempre subordinados a `value_bytes`, `run_bytes`, número de runs admitidos y deadline global. Los registros consumidos también cuentan: un loop no elimina acuses para eludir el límite. El host debe ampliar explícitamente el timeout del run si requiere esperas superiores al default de cinco minutos. Las referencias adjuntas conservan los límites de §10.3; bytes grandes se almacenan como artefactos.
+
+### 11.4 Criterios antes de cerrar el incremento
+
+La conformidad debe comprobar reserva desconocida, señal antes/después de confirmar el inicio, schema/correlación/permiso inválidos, duplicado y contenido conflictivo, carreras entre señal/expiración/cancelación, efecto de inicio incierto, consumo atómico y acuse perdido. Incluir timers y esperas dentro de paralelo/foreach/loop/subworkflow, y demostrar que un run suspendido libera capacidad para otro run con `active_runs = 1`.
+
+Las pruebas durables terminan procesos después de reservar, aceptar señal y consumirla antes de despachar el sucesor. Deben verificar deadline original al reiniciar, paquete/schema retirado de autoría, adjuntos retenidos, migración, GC de terminales y ausencia de repetición de un inicio confirmado. La evidencia ejecutada y los pendientes de fase se registran en PROJECT.
+
+El [ejemplo `v2_signal`](../crates/forge/examples/v2_signal.rs) inicia una reserva y cierra el host; otra ejecución entrega el callback contra el mismo SQLite. Usa la fachada para componer/arrancar y Command para entregar la señal. State gobierna reserva/consumo; los controles existentes mantienen Composite. La extensión opcional de inicio sigue siendo un Adapter de `Operation`; no necesita importar el store ni el coordinador.

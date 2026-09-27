@@ -127,6 +127,12 @@ async fn execute_control(
     key: &str,
     input: Value,
 ) -> Result<Value, StepError> {
+    if matches!(
+        node.instruction,
+        PreparedInstruction::Timer { .. } | PreparedInstruction::AwaitSignal { .. }
+    ) {
+        return waits::execute(scope, node, key, input).await;
+    }
     let limits = &scope.shared.composition.limits;
     let existing = state::view(&scope.shared, &scope.run_id, Some(key))
         .await?
@@ -267,7 +273,11 @@ fn initial_frame(
                 revision: child.definition().revision.clone(),
             },
         }),
-        PreparedInstruction::Operation(_) => unreachable!("operation dispatch has its own path"),
+        PreparedInstruction::Operation(_)
+        | PreparedInstruction::Timer { .. }
+        | PreparedInstruction::AwaitSignal { .. } => {
+            unreachable!("instruction has its own dispatch path")
+        }
     }
 }
 

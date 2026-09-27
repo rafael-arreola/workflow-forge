@@ -28,10 +28,17 @@ pub enum CreateOutcome {
 /// Stores enforce exclusive ownership, atomic receipt+run creation, and CAS commits.
 /// An implementation must never acknowledge durable acceptance without persisting it.
 /// Creation requires a clean Accepted snapshot at revision zero. Commits preserve
-/// identity, input, definition, scope, actor, grants, timestamps and confirmed outputs;
+/// identity, input, definition, resolved package, scope, actor, grants, timestamps and confirmed outputs;
 /// cancellation is monotonic and terminal results cannot be overwritten.
 pub trait ExecutionStore: Send + Sync {
     fn capabilities(&self) -> StoreCapabilities;
+    /// Identifies the live coordinator that atomically pins declared artifacts
+    /// with acceptance and releases them with run retention. Equal identifiers
+    /// promise the same transaction domain, not just matching durable flags.
+    /// `Some` must contain a nonempty identifier.
+    fn artifact_domain(&self) -> Option<&str> {
+        None
+    }
     fn claim<'a>(&'a self, owner: &'a str) -> PortFuture<'a, ()>;
     fn release<'a>(&'a self, owner: &'a str) -> PortFuture<'a, ()>;
     fn create<'a>(
@@ -67,6 +74,7 @@ pub trait ExecutionStore: Send + Sync {
     -> PortFuture<'a, ()>;
     /// Atomic replacement of one invocation under the same run CAS as `commit`.
     /// This cannot alter run identity, head state, audit or any other invocation.
+    /// Wait controls require a full commit with their reservation/consumption.
     /// The caller checks admission/data budgets against the coherent view first;
     /// an implementation updates its projection counters in the same commit.
     fn commit_invocation<'a>(
@@ -83,6 +91,11 @@ pub trait ExecutionStore: Send + Sync {
                 .await?
                 .ok_or_else(|| ForgeError::new("not_found", "Run is unavailable"))?;
             if run.revision != expected
+                || record.is_wait()
+                || run
+                    .invocations
+                    .get(node)
+                    .is_some_and(InvocationRecord::is_wait)
                 || run.state.is_terminal()
                 || run
                     .invocations
@@ -134,8 +147,19 @@ pub struct ArtifactRef {
     pub media_type: String,
 }
 pub type ByteStream = Pin<Box<dyn Stream<Item = Result<Vec<u8>, ForgeError>> + Send>>;
+
+/// Issued by the trusted engine. Compiled extensions are not a security sandbox.
+#[derive(Clone, Debug)]
+pub struct ArtifactAccess {
+    pub runtime_owner: String,
+    pub run_id: RunId,
+}
+
 pub trait ArtifactStore: Send + Sync {
     fn durable(&self) -> bool;
+    fn artifact_domain(&self) -> Option<&str> {
+        None
+    }
     fn write<'a>(
         &'a self,
         scope: &'a str,
@@ -143,6 +167,40 @@ pub trait ArtifactStore: Send + Sync {
         media_type: &'a str,
     ) -> PortFuture<'a, ArtifactRef>;
     fn read<'a>(&'a self, reference: &'a ArtifactRef) -> PortFuture<'a, ByteStream>;
+    /// Durable implementations must fence stale owners, pin writes to a live
+    /// run and permit reads only of its declared or run-created references.
+    fn write_for_run<'a>(
+        &'a self,
+        _access: &'a ArtifactAccess,
+        scope: &'a str,
+        content: ByteStream,
+        media_type: &'a str,
+    ) -> PortFuture<'a, ArtifactRef> {
+        Box::pin(async move {
+            if self.durable() {
+                return Err(ForgeError::new(
+                    "capability.unsupported",
+                    "Durable artifact ownership is not implemented",
+                ));
+            }
+            self.write(scope, content, media_type).await
+        })
+    }
+    fn read_for_run<'a>(
+        &'a self,
+        _access: &'a ArtifactAccess,
+        reference: &'a ArtifactRef,
+    ) -> PortFuture<'a, ByteStream> {
+        Box::pin(async move {
+            if self.durable() {
+                return Err(ForgeError::new(
+                    "capability.unsupported",
+                    "Durable artifact ownership is not implemented",
+                ));
+            }
+            self.read(reference).await
+        })
+    }
 }
 
 pub trait ExecutionObserver: Send + Sync {

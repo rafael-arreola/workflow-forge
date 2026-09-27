@@ -32,6 +32,7 @@ Estos principios no obligan a un trait por struct. Una función pura o un enum p
 | PAT-08 | Decorator | ¿Cómo añado una capacidad transversal conservando el contrato? | Instrumentación acotada de adaptadores. |
 | PAT-09 | Composite | ¿Cómo reutilizo un subworkflow como unidad? | Composición de flujos, no conversión de todo DAG a árbol. |
 | PAT-10 | Función fábrica / Abstract Factory | ¿Cómo construyo productos o familias compatibles? | Funciones simples primero; familia abstracta solo si hace falta. |
+| PAT-11 | Flyweight | ¿Cómo evito copiar el mismo paquete inmutable en cada run retenido? | Optimización del proveedor en memoria, respaldada por mediciones. |
 
 Arquitectura hexagonal, inyección de dependencias y registro de catálogo son mecanismos complementarios; no se presentan como patrones GoF distintos por tener nombres parecidos. Registrar un objeto ya creado no equivale a Factory Method.
 
@@ -211,6 +212,30 @@ Esto es una función de construcción, no se etiqueta como Factory Method GoF. `
 **Cuándo considerar Abstract Factory:** si se necesitan varias familias intercambiables de proveedores que deben compartir transacciones, codec o propiedad. La raíz de composición puede recibir una fábrica de familia; aun así debe verificar las garantías cruzadas. Si solo existe un constructor sencillo, no añadir esa interfaz.
 
 **Conformidad:** V-05/V-17; requisitos compatibles, conflictos detectados y registro completo o rechazado. Construir recursos técnicos no autoriza ejecutar negocio. Las tareas de fondo deben quedar bajo lifecycle del host, no ocultas en un constructor.
+
+### PAT-11 — Flyweight: compartir datos inmutables
+
+**Definición:** compartir la parte inmutable común entre muchos objetos, manteniendo separado el estado propio de cada uno. Es una optimización que se justifica al medir duplicación relevante. [Referencia de Flyweight](https://refactoring.guru/design-patterns/flyweight).
+
+**Aplicación:** el [store en memoria](../crates/modules/src/memory.rs) comparte paquetes de recuperación idénticos mediante `Arc<ResolvedPackage>`. Input, invocaciones, revisiones y acuses siguen perteneciendo a cada run. La igualdad del contenido completo decide qué paquete se puede compartir; no basta que dos workflows anuncien el mismo ID. El índice conserva referencias débiles y se limpia junto con la retención de runs.
+
+Ejemplo PX-06 — separación de propiedad dentro del proveedor, omitiendo campos auxiliares:
+
+```rust
+struct StoredRun {
+    package: Arc<ResolvedPackage>, // común e inmutable dentro del proveedor
+    execution: RunStateData,        // propio de esta ejecución
+}
+
+// El límite público devuelve un snapshot completo y de propiedad independiente.
+fn snapshot(stored: &StoredRun) -> RunSnapshot {
+    materialize(&stored.execution, stored.package.as_ref().clone())
+}
+```
+
+**Límite:** compartir el paquete no autoriza modificarlo ni compartir progreso entre runs. El puerto sigue recibiendo/devolviendo DTOs completos; comparar el paquete y validar el resto de la transición ocurre bajo el mismo lock/CAS. El detalle de memoria no modifica el formato de checkpoint ni los contratos de una extensión. SQLite almacena paquetes por contenido mediante su propio Adapter.
+
+**Conformidad:** V-05/V-08/V-15 y kit del store. Eliminar un resultado no pierde el paquete de otro run; después de liberar todos, una nueva aceptación conserva su contenido. Mutar una copia pública y tratar de reemplazar el paquete se rechaza. PROJECT registra la comparación de RSS/tiempo y el coste de materializar snapshots.
 
 <a id="registro"></a>
 

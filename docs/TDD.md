@@ -31,7 +31,7 @@ Separar `WorkflowId` y revisión de definición; `OperationId`, versión del con
 
 Una invocación incluye ámbito de run, nodo, ruta de subworkflow e iteración. Los reintentos conservan `InvocationId` y cambian `AttemptId`. Dos elementos con el mismo JSON siguen siendo invocaciones distintas. La clave de negocio de deduplicación puede ser independiente y aportada por el host.
 
-Una reanudación carga las revisiones fijadas. Si falta una implementación, un schema o un formato compatible de checkpoint, queda bloqueada con diagnóstico; nunca toma silenciosamente la última versión. Versionar la representación de checkpoints independientemente del crate y del documento de workflow. Migrar requiere un mecanismo explícito por versión, aún por concretar antes de F-3.
+Una reanudación carga las revisiones fijadas. Si falta una implementación, un schema o un formato compatible de checkpoint, queda bloqueada con diagnóstico; nunca toma silenciosamente la última versión. Versionar la representación de checkpoints independientemente del crate y del documento de workflow. [CONTRACTS §10](CONTRACTS.md#10-contrato-f-3--paquete-de-recuperación) concreta el paquete, codec y migraciones SQL; no se inventan dependencias ausentes al migrar formatos anteriores.
 
 ## 3. TDD-02 — descriptor, catálogo y composición
 
@@ -186,6 +186,8 @@ El puerto de estado necesita las siguientes garantías, no solo operaciones CRUD
 
 Checkpoint lógico: revisión de formato y run, definición/catálogo fijados, estado de nodos/invocaciones/iteraciones, outputs confirmados, referencias a artefactos, pendientes, esperas y deadlines. No serializa futures, conexiones o trait objects. Tablas, índices y migraciones dependen de P-04; escoger un backend no modifica estas obligaciones.
 
+[CONTRACTS §10](CONTRACTS.md#10-contrato-f-3--paquete-de-recuperación) concreta el paquete de dependencias incorporado desde checkpoint 2 y conservado en el formato actual 3, recuperable sin consultar revisiones nuevas. Los validadores usados para resolver un efecto también se reconstruyen desde los schemas aceptados. Un bloqueo por implementación ausente puede recuperarse al reinstalarla; uno por efecto incierto exige la resolución de TDD-06.
+
 El perfil efímero ofrece el mismo significado de control de flujo mientras vive el proceso, sin garantía de reinicio. El durable confirma aceptación después de persistirla. Si se aceptan varios propietarios, el adaptador debe demostrar reclamo exclusivo y protección contra propietarios vencidos; usar una lease no impide por sí solo duplicados remotos.
 
 ```mermaid
@@ -224,7 +226,7 @@ Decisión base P-09: `signal` se dirige a una espera identificada y tiene ID de 
 
 Para hacer viable el pre-registro, F-3 define el recorrido de control **reservar espera → iniciar trabajo → esperar resultado**. El coordinador reserva identidad/correlación y deadline antes del despacho, y entrega al adaptador de inicio esa referencia como dato de input. Una señal para esa reserva ya conocida puede conservarse antes de que el control llegue a esperar; su consumo requiere además que se haya confirmado el paso de inicio. La reserva admite un único resultado bajo su schema y deduplicación, con tamaño/retención acotados; no es un buzón abierto de señales sin destinatario. «Temprana» rechazada significa que aún no existe reserva.
 
-El vencimiento se cuenta desde la reserva. Si el inicio falla de manera conocida, se cierra la reserva sin continuar; si queda incierto, se preservan la reserva y evidencia mientras se resuelve TDD-06. Recibir un callback no autoriza saltarse esa resolución. Una reserva, un intento de inicio y un consumo son identidades distintas dentro del mismo run. El formato de esta instrucción se concreta en F-3; implementarlo como control del engine evita permisos de escritura de estado dentro de los conectores.
+El vencimiento se cuenta desde la reserva. Si el inicio falla de manera conocida, se cierra la reserva sin continuar; si queda incierto, se preservan la reserva y evidencia mientras se resuelve TDD-06. Recibir un callback no autoriza saltarse esa resolución. Una reserva, un intento de inicio y un consumo son identidades distintas dentro del mismo run. [CONTRACTS §11](CONTRACTS.md#esperas-durables) concreta `await_signal`/`timer`, comando, estados, cuotas y migración implementados; PROJECT registra sus pruebas y los pendientes de cierre F-3. Usar controles del engine evita permisos de escritura de estado dentro de los conectores.
 
 Validar acceso, correlación, estado y payload antes de consumir. Repetir la misma señal devuelve la recepción previa sin continuar otra vez. Consumo y transición deben ser atómicos. La carrera entre señal y expiración se resuelve por transición condicional: solo una gana; la otra recibe un resultado definido. Señales tardías no reabren estados terminales.
 
@@ -239,6 +241,8 @@ Un callback de un trabajo externo es una señal, no un hilo bloqueado. Una aprob
 `ArtifactStore` ofrece referencias con identidad, metadatos y operaciones de lectura/escritura adecuadas para streaming. En modo durable, publicar una referencia exige que sus bytes estén disponibles para recuperación. La finalización de un future no dispara limpieza de artefactos aún retenidos por un run, espera o resultado consultable.
 
 Separar artefacto en preparación, publicado/referenciado y elegible para limpieza. Confirmar referencia y propiedad mediante protocolo recuperable cuando bytes y estado vivan en sistemas distintos. Retención, cuotas y disponibilidad tras finalizar se deciden en P-07. La expiración debe ser observable y no confundirse con un resultado vacío.
+
+[CONTRACTS §10.3](CONTRACTS.md#artefactos-durables) concreta el proveedor coordinado: `StartOptions.artifacts` declara entradas que se fijan con la aceptación; `ArtifactAccess` delimita propietario/run en cada acceso; el mismo actor SQLite conserva bytes y sus propietarios. Las operaciones no obtienen acceso al store de ejecución por esa vía. Las garantías se verifican mediante migración, retención compartida, propietario obsoleto y caídas reales de C-02.
 
 ## 11. TDD-10 — librería y servicio
 
@@ -329,6 +333,6 @@ V-18 añade en F-2/F-3 el caso donde una consulta remota devuelve «no encontrad
 
 ## 15. Detalles que deben cerrarse antes de codificar cada contrato
 
-PROJECT distingue diseño de capacidad verificada. CONTRACTS concreta F-1 y las instrucciones, identidades, efectos y cuotas F-2; sus formas ya tienen tipos, schema y pruebas. Para fases posteriores faltan codec/DDL/migraciones del checkpoint durable, instrucciones de esperas/señales, DTOs HTTP y cuotas durables según [P-01 a P-09](PRD.md#7-registro-canónico-de-decisiones-pendientes). La referencia SQLite y el transporte HTTP ya están seleccionados; sus adaptadores aún deben demostrar conformidad.
+PROJECT distingue diseño de capacidad verificada. CONTRACTS concreta F-1/F-2 y el paquete, codec, DDL, artefactos y esperas F-3, con tipos, cuotas y pruebas. Restan DTOs HTTP según [P-01 a P-09](PRD.md#7-registro-canónico-de-decisiones-pendientes). SQLite tiene evidencia registrada de recuperación, carreras, reconciliación y mediciones locales. Las metas de producción permanecen en P-07; el transporte HTTP sigue pendiente de implementar/verificar.
 
 La [hoja de ruta](ROADMAP.md) exige cerrar los detalles de la fase antes de programarlos. Decidir persistencia no equivale a elegir automáticamente event sourcing, Redis, SQL o workers remotos. Las [referencias de arquitectura](ARCHITECTURE.md#9-referencias-de-diseño) orientan este diseño sin imponer infraestructura.

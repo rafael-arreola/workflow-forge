@@ -104,7 +104,7 @@ impl WorkflowApplication {
     pub async fn start(
         &self,
         access: AccessContext,
-        request: StartRunRequest,
+        mut request: StartRunRequest,
     ) -> Result<StartReceipt, ForgeError> {
         let _guard = self.shared.admission.lock().await;
         self.authorize(&access, Permission::Start, true)?;
@@ -116,11 +116,49 @@ impl WorkflowApplication {
             ));
         }
         authorize_resources(&request.plan, &access)?;
-        if request.options.require_durable {
+        let durable = composition.store.capabilities().durable;
+        if request.options.require_durable && !durable {
             return Err(ForgeError::new(
                 "capability.unsupported",
                 "This composition is ephemeral",
             ));
+        }
+        if !request.options.artifacts.is_empty() {
+            if !access.permits_resource("artifacts")
+                || request
+                    .options
+                    .artifacts
+                    .iter()
+                    .any(|reference| reference.scope != access.scope)
+            {
+                return Err(ForgeError::new(
+                    "access.denied",
+                    "Input artifacts are outside the caller's grants",
+                ));
+            }
+            if durable && !composition.coordinated_artifacts() {
+                return Err(ForgeError::new(
+                    "capability.unsupported",
+                    "Input artifacts require coordinated retention",
+                ));
+            }
+            request.options.artifacts.sort_by(|a, b| a.id.cmp(&b.id));
+            if request.options.artifacts.len() > 1000
+                || request
+                    .options
+                    .artifacts
+                    .windows(2)
+                    .any(|pair| pair[0].id == pair[1].id)
+                || serde_json::to_vec(&request.options.artifacts)
+                    .expect("references serialize")
+                    .len()
+                    > composition.limits.value_bytes
+            {
+                return Err(ForgeError::new(
+                    "resource.limit",
+                    "Input artifact declarations exceed their budget or contain duplicates",
+                ));
+            }
         }
         let timeout = request
             .options
@@ -149,21 +187,30 @@ impl WorkflowApplication {
             .store
             .collect(&composition.id, now, &composition.limits)
             .await?;
+        let mut receipt_options =
+            json!({"require_durable":request.options.require_durable,"timeout_ms":timeout});
+        // Preserve receipt identity for existing JSON-only format-2 runs.
+        if !request.options.artifacts.is_empty() {
+            receipt_options["artifacts"] = json!(request.options.artifacts);
+        }
         let reservation=request.options.receipt_key.as_ref().map(|key|ReceiptReservation {
             key:key.clone(),expires_at_ms:now.saturating_add(composition.limits.receipt_ttl_ms),
-            request:json!({"definition":request.plan.definition().semantic_value(),"input":request.input,"options":{"require_durable":false,"timeout_ms":timeout},"resources":access.resources}),
+            request:json!({"package":request.plan.0.package.semantic_value(),"input":request.input,"options":receipt_options,"resources":access.resources}),
         });
         let deduplicated_until_ms = reservation.as_ref().map(|r| r.expires_at_ms);
         let id = RunId(uuid::Uuid::now_v7().to_string());
         let run = RunSnapshot {
-            checkpoint_format: 1,
+            waits: BTreeMap::new(),
+            checkpoint_format: CHECKPOINT_FORMAT,
             id: id.clone(),
             scope: access.scope,
             actor: access.actor,
             resources: access.resources,
             revision: 0,
             definition: request.plan.definition().clone(),
+            package: request.plan.0.package.clone(),
             input: request.input,
+            artifacts: request.options.artifacts,
             state: RunState::Accepted,
             invocations: BTreeMap::new(),
             output: None,
@@ -175,6 +222,12 @@ impl WorkflowApplication {
             audit: Vec::new(),
             unresolved_effects: Vec::new(),
         };
+        if run.retained_data_bytes() > composition.limits.run_bytes {
+            return Err(ForgeError::new(
+                "resource.limit",
+                "Accepted data exceeds the run budget",
+            ));
+        }
         match composition
             .store
             .create(&composition.id, run, reservation, &composition.limits)
@@ -185,7 +238,7 @@ impl WorkflowApplication {
                 expires_at_ms,
             } => Ok(StartReceipt {
                 run_id,
-                durable: false,
+                durable,
                 duplicate: true,
                 deduplicated_until_ms: Some(expires_at_ms),
             }),
@@ -198,7 +251,7 @@ impl WorkflowApplication {
                 self.shared.wake.notify_one();
                 Ok(StartReceipt {
                     run_id: id,
-                    durable: false,
+                    durable,
                     duplicate: false,
                     deduplicated_until_ms,
                 })
@@ -253,6 +306,7 @@ impl WorkflowApplication {
         transition(&self.shared, &id, |run| {
             run.cancel_requested = true;
             run.state = RunState::Cancelling;
+            run.close_waits();
         })
         .await?;
         if let Some(token) = self.shared.cancellations.lock().await.get(&id) {
@@ -325,4 +379,31 @@ pub(super) async fn prepare_registered(
     }
     versions.extend(candidates);
     Ok(plan)
+}
+
+pub(super) async fn prepare_recovered(
+    shared: &Arc<Shared>,
+    run: RunSnapshot,
+) -> Result<PreparedWorkflow, ForgeError> {
+    let composition = shared.composition.clone();
+    tokio::task::spawn_blocking(move || compiler::recover(&composition, &run))
+        .await
+        .map_err(|_| {
+            ForgeError::new(
+                "recovery.unavailable",
+                "Recovery compiler could not complete",
+            )
+        })?
+        .map_err(|mut error| {
+            if error.code() != "recovery.unavailable" {
+                error.diagnostics.insert(
+                    0,
+                    Diagnostic::new(
+                        "recovery.unavailable",
+                        "The accepted package cannot be recovered under this composition",
+                    ),
+                );
+            }
+            error
+        })
 }

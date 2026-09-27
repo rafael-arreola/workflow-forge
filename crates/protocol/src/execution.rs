@@ -116,6 +116,9 @@ pub struct InvocationRecord {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ControlFrame {
+    Wait {
+        id: String,
+    },
     Decision {
         selected: String,
     },
@@ -141,8 +144,29 @@ pub enum ControlFrame {
 }
 
 /// Serializable state, not an in-process prepared plan or future.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResolvedPackage {
+    pub definitions: Vec<WorkflowDefinition>,
+    pub operations: Vec<crate::OperationDescriptor>,
+    pub schemas: Vec<crate::SchemaResource>,
+}
+
+impl ResolvedPackage {
+    /// Receipt identity excludes presentation metadata, just like a definition.
+    pub fn semantic_value(&self) -> Value {
+        serde_json::json!({
+            "definitions": self.definitions.iter().map(WorkflowDefinition::semantic_value).collect::<Vec<_>>(),
+            "operations": self.operations.iter().map(crate::OperationDescriptor::semantic_value).collect::<Vec<_>>(),
+            "schemas": self.schemas,
+        })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RunSnapshot {
+    #[serde(default)]
+    pub waits: BTreeMap<String, crate::WaitRecord>,
     pub checkpoint_format: u32,
     pub id: RunId,
     pub scope: String,
@@ -150,8 +174,13 @@ pub struct RunSnapshot {
     pub resources: BTreeSet<String>,
     pub revision: u64,
     pub definition: WorkflowDefinition,
+    pub package: ResolvedPackage,
     pub input: Value,
     pub state: RunState,
+    /// Immutable references pinned atomically during acceptance. JSON-only
+    /// format-2 checkpoints from SQL schema 1 have no attachments.
+    #[serde(default)]
+    pub artifacts: Vec<crate::ArtifactRef>,
     pub invocations: BTreeMap<String, InvocationRecord>,
     pub output: Option<Value>,
     pub error: Option<ForgeError>,
@@ -168,6 +197,7 @@ pub struct RunSnapshot {
 /// A coherent projection of one committed revision, without historical payloads.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunHead {
+    pub next_wakeup_at_ms: Option<u64>,
     pub id: RunId,
     pub scope: String,
     pub revision: u64,
@@ -187,6 +217,9 @@ pub struct ExecutionView {
 }
 
 impl InvocationRecord {
+    pub fn is_wait(&self) -> bool {
+        matches!(self.control, Some(ControlFrame::Wait { .. }))
+    }
     pub fn is_unresolved(&self) -> bool {
         self.state == InvocationState::Unknown
             || (self.operation.is_some()
@@ -212,15 +245,19 @@ impl RunSnapshot {
             .saturating_add(self.error.as_ref().map_or(0, json_bytes))
             .saturating_add(json_bytes(&self.audit))
             .saturating_add(json_bytes(&self.unresolved_effects))
+            .saturating_add(self.waits.values().map(json_bytes).sum::<usize>())
     }
     pub fn retained_data_bytes(&self) -> usize {
         self.invocations.values().fold(
-            json_bytes(&self.input).saturating_add(self.retained_result_bytes()),
+            json_bytes(&self.input)
+                .saturating_add(self.artifacts.iter().map(json_bytes).sum::<usize>())
+                .saturating_add(self.retained_result_bytes()),
             |bytes, record| bytes.saturating_add(record.retained_data_bytes()),
         )
     }
     pub fn head(&self) -> RunHead {
         RunHead {
+            next_wakeup_at_ms: self.next_wakeup_at_ms(),
             id: self.id.clone(),
             scope: self.scope.clone(),
             revision: self.revision,
@@ -261,6 +298,8 @@ pub struct StartOptions {
     pub require_durable: bool,
     pub timeout_ms: Option<u64>,
     pub receipt_key: Option<String>,
+    #[serde(default)]
+    pub artifacts: Vec<crate::ArtifactRef>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -281,6 +320,9 @@ pub struct ExecutionEvent {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Limits {
+    pub waits_per_run: usize,
+    pub signal_bytes: usize,
+    pub wait_timeout_ms: u64,
     pub document_bytes: usize,
     pub plan_bytes: usize,
     pub schema_resources: usize,
@@ -315,6 +357,9 @@ pub struct Limits {
 impl Default for Limits {
     fn default() -> Self {
         Self {
+            waits_per_run: 256,
+            signal_bytes: 64 * 1024,
+            wait_timeout_ms: 24 * 60 * 60 * 1000,
             document_bytes: 1024 * 1024,
             plan_bytes: 16 * 1024 * 1024,
             schema_resources: 64,

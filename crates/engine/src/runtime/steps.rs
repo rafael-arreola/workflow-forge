@@ -6,6 +6,7 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub(super) enum StepError {
+    Suspended,
     Execution(ForgeError),
     Infrastructure(ForgeError),
 }
@@ -194,7 +195,10 @@ pub(super) async fn execute_operation(
             .deadline_at_ms
             .min(now_ms().saturating_add(c.limits.attempt_timeout_ms));
         let context = OperationContext::new(
-            id.clone(),
+            ArtifactAccess {
+                runtime_owner: c.id.clone(),
+                run_id: id.clone(),
+            },
             deadline,
             cancellation.child_token(),
             intent.scope.clone(),

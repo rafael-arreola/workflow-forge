@@ -1,6 +1,6 @@
 use crate::{
-    ArtifactRef, ArtifactStore, ByteStream, ForgeError, OperationRevision, PortFuture, RunId,
-    SecretProvider, SecretValue,
+    ArtifactAccess, ArtifactRef, ArtifactStore, ByteStream, ForgeError, OperationRevision,
+    PortFuture, RunId, SecretProvider, SecretValue,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -55,6 +55,16 @@ pub struct OperationDescriptor {
     pub examples: Vec<Value>,
 }
 
+impl OperationDescriptor {
+    pub fn semantic_value(&self) -> Value {
+        let mut value = serde_json::to_value(self).expect("descriptor serializes");
+        let object = value.as_object_mut().expect("descriptor is an object");
+        object.remove("description");
+        object.remove("examples");
+        value
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OperationError {
     pub code: String,
@@ -103,11 +113,12 @@ pub struct OperationContext {
     allowed: BTreeSet<String>,
     secrets: Arc<dyn SecretProvider>,
     artifacts: Arc<dyn ArtifactStore>,
+    artifact_access: ArtifactAccess,
 }
 
 impl OperationContext {
     pub fn new(
-        run_id: RunId,
+        artifact_access: ArtifactAccess,
         deadline_at_ms: u64,
         cancellation: CancellationToken,
         scope: String,
@@ -116,7 +127,8 @@ impl OperationContext {
         artifacts: Arc<dyn ArtifactStore>,
     ) -> Self {
         Self {
-            run_id,
+            run_id: artifact_access.run_id.clone(),
+            artifact_access,
             deadline_at_ms,
             cancellation,
             scope,
@@ -144,7 +156,9 @@ impl OperationContext {
                 "Artifact is not accessible in this scope",
             ));
         }
-        self.artifacts.read(reference).await
+        self.artifacts
+            .read_for_run(&self.artifact_access, reference)
+            .await
     }
     pub async fn write_artifact(
         &self,
@@ -157,7 +171,9 @@ impl OperationContext {
                 "Artifacts are not declared for this operation",
             ));
         }
-        self.artifacts.write(&self.scope, content, media_type).await
+        self.artifacts
+            .write_for_run(&self.artifact_access, &self.scope, content, media_type)
+            .await
     }
 }
 

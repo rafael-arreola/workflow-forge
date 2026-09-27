@@ -246,13 +246,19 @@ async fn global_output_validation_fails_the_run_without_coercing_data() {
 
 fn sample_snapshot() -> RunSnapshot {
     RunSnapshot {
-        checkpoint_format: 1,
+        waits: Default::default(),
+        artifacts: vec![],
+        checkpoint_format: CHECKPOINT_FORMAT,
         id: RunId("conformance.run".into()),
         scope: "test".into(),
         actor: "host".into(),
         resources: Default::default(),
         revision: 0,
         definition: definition(),
+        package: ResolvedPackage {
+            definitions: vec![definition()],
+            ..Default::default()
+        },
         input: json!({"original":true}),
         state: RunState::Accepted,
         invocations: Default::default(),

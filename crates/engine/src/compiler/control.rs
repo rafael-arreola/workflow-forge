@@ -108,6 +108,36 @@ impl<'a> Compiler<'a> {
             metadata
                 .definitions
                 .insert(revision.clone(), definition.clone());
+            if self.composition.store.capabilities().durable
+                && metadata.resources.contains("artifacts")
+                && !self.composition.coordinated_artifacts()
+            {
+                return Err(ForgeError::new(
+                    "capability.unsupported",
+                    "A durable workflow requires artifacts in its store coordination domain",
+                ));
+            }
+            let package = ResolvedPackage {
+                definitions: metadata.definitions.values().cloned().collect(),
+                operations: metadata.operations.values().cloned().collect(),
+                schemas: self
+                    .composition
+                    .schema_resources
+                    .values()
+                    .cloned()
+                    .collect(),
+            };
+            if self.bytes.saturating_add(
+                serde_json::to_vec(&package)
+                    .expect("package serializes")
+                    .len(),
+            ) > limits.plan_bytes
+            {
+                return Err(ForgeError::new(
+                    "resource.limit",
+                    "Resolved package exceeds the plan budget",
+                ));
+            }
             Ok(PreparedWorkflow(Arc::new(Plan {
                 composition: self.composition.id.clone(),
                 definition,
@@ -117,6 +147,7 @@ impl<'a> Compiler<'a> {
                 warnings: metadata.warnings,
                 resources: metadata.resources,
                 definitions: metadata.definitions,
+                package,
             })))
         })();
         self.active.remove(&revision);
@@ -223,6 +254,74 @@ impl<'a> Compiler<'a> {
     ) -> Result<PreparedInstruction, ForgeError> {
         let limits = &self.composition.limits;
         match &node.instruction {
+            Instruction::Timer { duration_ms } => {
+                if *duration_ms > limits.wait_timeout_ms {
+                    return Err(ForgeError::new(
+                        "resource.limit",
+                        "Timer exceeds the wait deadline budget",
+                    ));
+                }
+                Ok(PreparedInstruction::Timer {
+                    duration_ms: *duration_ms,
+                })
+            }
+            Instruction::AwaitSignal {
+                correlation,
+                timeout_ms,
+                payload_schema,
+                start,
+            } => {
+                context_binding(correlation, limits, false)?;
+                if let Binding::Literal(value) = correlation {
+                    if value.as_str().is_none_or(|s| s.is_empty() || s.len() > 256) {
+                        return Err(ForgeError::new(
+                            "data.invalid",
+                            "Signal correlation must contain 1 to 256 bytes",
+                        ));
+                    }
+                }
+                if *timeout_ms == 0 || *timeout_ms > limits.wait_timeout_ms {
+                    return Err(ForgeError::new(
+                        "resource.limit",
+                        "Signal deadline exceeds the wait budget",
+                    ));
+                }
+                CompiledSchema::compile(payload_schema, &self.composition.schemas, limits)?;
+                let start = if let Some(start) = start {
+                    context_binding(&start.input, limits, false)?;
+                    self.nodes = self.nodes.saturating_add(1);
+                    *document_nodes = document_nodes.saturating_add(1);
+                    if *document_nodes > limits.nodes || self.nodes > limits.activations {
+                        return Err(ForgeError::new(
+                            "resource.limit",
+                            "Signal start exceeds the plan node budget",
+                        ));
+                    }
+                    let synthetic = NodeDefinition {
+                        id: node.id.clone(),
+                        input: start.input.clone(),
+                        instruction: Instruction::Operation {
+                            operation: start.operation.clone(),
+                            config: start.config.clone(),
+                            retry: start.retry.clone(),
+                        },
+                    };
+                    let PreparedInstruction::Operation(operation) =
+                        self.instruction(&synthetic, depth, document_nodes, metadata)?
+                    else {
+                        unreachable!()
+                    };
+                    Some((start.input.clone(), operation))
+                } else {
+                    None
+                };
+                Ok(PreparedInstruction::AwaitSignal {
+                    correlation: correlation.clone(),
+                    timeout_ms: *timeout_ms,
+                    payload_schema: payload_schema.clone(),
+                    start,
+                })
+            }
             Instruction::Operation {
                 operation: revision,
                 config,
@@ -252,6 +351,9 @@ impl<'a> Compiler<'a> {
                 metadata
                     .resources
                     .extend(operation.descriptor.required_resources.iter().cloned());
+                metadata
+                    .operations
+                    .insert(revision.clone(), operation.descriptor.clone());
                 Ok(PreparedInstruction::Operation(PreparedOperation {
                     operation,
                     config: config.clone(),
@@ -395,6 +497,14 @@ impl<'a> Compiler<'a> {
                 metadata.resources.extend(child.0.resources.iter().cloned());
                 metadata.warnings.extend(child.0.warnings.iter().cloned());
                 metadata.definitions.extend(child.0.definitions.clone());
+                metadata.operations.extend(
+                    child
+                        .0
+                        .package
+                        .operations
+                        .iter()
+                        .map(|d| (d.revision.clone(), d.clone())),
+                );
                 Ok(PreparedInstruction::Subworkflow(child))
             }
         }
@@ -405,6 +515,7 @@ struct Metadata {
     warnings: Vec<Diagnostic>,
     resources: BTreeSet<String>,
     definitions: BTreeMap<WorkflowRevision, WorkflowDefinition>,
+    operations: BTreeMap<OperationRevision, OperationDescriptor>,
 }
 fn context_binding(binding: &Binding, limits: &Limits, boolean: bool) -> Result<(), ForgeError> {
     binding::check(binding, &BTreeSet::new(), limits)?;

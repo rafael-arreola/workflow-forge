@@ -2,7 +2,7 @@
 
 Motor agnóstico de integración en Rust. Las definiciones JSON conectan operaciones mediante contratos JSON Schema; el host decide qué módulos, recursos y transportes habilita.
 
-**En desarrollo, sin versión pública.** `workflow_forge::v2` ejecuta secuencias, decisiones, paralelo, foreach, loop y subworkflows en memoria, con retry e inspección/resolución de efectos. F-2 incluye importación CSV por lotes y mediciones verificadas de 100 y 10 000 filas. Persistencia y servicio tienen fases posteriores en el [ROADMAP](docs/ROADMAP.md). La [evidencia y los límites](docs/PROJECT.md) distinguen capacidades probadas de diseño pendiente.
+**En desarrollo, sin versión pública.** `workflow_forge::v2` ejecuta secuencias, decisiones, paralelo, foreach, loop y subworkflows, con retry e inspección/resolución de efectos. Incluye estado/artefactos SQLite, recuperación, señales y timers. F-0 a F-3 están verificadas, con pruebas de caída y mediciones de secuencias e importaciones de 100/10 000 filas en memoria y SQLite. El servicio y la adopción siguen en el [ROADMAP](docs/ROADMAP.md). La [evidencia y los límites](docs/PROJECT.md) distinguen capacidades probadas de diseño pendiente.
 
 ## Ejecutar el primer recorrido
 
@@ -40,6 +40,23 @@ cargo run --release -p workflow-forge --example v2_inventory -- 100 3
 
 El [workflow de inventario](examples/workflows/inventory_import.v2.json) lee un artefacto CSV, aplica filas mediante un destino inyectado y publica un reporte JSONL. La [extensión](examples/reference-module/src/inventory/mod.rs) mantiene el parseo y las reglas de inventario fuera del engine. El [ejecutable](crates/forge/examples/v2_inventory.rs) mide tres composiciones independientes; en un servicio se conserva una instancia durante su vida, como en `v2_customer`. Un efecto incierto bloquea la continuación hasta su resolución; `collect` recoge errores conocidos.
 
+El incremento F-3 incorpora estado y artefactos SQLite:
+
+```sh
+cargo run -p workflow-forge --features sqlite --example v2_sqlite -- /tmp/forge-example.sqlite
+```
+
+El [host durable](crates/forge/examples/v2_sqlite.rs) ejecuta C-01A y solicita aceptación durable. Repetir el comando con la misma clave recupera su recibo dentro de la ventana de deduplicación. Un solo runtime reclama el archivo local; `shutdown` libera su propiedad. Para CSV/reportes, el mismo proveedor se instala en ambos puertos y se declaran las referencias de entrada en `StartOptions.artifacts`; [CONTRACTS §10.3](docs/CONTRACTS.md#artefactos-durables) muestra la composición. Las [pruebas C-02](crates/forge/tests/v2_sqlite_inventory.rs) recuperan caídas entre lotes, durante streaming y después de publicación. Un store durable rechaza dependencias de artefactos efímeros o sin coordinación de retención.
+
+Para conservar una espera entre dos arranques, ejecutar ambos comandos dentro de cinco minutos:
+
+```sh
+cargo run -p workflow-forge --features sqlite --example v2_signal -- /tmp/forge-approval.sqlite start
+cargo run -p workflow-forge --features sqlite --example v2_signal -- /tmp/forge-approval.sqlite signal
+```
+
+El [ejemplo](crates/forge/examples/v2_signal.rs) usa un [workflow de aprobación](examples/workflows/approval.v2.json). `start` imprime la reserva y cierra el host; `signal` recupera el mismo run, valida la aprobación y devuelve `{"start":null,"signal":{"approved":true}}`. Repetir `signal` conserva el acuse con `duplicate:true`. Es una demostración local con acceso confiable; el transporte y autenticación de callbacks los aporta el host. [CONTRACTS §11](docs/CONTRACTS.md#esperas-durables) explica el inicio opcional, los límites y las carreras.
+
 ## Contratos y extensiones
 
 - [CONTRACTS](docs/CONTRACTS.md): documento, mappings explícitos, errores, recursos y cuotas.
@@ -73,6 +90,8 @@ cargo run --release -p workflow-forge --example v2_measure -- 10 1024 1000 8
 ```
 
 El benchmark separa preparación y ejecución, realiza 100 calentamientos y exige al menos 1 000 muestras. El test SFTP del prototipo requiere un servidor externo; permanece ignorado en las pruebas locales generales. Consultar [PROJECT](docs/PROJECT.md) para comandos, resultados y entorno realmente medidos.
+
+Los dos ejecutables de medición admiten SQLite con `--features sqlite`. Después de los argumentos numéricos, `v2_measure` acepta `--sqlite RUTA_NUEVA.sqlite` y `v2_inventory` acepta `--sqlite DIRECTORIO`. El directorio padre debe existir; cada base de medición debe ser nueva. Ambos solicitan aceptación durable y conservan las comprobaciones de resultados. C-02 usa lotes de 100, concurrencia de filas 4 y presupuestos explícitos de 12 000 activaciones y 15 minutos por run. Tres muestras de C-02 no equivalen a percentiles; las secuencias usan al menos 1 000 observaciones.
 
 El [mapa documental](docs/README.md) conecta PRD, arquitectura, TDD y hoja de ruta. Los casos reales y objetivos de producción siguen sujetos a validación con el implementador.
 

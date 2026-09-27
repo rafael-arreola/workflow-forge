@@ -136,6 +136,30 @@ pub enum Instruction {
     Subworkflow {
         workflow: WorkflowRevision,
     },
+    Timer {
+        duration_ms: u64,
+    },
+    AwaitSignal {
+        correlation: Binding,
+        timeout_ms: u64,
+        payload_schema: Value,
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            deserialize_with = "present"
+        )]
+        start: Option<SignalStart>,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SignalStart {
+    pub operation: OperationRevision,
+    pub config: Value,
+    pub input: Binding,
+    #[serde(default, skip_serializing_if = "default_retry")]
+    pub retry: crate::RetryPolicy,
 }
 
 fn default_retry(policy: &crate::RetryPolicy) -> bool {
@@ -222,7 +246,10 @@ impl Instruction {
                 }
             }
             Self::Foreach { body, .. } | Self::Loop { body, .. } => body.normalize(),
-            Self::Operation { .. } | Self::Subworkflow { .. } => (),
+            Self::Operation { .. }
+            | Self::Subworkflow { .. }
+            | Self::Timer { .. }
+            | Self::AwaitSignal { .. } => (),
         }
     }
 }

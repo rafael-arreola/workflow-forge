@@ -2,7 +2,7 @@
 
 La documentación define la refactorización de Workflow Forge como motor agnóstico de integración en Rust. La planificación sigue la separación de producto, arquitectura y diseño técnico utilizada en `memory-forge`, adaptada a este proyecto.
 
-**Estado al 2026-09-26:** implementación por fases autorizada. Las capacidades objetivo solo se consideran entregadas con evidencia en PROJECT. F-0, F-1 y F-2 cubren el motor en memoria, controles, efectos y los recorridos de referencia; sus contratos, pruebas y mediciones están registrados en PROJECT. F-3 incorpora persistencia, recuperación y esperas.
+**Estado al 2026-09-26:** implementación por fases autorizada. Las capacidades objetivo solo se consideran entregadas con evidencia en PROJECT. F-0 a F-3 cubren el motor en memoria, controles, efectos, persistencia SQLite, recuperación y esperas; sus contratos, pruebas y mediciones están registrados en PROJECT. F-4 continúa con servicio y módulos de integración; F-5 contrasta adopción y objetivos de producción.
 
 ## Recorrido de lectura
 
@@ -19,7 +19,7 @@ Dos anexos permiten avanzar sin leer todo el diseño a la vez:
 
 | Anexo | Cuándo leerlo | Autoridad |
 |---|---|---|
-| [CONTRACTS](CONTRACTS.md) | Al implementar o integrar el motor. | Anexo normativo de TDD: formato, mappings, tipos, errores, confianza y límites F-1/F-2. |
+| [CONTRACTS](CONTRACTS.md) | Al implementar o integrar el motor. | Anexo normativo de TDD: formato, mappings, tipos, errores, confianza, persistencia, esperas y límites F-1/F-2/F-3. |
 | [ACCEPTANCE](ACCEPTANCE.md) | Al comprobar generalidad y resultados. | Casos de referencia del PRD, fixtures y protocolo de mediciones; no resultados ejecutados. |
 
 Para empezar: leer el alcance F-1 en CONTRACTS y recorrer C-01A. Para crear un plugin: las tres fronteras de CONTRACTS y la selección rápida de PATTERNS. Para implementar el runtime: TDD y secuencias de ARCHITECTURE. Para conocer avances: PROJECT.
@@ -49,7 +49,7 @@ Los IDs `PRD-*`, `ARC-*`, `TDD-*`, `V-*`, `F-*` y `P-*` enlazan requisitos, arqu
 
 ## Referencias complementarias vigentes
 
-El [ejemplo de host formato 2](../crates/forge/examples/v2_customer.rs), el [recorrido por lotes](../crates/forge/examples/v2_inventory.rs) y el [schema formato 2](../schemas/2/workflow.schema.json) corresponden al motor F-1/F-2. Los [ejemplos del prototipo](../EXAMPLES.md) y [schemas 1.0](../schemas/1.0/workflow.schema.json) siguen siendo referencias del código existente y participan en sus pruebas; se retirarán con sus consumidores y no especifican el motor nuevo. El [changelog](../CHANGELOG.md) conserva el registro de cambios del prototipo.
+El [ejemplo de host formato 2](../crates/forge/examples/v2_customer.rs), el [recorrido por lotes](../crates/forge/examples/v2_inventory.rs), el [host SQLite](../crates/forge/examples/v2_sqlite.rs), la [espera entre arranques](../crates/forge/examples/v2_signal.rs) y el [schema formato 2](../schemas/2/workflow.schema.json) corresponden al motor nuevo. Los [ejemplos del prototipo](../EXAMPLES.md) y [schemas 1.0](../schemas/1.0/workflow.schema.json) siguen siendo referencias del código existente y participan en sus pruebas; se retirarán con sus consumidores y no especifican el motor nuevo. El [changelog](../CHANGELOG.md) conserva el registro de cambios del prototipo.
 
 El diseño anterior, el borrador de evolución y los manuales sustituidos se eliminaron tras consolidar la planificación. Las nuevas decisiones sustituyen las históricas incompatibles según la tabla de ARCHITECTURE. No se promete migración compatible de la spec 1.0: el proyecto aún no tiene una versión pública, según lo confirmado por el usuario.
 

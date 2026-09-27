@@ -96,7 +96,9 @@ pub struct WorkflowApplication {
 pub struct EngineRuntime {
     app: WorkflowApplication,
     supervisor: Option<JoinHandle<Result<(), ForgeError>>>,
+    supervisor_abort: tokio::task::AbortHandle,
     observer: Option<JoinHandle<()>>,
+    owns_store: bool,
 }
 
 mod application;
@@ -108,7 +110,9 @@ mod lifecycle;
 mod planner;
 mod reconcile;
 mod recovery;
+mod signals;
 mod state;
 mod steps;
-use application::prepare_registered;
+mod waits;
+use application::{prepare_recovered, prepare_registered};
 use coordinator::{supervise, transition};

@@ -58,6 +58,8 @@ impl CompiledOperation {
 }
 
 mod control;
+mod recovery;
+pub(crate) use recovery::{recover, recover_operation, recover_schema};
 
 pub(crate) struct PreparedOperation {
     pub operation: Arc<CompiledOperation>,
@@ -79,6 +81,15 @@ pub(crate) struct PreparedCase {
     pub body: Arc<PreparedBody>,
 }
 pub(crate) enum PreparedInstruction {
+    Timer {
+        duration_ms: u64,
+    },
+    AwaitSignal {
+        correlation: Binding,
+        timeout_ms: u64,
+        payload_schema: Value,
+        start: Option<(Binding, PreparedOperation)>,
+    },
     Operation(PreparedOperation),
     Decision {
         cases: Vec<PreparedCase>,
@@ -112,6 +123,7 @@ pub(crate) struct Plan {
     pub warnings: Vec<Diagnostic>,
     pub resources: BTreeSet<String>,
     pub definitions: BTreeMap<WorkflowRevision, WorkflowDefinition>,
+    pub package: ResolvedPackage,
 }
 
 #[derive(Clone)]
